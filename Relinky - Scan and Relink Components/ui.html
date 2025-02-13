@@ -13,9 +13,29 @@
   <!-- Main app -->
   <div id="app">
     <div v-cloak class="plugin-container">
+      <!-- Main Content -->
       <div class="step-container first-section">
         <div class="step-content">
-          <h3 class="step-title">Select frames or components</h3>
+          <div class="step-header">
+            <h3 class="step-title">Select frames or components</h3>
+            <button 
+              class="watch-toggle" 
+              :class="{ active: isWatching }"
+              @click="toggleWatch"
+              :title="isWatching ? 'Stop watching for changes' : 'Watch for changes'"
+            >
+              <div class="watch-toggle-content">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path v-if="isWatching" d="M8 3.33333C11.3333 3.33333 14.1667 5.33333 15.3333 8C14.1667 10.6667 11.3333 12.6667 8 12.6667C4.66667 12.6667 1.83333 10.6667 0.666667 8C1.83333 5.33333 4.66667 3.33333 8 3.33333ZM8 11C9.65685 11 11 9.65685 11 8C11 6.34315 9.65685 5 8 5C6.34315 5 5 6.34315 5 8C5 9.65685 6.34315 11 8 11ZM8 9.66667C7.07953 9.66667 6.33333 8.92047 6.33333 8C6.33333 7.07953 7.07953 6.33333 8 6.33333C8.92047 6.33333 9.66667 7.07953 9.66667 8C9.66667 8.92047 8.92047 9.66667 8 9.66667Z" fill="currentColor"/>
+                  <g v-else>
+                    <path d="M2.66667 2L13.3333 14" stroke="currentColor" stroke-width="1.5"/>
+                    <path d="M8 3.33333C11.3333 3.33333 14.1667 5.33333 15.3333 8C14.1667 10.6667 11.3333 12.6667 8 12.6667C4.66667 12.6667 1.83333 10.6667 0.666667 8C1.83333 5.33333 4.66667 3.33333 8 3.33333Z" fill="currentColor" fill-opacity="0.5"/>
+                  </g>
+                </svg>
+                <span class="watch-toggle-text">{{ isWatching ? 'Watching' : 'Watch changes' }}</span>
+              </div>
+            </button>
+          </div>
           <div class="selection-container">
             <div v-if="!hasSelection" class="toast warning">
               <div class="toast-icon">
@@ -35,21 +55,17 @@
             </div>
           </div>
 
-          <!-- Add margin-top to create space -->
-          <div class="watch-controls" style="margin-top: 16px;">
-            <div class="toggle-container">
-              <label class="toggle-label">
-                <span>Watch for Changes</span>
-                <div class="toggle-wrapper">
-                  <input 
-                    type="checkbox" 
-                    v-model="isWatching"
-                    class="toggle-input"
-                    @change="toggleWatch"
-                  >
-                  <div class="toggle-slider"></div>
-                </div>
-              </label>
+          <!-- Progress Bar -->
+          <div class="progress-container">
+            <div class="progress-bar">
+              <div 
+                class="progress-fill" 
+                :style="{ 
+                  width: isScanning ? `${scanProgress}%` : '0%',
+                  opacity: isScanning ? 1 : 0.3
+                }"
+              ></div>
+              <div class="progress-text">{{ isScanning ? Math.round(scanProgress) : 0 }}%</div>
             </div>
           </div>
         </div>
@@ -135,24 +151,30 @@
           </div>
         </div>
 
-        <!-- Progress Bar -->
-        <div v-if="isScanning" class="progress-container">
-          <div class="progress-bar">
-            <div 
-              class="progress-fill" 
-              :style="{ width: `${scanProgress}%` }"
-            ></div>
-          </div>
-          <div class="progress-text">{{ Math.round(scanProgress) }}%</div>
-        </div>
-
         <!-- Add a new section for scan results with consistent styling -->
         <template v-if="!isScanning && Object.keys(groupedReferences).length > 0">
           <div class="divider"></div>
           
           <div class="step-container">
             <div class="step-content">
-              <h3 class="step-title">Scan results</h3>
+              <div class="results-header">
+                <h3 class="step-title">Scan results</h3>
+                <div class="results-actions">
+                  <button 
+                    class="button secondary-button"
+                    @click="rescan"
+                    :disabled="isScanning"
+                  >
+                    Rescan
+                  </button>
+                  <button 
+                    class="button secondary-button"
+                    @click="clearResults"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
               <div class="results-container">
                 <div v-for="(group, groupKey) in groupedByValue" :key="groupKey" class="value-group">
                   <!-- Value Group Header -->
@@ -209,6 +231,27 @@
         </template>
       </div>
     </div>
+
+    <!-- Success Toast -->
+    <div 
+      class="success-toast" 
+      :class="{ visible: showSuccessToast }"
+      v-if="showSuccessToast"
+    >
+      <div class="success-toast-content">
+        <div class="success-toast-icon">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path fill-rule="evenodd" clip-rule="evenodd" d="M8 1.33334C4.31811 1.33334 1.33334 4.31811 1.33334 8C1.33334 11.6819 4.31811 14.6667 8 14.6667C11.6819 14.6667 14.6667 11.6819 14.6667 8C14.6667 4.31811 11.6819 1.33334 8 1.33334ZM11.0607 6.27274L7.39401 9.93941L5.27274 7.81814L6.06069 7.03019L7.39401 8.36351L10.2727 5.48479L11.0607 6.27274Z" fill="currentColor"/>
+          </svg>
+        </div>
+        <span class="success-toast-message">{{ successMessage }}</span>
+        <button class="success-toast-close" @click="dismissToast">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M12.6667 4.27337L11.7267 3.33337L8.00001 7.06004L4.27334 3.33337L3.33334 4.27337L7.06001 8.00004L3.33334 11.7267L4.27334 12.6667L8.00001 8.94004L11.7267 12.6667L12.6667 11.7267L8.94001 8.00004L12.6667 4.27337Z" fill="currentColor"/>
+          </svg>
+        </button>
+      </div>
+    </div>
   </div>
 
   <style>
@@ -241,6 +284,7 @@
       display: flex;
       flex-direction: column;
       overflow: hidden;
+      position: relative;
     }
 
     .content {
@@ -292,7 +336,6 @@
     .scan-controls {
       display: flex;
       gap: 8px;
-      margin-top: 8px;
     }
 
     .button {
@@ -327,27 +370,57 @@
     }
 
     .progress-container {
-      margin: 16px 0;
+      padding: 8px 0;
+      position: relative;
+      min-height: 24px;
     }
 
     .progress-bar {
-      height: 4px;
+      height: 24px;
       background: var(--figma-color-bg-secondary);
-      border-radius: 2px;
+      border-radius: 6px;
       overflow: hidden;
+      position: relative;
     }
 
     .progress-fill {
       height: 100%;
-      background: var(--figma-color-bg-brand);
-      transition: width 0.3s ease;
+      background: linear-gradient(
+        90deg,
+        var(--figma-color-bg-brand) 0%,
+        var(--figma-color-bg-brand-hover) 100%
+      );
+      transition: all 0.2s ease;
+      animation: pulse 2s infinite;
+      border-radius: 6px;
     }
 
     .progress-text {
-      margin-top: 4px;
-      text-align: center;
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      margin: 0;
       font-size: 12px;
-      color: var(--figma-color-text-secondary);
+      font-weight: 500;
+      color: var(--figma-color-text);
+      z-index: 1;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+      padding: 0 4px;
+      min-width: 40px;
+      text-align: right;
+    }
+
+    @keyframes pulse {
+      0% {
+        opacity: 1;
+      }
+      50% {
+        opacity: 0.9;
+      }
+      100% {
+        opacity: 1;
+      }
     }
 
     .references-container {
@@ -461,8 +534,7 @@
     .value-group {
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      margin-bottom: 16px;
+      gap: 4px;
     }
 
     .value-group-header {
@@ -784,10 +856,125 @@
 
     .first-section {
       padding: 16px;
+      /* Tighter vertical spacing for first section */
+      & .step-content {
+        gap: 6px;  /* Half of the default 12px gap */
+      }
+      
+      & .selection-container {
+        margin-bottom: 4px;  /* Add small margin between status and progress */
+      }
+      
+      & .progress-container {
+        padding: 4px 0;  /* Half of the default 8px padding */
+      }
     }
 
     .step-container {
       padding: 16px;
+    }
+
+    .step-content {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .step-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .step-title {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .watch-toggle {
+      background: none;
+      border: none;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      color: var(--figma-color-text-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+    }
+
+    .watch-toggle-content {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .watch-toggle-text {
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .watch-toggle:hover {
+      background: var(--figma-color-bg-hover);
+      color: var(--figma-color-text);
+    }
+
+    .watch-toggle.active {
+      color: var(--figma-color-text-brand);
+      background: var(--figma-color-bg-brand-tertiary);
+    }
+
+    .results-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .results-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .results-actions .button {
+      min-width: unset;
+      padding: 5px 12px;
+      height: 28px;
+    }
+
+    .rescan {
+      background: none;
+      border: none;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      color: var(--figma-color-text-secondary);
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .clear-results {
+      background: none;
+      border: none;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      color: var(--figma-color-text-secondary);
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .selection-container {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .results-container {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
     }
   </style>
 
@@ -862,6 +1049,20 @@
     // Then create the Vue app
     const { createApp } = Vue;
 
+    // Add the SuccessToast component definition
+    const SuccessToast = {
+      template: '#success-toast',
+      props: {
+        message: String,
+        show: Boolean
+      },
+      methods: {
+        close() {
+          this.$emit('close');
+        }
+      }
+    };
+
     createApp({
       components: {
         IconWarning,
@@ -870,7 +1071,8 @@
         IconSpacing,
         IconRadius,
         IconFill,
-        IconStroke
+        IconStroke,
+        SuccessToast
       },
       data() {
         return {
@@ -914,7 +1116,9 @@
               description: 'Find layers with unlinked stroke colors',
               icon: 'IconStroke'
             }
-          ]
+          ],
+          showSuccessToast: false,
+          successMessage: '',
         }
       },
       computed: {
@@ -971,12 +1175,16 @@
             this.scanEntirePage = false;
           }
         },
-        async startScan() {
+        async startScan(isRescan = false) {
           if (!this.canStartScan) return;
           
           this.isScanning = true;
           this.scanProgress = 0;
-          this.groupedReferences = {};
+          await new Promise(resolve => setTimeout(resolve, 50));
+          
+          if (!isRescan) {
+            this.groupedReferences = {};
+          }
 
           const selectedFrameIds = !this.scanEntirePage 
             ? await this.getSelectedFrameIds()
@@ -1047,23 +1255,52 @@
           return key.split(':')[0];
         },
         toggleWatch() {
-          if (this.isWatching) {
-            // Start watching with current scan type
-            parent.postMessage({ 
-              pluginMessage: { 
-                type: 'start-watching',
-                scanType: this.selectedScanType 
-              }
-            }, '*');
-          } else {
-            // Stop watching
-            parent.postMessage({ 
-              pluginMessage: { 
-                type: 'stop-watching' 
-              }
-            }, '*');
+          this.isWatching = !this.isWatching;
+          parent.postMessage({ 
+            pluginMessage: { 
+              type: this.isWatching ? 'start-watching' : 'stop-watching',
+              scanType: this.selectedScanType 
+            }
+          }, '*');
+        },
+        rescan() {
+          // Reset scanning state but keep existing results
+          this.isScanning = true;
+          this.scanProgress = 0;
+          
+          parent.postMessage({ 
+            pluginMessage: { 
+              type: 'scan-for-tokens',
+              scanType: this.selectedScanType,
+              scanScope: this.scanScope,
+              isRescan: true // Add flag to indicate this is a rescan
+            }
+          }, '*');
+        },
+        clearResults() {
+          this.groupedReferences = {};
+        },
+        dismissToast() {
+          this.showSuccessToast = false;
+        },
+        handleResize(msg) {
+          if (msg.type === 'resize' && msg.width && msg.height) {
+            const width = Number(msg.width);
+            const height = Number(msg.height);
+            
+            if (!isNaN(width) && !isNaN(height)) {
+              this.windowSize = { width, height };
+              // The plugin will automatically resize
+            }
           }
-        }
+        },
+        updateProgress(newProgress) {
+          // Ensure progress is a number and between 0-100
+          const progress = Math.min(Math.max(0, Number(newProgress) || 0), 100);
+          console.log(`Updating progress bar: ${progress}%`);
+          // Only update if the new progress is greater than current
+          this.scanProgress = progress;
+        },
       },
       mounted() {
         console.log('Vue app mounted');
@@ -1079,19 +1316,51 @@
                 this.scanEntirePage = false;
               }
               break;
+            case 'watch-scan-started':
+              this.isScanning = true;
+              this.scanProgress = 0;
+              break;
             case 'scan-progress':
-              this.scanProgress = msg.progress;
+              console.log('Received progress update:', msg.progress);
+              this.updateProgress(msg.progress);
               break;
             case 'missing-references-result':
               this.groupedReferences = msg.references;
               this.isScanning = false;
+              this.updateProgress(100); // Ensure we reach 100%
+              setTimeout(() => {
+                if (!this.isScanning) {
+                  this.scanProgress = 0;
+                }
+              }, 300); // Shorter delay
               break;
             case 'scan-cancelled':
               this.isScanning = false;
+              this.scanProgress = 0;
               break;
             case 'error':
               console.error(msg.message);
               this.isScanning = false;
+              this.scanProgress = 0;
+              break;
+            case 'scan-complete':
+              this.isScanning = false;
+              this.scanProgress = 0;
+              if (msg.status === 'success') {
+                this.successMessage = msg.message;
+                this.showSuccessToast = true;
+                this.groupedReferences = {};
+              }
+              break;
+            case 'watch-status':
+              this.isWatching = msg.isWatching;
+              if (!msg.isWatching) {
+                this.isScanning = false;
+                this.scanProgress = 0;
+              }
+              break;
+            case 'resize':
+              this.handleResize(msg);
               break;
           }
         };

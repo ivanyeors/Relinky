@@ -208,7 +208,8 @@ async function scanForTextTokens(
 
       // Update progress more frequently
       processedNodes++;
-      const progress = (processedNodes / totalNodes) * 100;
+      // Ensure progress is a whole number between 0 and 100
+      const progress = Math.round((processedNodes / totalNodes) * 100);
       progressCallback(progress);
 
       // Add a small delay every few nodes to prevent UI freezing
@@ -230,50 +231,44 @@ async function scanForColorTokens(
   const missingRefs: MissingReference[] = [];
   
   try {
-    // Get all available variables in the document using async method
-    const localVariables = await figma.variables.getLocalVariablesAsync();
-    const libraryVariables = await Promise.all(
-      (await figma.variables.getLocalVariablesAsync())
-        .filter(v => v.remote)
-        .map(async v => {
-          try {
-            return await figma.variables.importVariableByKeyAsync(v.key);
-          } catch (err) {
-            console.warn(`Failed to import variable: ${v.name}`, err);
-            return null;
-          }
-        })
-    );
-
     const nodes = figma.currentPage.findAll(node => {
       if (!node || node.removed) return false;
       return 'fills' in node || 'strokes' in node || 'backgroundColor' in node;
     });
-    console.log(`Found ${nodes.length} nodes with color properties`);
+
+    const totalNodes = nodes.length;
+    let processedNodes = 0;
 
     for (let i = 0; i < nodes.length; i++) {
-      if (isScanCancelled) {
-        console.log('Scan cancelled by user');
-        break;
-      }
+      if (isScanCancelled) break;
       
       const node = nodes[i];
       try {
         // Check for bound variables
         if ('boundVariables' in node) {
           const boundVars = (node as any).boundVariables;
-          // Use Object.keys() instead of entries
           const keys = Object.keys(boundVars);
           for (const key of keys) {
             const binding = boundVars[key];
             if (binding.type === 'VARIABLE') {
-              // Check if the variable exists locally
+              // Get local variables
+              const localVariables = await figma.variables.getLocalVariablesAsync();
               const localVar = localVariables.find(v => v.id === binding.id);
-              // Check if it's a library variable that's missing
-              const libraryVar = libraryVariables.find(v => v?.id === binding.id);
+              
+              // Get library variables
+              const remoteVariables = localVariables.filter(v => v.remote);
+              const libraryVar = await Promise.all(
+                remoteVariables.map(async v => {
+                  try {
+                    return await figma.variables.importVariableByKeyAsync(v.key);
+                  } catch (err) {
+                    console.warn(`Failed to import variable: ${v.key}`, err);
+                    return null;
+                  }
+                })
+              ).then(vars => vars.find(v => v?.id === binding.id));
               
               if (!localVar && !libraryVar) {
-                console.log(`Missing library variable in node: ${node.name}`);
                 missingRefs.push({
                   nodeId: node.id,
                   nodeName: node.name || 'Unnamed Node',
@@ -295,7 +290,6 @@ async function scanForColorTokens(
           if (Array.isArray(fills)) {
             fills.forEach((fill: Paint, index) => {
               if (fill.type === 'SOLID' && !node.boundVariables?.fills?.[index]) {
-                console.log(`Missing color variable in fill of node: ${node.name}`);
                 missingRefs.push({
                   nodeId: node.id,
                   nodeName: node.name || 'Unnamed Node',
@@ -306,18 +300,17 @@ async function scanForColorTokens(
                 });
               }
             });
-      }
-    }
+          }
+        }
     
-    // Check strokes
-    if ('strokes' in node) {
-      const strokes = node.strokes;
+        // Check strokes
+        if ('strokes' in node) {
+          const strokes = node.strokes;
           if (Array.isArray(strokes)) {
             strokes.forEach((stroke: Paint, index) => {
               if (stroke.type === 'SOLID' && !node.boundVariables?.strokes?.[index]) {
-                console.log(`Missing color variable in stroke of node: ${node.name}`);
                 missingRefs.push({
-            nodeId: node.id,
+                  nodeId: node.id,
                   nodeName: node.name || 'Unnamed Node',
                   type: 'stroke',
                   property: `strokes[${index}]`,
@@ -329,8 +322,15 @@ async function scanForColorTokens(
           }
         }
 
-        progressCallback((i / nodes.length) * 100);
-        await new Promise(resolve => setTimeout(resolve, 0));
+        // Update progress
+        processedNodes++;
+        const progress = Math.round((processedNodes / totalNodes) * 100);
+        progressCallback(progress);
+
+        // Add a small delay every few nodes to prevent UI freezing
+        if (processedNodes % 10 === 0) {
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
       } catch (err) {
         console.warn(`Error checking node ${node.name}:`, err);
       }
@@ -400,8 +400,10 @@ async function scanForMissingReferences(
   let nodesToScan: SceneNode[] = [];
   
   try {
+    console.log(`Starting scan for ${scanType}`);
     // Get the nodes to scan based on selection
     if (selectedFrameIds && selectedFrameIds.length > 0) {
+      console.log(`Scanning selected frames: ${selectedFrameIds.length} frames`);
       // Use Promise.all to fetch all nodes asynchronously
       const selectedFrames = await Promise.all(
         selectedFrameIds.map(id => figma.getNodeByIdAsync(id))
@@ -418,16 +420,19 @@ async function scanForMissingReferences(
         return [...acc, frame, ...frame.findAll()];
       }, []);
     } else {
+      console.log('Scanning entire page');
       nodesToScan = figma.currentPage.findAll();
     }
 
+    console.log(`Found ${nodesToScan.length} nodes to scan`);
     let refs: MissingReference[] = [];
     
     switch (scanType) {
       case 'vertical-gap':
         refs = await scanForVerticalGap(progress => {
           if (progressCallback) {
-            progressCallback((progress / 100) * 100);
+            console.log(`Scan progress: ${progress}%`);
+            progressCallback(progress);
           }
         }, nodesToScan);
         break;
@@ -435,14 +440,16 @@ async function scanForMissingReferences(
       case 'vertical-padding':
         refs = await scanForPadding(progress => {
           if (progressCallback) {
-            progressCallback((progress / 100) * 100);
+            console.log(`Scan progress: ${progress}%`);
+            progressCallback(progress);
           }
         }, scanType);
         break;
       case 'corner-radius':
         refs = await scanForCornerRadius(progress => {
           if (progressCallback) {
-            progressCallback((progress / 100) * 100);
+            console.log(`Scan progress: ${progress}%`);
+            progressCallback(progress);
           }
         });
         break;
@@ -450,22 +457,41 @@ async function scanForMissingReferences(
       case 'stroke':
         refs = await scanForColorTokens(progress => {
           if (progressCallback) {
-            progressCallback((progress / 100) * 100);
+            console.log(`Scan progress: ${progress}%`);
+            progressCallback(progress);
           }
         });
         break;
       case 'typography':
         refs = await scanForTextTokens(progress => {
           if (progressCallback) {
-            progressCallback((progress / 100) * 100);
+            console.log(`Scan progress: ${progress}%`);
+            progressCallback(progress);
           }
         });
         break;
     }
+
+    console.log(`Scan complete. Found ${refs.length} issues`);
+
+    // After getting the refs, check if empty and send appropriate message
+    if (refs.length === 0) {
+      figma.ui.postMessage({ 
+        type: 'scan-complete',
+        status: 'success',
+        message: 'No unlinked parameters found!'
+      });
+    } else {
+      figma.ui.postMessage({ 
+        type: 'missing-references-result', 
+        references: groupMissingReferences(refs) 
+      });
+    }
+    
     return refs;
   } catch (error) {
     console.error('Error in scanForMissingReferences:', error);
-    throw error; // Re-throw to handle in the message handler
+    throw error;
   }
 }
 
@@ -489,7 +515,6 @@ async function startWatchingDocument(scanType: ScanType) {
   }
 
   try {
-    // Load all pages before registering document change handler
     await figma.loadAllPagesAsync();
     
     documentState.isWatching = true;
@@ -503,26 +528,61 @@ async function startWatchingDocument(scanType: ScanType) {
       documentState.timeoutId = setTimeout(async () => {
         if (!documentState.lastScanType) return;
 
-        // Show scanning state in UI
-        figma.ui.postMessage({ type: 'scan-progress', progress: 0 });
+        try {
+          // Show scanning state in UI
+          figma.ui.postMessage({ 
+            type: 'watch-scan-started'
+          });
+          
+          // Perform a new scan
+          const missingRefs = await scanForMissingReferences(
+            documentState.lastScanType,
+            undefined,
+            (progress) => {
+              figma.ui.postMessage({ 
+                type: 'scan-progress', 
+                progress 
+              });
+            }
+          );
 
-        // Perform a new scan
-        const missingRefs = await scanForMissingReferences(
-          documentState.lastScanType,
-          undefined
-        );
-
-        // Send updated results to UI
-        figma.ui.postMessage({
-          type: 'missing-references-result',
-          references: groupMissingReferences(missingRefs)
-        });
-      }, 500);
+          // Check if there are any missing references
+          if (missingRefs.length === 0) {
+            figma.ui.postMessage({ 
+              type: 'scan-complete',
+              status: 'success',
+              message: 'No unlinked parameters found!'
+            });
+            // Clear previous results
+            figma.ui.postMessage({
+              type: 'missing-references-result',
+              references: {}
+            });
+          } else {
+            figma.ui.postMessage({
+              type: 'missing-references-result',
+              references: groupMissingReferences(missingRefs)
+            });
+          }
+        } catch (err) {
+          console.error('Error during watch scan:', err);
+          figma.ui.postMessage({ 
+            type: 'error', 
+            message: 'Failed to update scan results' 
+          });
+        }
+      }, 500); // Debounce time for document changes
     };
 
     // Store the handler in the state
     documentState.changeHandler = documentChangeHandler;
     figma.on('documentchange', documentChangeHandler);
+   
+    // Notify UI that watching has started
+    figma.ui.postMessage({ 
+      type: 'watch-status',
+      isWatching: true 
+    });
   } catch (err) {
     console.error('Failed to start document watching:', err);
     figma.ui.postMessage({ 
@@ -532,7 +592,7 @@ async function startWatchingDocument(scanType: ScanType) {
   }
 }
 
-// Add this function to stop watching
+// Update the stopWatchingDocument function
 function stopWatchingDocument() {
   documentState.isWatching = false;
   if (documentState.timeoutId) {
@@ -541,6 +601,12 @@ function stopWatchingDocument() {
   if (documentState.changeHandler) {
     figma.off('documentchange', documentState.changeHandler);
   }
+ 
+  // Notify UI that watching has stopped
+  figma.ui.postMessage({ 
+    type: 'watch-status',
+    isWatching: false 
+  });
 }
 
 // Update the message handler to include watch controls
@@ -569,6 +635,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
       isScanCancelled = false;
       const scanType = msg.scanType as ScanType;
 
+      console.log('Starting scan with progress tracking');
       figma.ui.postMessage({ 
         type: 'scan-status', 
         message: `Scanning for ${scanType}...` 
@@ -576,7 +643,14 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
 
       const refs = await scanForMissingReferences(
         scanType,
-        msg.scanScope === 'selected-frames' ? msg.selectedFrameIds : undefined
+        msg.scanScope === 'selected-frames' ? msg.selectedFrameIds : undefined,
+        (progress) => {
+          console.log(`Sending progress update: ${progress}%`);
+          figma.ui.postMessage({ 
+            type: 'scan-progress', 
+            progress 
+          });
+        }
       );
 
       if (isScanCancelled) {
@@ -599,6 +673,8 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
         message: err instanceof Error ? err.message : 'Scan failed. Please try again.' 
       });
     }
+  } else if (msg.type === 'start-watching') {
+    await startWatchingDocument(msg.scanType as ScanType);
   } else if (msg.type === 'stop-watching') {
     stopWatchingDocument();
   }
