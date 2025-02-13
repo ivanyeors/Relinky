@@ -20,36 +20,38 @@
         </button>
       </header>
 
+      <!-- Progress bar -->
       <div v-if="isLoading" class="progress-container">
         <div class="progress-text">
-          Scanning for missing references... {{ Math.round(scanProgress) }}%
+          {{ scanStatus }}
+          <div class="progress-detail">{{ currentScanType }}: {{ Math.round(scanProgress) }}%</div>
         </div>
         <div class="progress-bar">
           <div class="progress-fill" :style="{ width: scanProgress + '%' }"></div>
         </div>
       </div>
 
-      <pre v-if="missingRefs.length">{{ missingRefs }}</pre>
-      <div v-else class="empty-state">
-        No missing references found or start by scanning the page.
-      </div>
+      <!-- Results -->
+      <div v-else>
+        <!-- Empty state -->
+        <div v-if="missingRefs.length === 0" class="empty-state">
+          <span>No missing references found or start by scanning the page.</span>
+        </div>
 
-      <div v-else-if="missingRefs.length === 0" class="empty-state">
-        <span>No missing references found or start by scanning the page.</span>
-      </div>
-
-      <div v-else class="references-container">
-        <div class="reference-list">
-          <div v-for="ref in filteredRefs" 
-               :key="ref.nodeId" 
-               class="reference-item">
-            <div class="reference-info">
-              <div class="reference-header">
-                <span class="node-name">{{ ref.nodeName }}</span>
-                <span class="property-type">{{ ref.propertyType }}</span>
-              </div>
-              <div v-if="ref.missingSource" class="missing-source">
-                Originally from: {{ ref.missingSource }}
+        <!-- References list -->
+        <div v-else class="references-container">
+          <div class="reference-list">
+            <div v-for="ref in filteredRefs" 
+                 :key="ref.nodeId" 
+                 class="reference-item">
+              <div class="reference-info">
+                <div class="reference-header">
+                  <span class="node-name">{{ ref.nodeName }}</span>
+                  <span class="property-type">{{ ref.propertyType }}</span>
+                </div>
+                <div v-if="ref.missingSource" class="missing-source">
+                  Originally from: {{ ref.missingSource }}
+                </div>
               </div>
             </div>
           </div>
@@ -361,6 +363,8 @@
             width: window.innerWidth,
             height: window.innerHeight
           },
+          scanStatus: '',
+          currentScanType: '',
           scanProgress: 0
         }
       },
@@ -465,7 +469,12 @@
             console.error(message.message);
           }
 
+          if (message.type === 'scan-status') {
+            this.scanStatus = message.message;
+          }
+
           if (message.type === 'scan-progress') {
+            this.currentScanType = message.scanType;
             this.scanProgress = message.progress;
           }
         }

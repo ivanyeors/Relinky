@@ -30,152 +30,130 @@ interface MissingReference {
   missingSource?: string;
 }
 
-async function findMissingReferences(
-  progressCallback: (current: number) => void
+// Add scan type definitions
+type ScanType = 'colors' | 'typography' | 'spacing' | 'effects';
+
+interface ScanProgress {
+  type: ScanType;
+  progress: number;
+}
+
+async function findMissingColorTokens(
+  progressCallback: (progress: number) => void
 ): Promise<MissingReference[]> {
   const missingRefs: MissingReference[] = [];
-  const nodes = figma.currentPage.findAll();
-  let processedNodes = 0;
   
-  for (const node of nodes) {
-    processedNodes++;
-    if (processedNodes % 10 === 0) { // Update every 10 nodes to avoid UI spam
-      progressCallback(processedNodes);
-    }
-    
-    // Check component instances
-    if (node.type === 'INSTANCE') {
-      console.log('Checking instance:', node.name); // Debug log
-      const instance = node as InstanceNode;
-      if (instance.mainComponent === null || instance.mainComponent?.remote) {
-        missingRefs.push({
-          nodeId: node.id,
-          nodeName: node.name,
-          referenceType: 'component',
-          propertyType: 'component',
-          currentValue: instance.mainComponent?.key || null,
-          missingSource: instance.mainComponent?.parent?.name || 'Unknown Library'
-        });
-      }
-    }
+  try {
+    // Only get nodes that can have color properties
+    const nodes = figma.currentPage.findAll(node => {
+      if (!node || node.removed) return false;
+      return 'fills' in node || 'strokes' in node;
+    });
 
-    // Check styles
-    if ('effectStyleId' in node && node.effectStyleId) {
-      const style = figma.getStyleById(node.effectStyleId as string);
-      if (!style || (style as any).remote) {
-        missingRefs.push({
-          nodeId: node.id,
-          nodeName: node.name,
-          referenceType: 'style',
-          propertyType: 'effect',
-          currentValue: node.effectStyleId,
-          missingSource: (style as any)?.parent?.name || 'Unknown Library'
-        });
-      }
-    }
-
-    if ('fillStyleId' in node && node.fillStyleId) {
-      const style = figma.getStyleById(node.fillStyleId as string);
-      if (!style || (style as any).remote) {
-        missingRefs.push({
-          nodeId: node.id,
-          nodeName: node.name,
-          referenceType: 'style',
-          propertyType: 'fill',
-          currentValue: node.fillStyleId,
-          missingSource: (style as any)?.parent?.name || 'Unknown Library'
-        });
-      }
-    }
-
-    if ('strokeStyleId' in node && node.strokeStyleId) {
-      const style = figma.getStyleById(node.strokeStyleId as string);
-      if (!style || (style as any).remote) {
-        missingRefs.push({
-          nodeId: node.id,
-          nodeName: node.name,
-          referenceType: 'style',
-          propertyType: 'stroke',
-          currentValue: node.strokeStyleId,
-          missingSource: (style as any)?.parent?.name || 'Unknown Library'
-        });
-      }
-    }
-
-    // Check text styles
-    if (node.type === 'TEXT') {
-      if (node.textStyleId) {
-        const style = figma.getStyleById(node.textStyleId as string);
-        if (!style || (style as any).remote) {
-          missingRefs.push({
-            nodeId: node.id,
-            nodeName: node.name,
-            referenceType: 'style',
-            propertyType: 'text',
-            currentValue: node.textStyleId,
-            missingSource: (style as any)?.parent?.name || 'Unknown Library'
-          });
+    const totalNodes = nodes.length;
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+      
+      try {
+        // Check fills
+        if ('fills' in node) {
+          const fills = node.fills;
+          if (Array.isArray(fills)) {
+            fills.forEach(fill => {
+              if (fill.type === 'SOLID' && !fill.boundVariables?.color) {
+                missingRefs.push({
+                  nodeId: node.id,
+                  nodeName: node.name || 'Unnamed Node',
+                  referenceType: 'token',
+                  propertyType: 'fill',
+                  currentValue: fill.color,
+                  missingSource: 'Color Token'
+                });
+              }
+            });
+          }
         }
+
+        // Check strokes
+        if ('strokes' in node) {
+          const strokes = node.strokes;
+          if (Array.isArray(strokes)) {
+            strokes.forEach(stroke => {
+              if (stroke.type === 'SOLID' && !stroke.boundVariables?.color) {
+                missingRefs.push({
+                  nodeId: node.id,
+                  nodeName: node.name || 'Unnamed Node',
+                  referenceType: 'token',
+                  propertyType: 'stroke',
+                  currentValue: stroke.color,
+                  missingSource: 'Color Token'
+                });
+              }
+            });
+          }
+        }
+
+        // Update progress
+        if (i % 10 === 0) {
+          progressCallback((i / totalNodes) * 100);
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
+      } catch (err) {
+        console.warn('Error checking node:', node.name, err);
       }
     }
 
-    // Check for missing variables (tokens)
-    if ('fills' in node) {
-      const fills = node.fills;
-      if (Array.isArray(fills) && fills.length > 0) {
-        const solidFill = fills[0] as SolidPaint;
-        if (solidFill && !solidFill.boundVariables) {
-          missingRefs.push({
-            nodeId: node.id,
-            nodeName: node.name,
-            referenceType: 'token',
-            propertyType: 'fill',
-            currentValue: solidFill
-          });
-        }
-      }
-    }
-    
-    if ('strokes' in node) {
-      const strokes = node.strokes;
-      if (Array.isArray(strokes) && strokes.length > 0) {
-        const solidStroke = strokes[0] as SolidPaint;
-        if (solidStroke && !solidStroke.boundVariables) {
-          missingRefs.push({
-            nodeId: node.id,
-            nodeName: node.name,
-            referenceType: 'token',
-            propertyType: 'stroke',
-            currentValue: solidStroke
-          });
-        }
-      }
-    }
-
-    if ('effects' in node && node.effects) {
-      const effects = node.effects;
-      if (Array.isArray(effects) && effects.length > 0) {
-        if (!effects[0].boundVariables) {
-          missingRefs.push({
-            nodeId: node.id,
-            nodeName: node.name,
-            referenceType: 'token',
-            propertyType: 'effect',
-            currentValue: effects[0]
-          });
-        }
-      }
-    }
-
-    // Check variables
-    if ('boundVariables' in node) {
-      console.log('Checking variables for:', node.name); // Debug log
-      // Add variable checks here
-    }
+    progressCallback(100);
+    return missingRefs;
+  } catch (err) {
+    console.error('Error scanning for color tokens:', err);
+    return missingRefs;
   }
+}
+
+async function findMissingTypographyTokens(
+  progressCallback: (progress: number) => void
+): Promise<MissingReference[]> {
+  const missingRefs: MissingReference[] = [];
   
-  progressCallback(nodes.length); // Final update
-  return missingRefs;
+  try {
+    // Only get text nodes
+    const nodes = figma.currentPage.findAll(node => node.type === 'TEXT');
+    const totalNodes = nodes.length;
+
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i] as TextNode;
+      try {
+        if (!node.textStyleId) {
+          missingRefs.push({
+            nodeId: node.id,
+            nodeName: node.name || 'Unnamed Text',
+            referenceType: 'style',
+            propertyType: 'typography',
+            currentValue: {
+              fontSize: node.fontSize,
+              fontName: node.fontName
+            },
+            missingSource: 'Typography Style'
+          });
+        }
+
+        // Update progress
+        if (i % 10 === 0) {
+          progressCallback((i / totalNodes) * 100);
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
+      } catch (err) {
+        console.warn('Error checking text node:', node.name, err);
+      }
+    }
+
+    progressCallback(100);
+    return missingRefs;
+  } catch (err) {
+    console.error('Error scanning for typography tokens:', err);
+    return missingRefs;
+  }
 }
 
 // Handle messages from the UI
@@ -195,24 +173,50 @@ figma.ui.onmessage = async (msg) => {
   }
   
   if (msg.type === 'scan-for-tokens') {
-    console.log('Starting scan...');
-    const totalNodes = figma.currentPage.findAll().length;
-    let scannedNodes = 0;
-    
-    const updateProgress = (current: number) => {
+    try {
+      // Scan for colors first
       figma.ui.postMessage({ 
-        type: 'scan-progress', 
-        progress: (current / totalNodes) * 100 
+        type: 'scan-status', 
+        message: 'Scanning for color tokens...' 
       });
-    };
+      
+      const colorRefs = await findMissingColorTokens(progress => {
+        figma.ui.postMessage({ 
+          type: 'scan-progress',
+          scanType: 'colors',
+          progress 
+        });
+      });
 
-    const missingRefs = await findMissingReferences(updateProgress);
-    console.log('Found refs:', missingRefs);
-    
-    figma.ui.postMessage({ 
-      type: 'missing-references-result', 
-      references: missingRefs
-    });
+      // Then scan for typography
+      figma.ui.postMessage({ 
+        type: 'scan-status', 
+        message: 'Scanning for typography tokens...' 
+      });
+      
+      const typographyRefs = await findMissingTypographyTokens(progress => {
+        figma.ui.postMessage({ 
+          type: 'scan-progress',
+          scanType: 'typography',
+          progress 
+        });
+      });
+
+      // Combine results
+      const allRefs = [...colorRefs, ...typographyRefs];
+      
+      figma.ui.postMessage({ 
+        type: 'missing-references-result', 
+        references: allRefs
+      });
+
+    } catch (err) {
+      console.error('Scan failed:', err);
+      figma.ui.postMessage({ 
+        type: 'error', 
+        message: 'Scan failed. Please try again.' 
+      });
+    }
   }
   
   if (msg.type === 'apply-token') {
