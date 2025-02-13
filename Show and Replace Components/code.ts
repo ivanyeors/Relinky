@@ -25,7 +25,7 @@ console.log('Plugin code started');
 interface MissingReference {
   nodeId: string;
   nodeName: string;
-  type: ScanType;
+  type: string;
   property: string;
   currentValue: any;
   location: string;
@@ -34,14 +34,7 @@ interface MissingReference {
 }
 
 // Update ScanType to match the UI options exactly
-type ScanType = 
-  | 'vertical-gap'
-  | 'horizontal-padding'
-  | 'vertical-padding'
-  | 'corner-radius'
-  | 'fill'
-  | 'stroke'
-  | 'typography';
+type ScanType = 'vertical-gap' | 'horizontal-padding' | 'vertical-padding' | 'corner-radius' | 'fill' | 'stroke' | 'typography';
 
 interface ScanProgress {
   type: ScanType;
@@ -82,8 +75,8 @@ type EffectPropertyMap = {
 };
 
 // Add more type guards based on Figma's API
-function hasAutoLayout(node: BaseNode): node is FrameNode | ComponentNode | InstanceNode {
-  return 'layoutMode' in node && node.layoutMode !== 'NONE';
+function hasAutoLayout(node: BaseNode): node is FrameNode {
+  return node.type === 'FRAME' && 'layoutMode' in node;
 }
 
 function hasTextProperties(node: BaseNode): node is TextNode {
@@ -306,32 +299,134 @@ async function scanForColorTokens(
   }
 }
 
-// Function to group missing references by property
+// Update the grouping function to group by exact values
 function groupMissingReferences(missingRefs: MissingReference[]): Record<string, MissingReference[]> {
   return missingRefs.reduce((groups, ref) => {
-    if (!groups[ref.property]) {
-      groups[ref.property] = [];
+    // Create a unique key combining property and value
+    const key = `${ref.property}:${JSON.stringify(ref.currentValue)}`;
+    if (!groups[key]) {
+      groups[key] = [];
     }
-    groups[ref.property].push(ref);
+    groups[key].push(ref);
     return groups;
   }, {} as Record<string, MissingReference[]>);
 }
 
-// Update the message handler
-figma.ui.onmessage = async (msg) => {
+// Update the PluginMessage interface to include all possible message types
+interface PluginMessage {
+  type: string;
+  scanType?: ScanType;
+  scanScope?: 'entire-page' | 'selected-frames';
+  selectedFrameIds?: string[];
+  width?: number;
+  height?: number;
+  nodeId?: string;
+  nodeIds?: string[];
+  tokenType?: string;
+  tokenValue?: string;
+  styleType?: string;
+  styleId?: string;
+  message?: string;
+  progress?: number;
+  references?: Record<string, MissingReference[]>;
+}
+
+// In your main plugin code
+figma.on('selectionchange', () => {
+  const selection = figma.currentPage.selection;
+  const frameNodes = selection.filter(node => 
+    node.type === 'FRAME' || 
+    node.type === 'COMPONENT' || 
+    node.type === 'COMPONENT_SET'
+  );
+  
+  figma.ui.postMessage({ 
+    type: 'selection-updated',
+    count: frameNodes.length,
+    hasSelection: frameNodes.length > 0
+  });
+});
+
+// Update scanForMissingReferences to use async node fetching
+async function scanForMissingReferences(
+  scanType: ScanType,
+  selectedFrameIds?: string[]
+): Promise<MissingReference[]> {
+  let nodesToScan: SceneNode[] = [];
+  
+  try {
+    // Get the nodes to scan based on selection
+    if (selectedFrameIds && selectedFrameIds.length > 0) {
+      // Use Promise.all to fetch all nodes asynchronously
+      const selectedFrames = await Promise.all(
+        selectedFrameIds.map(id => figma.getNodeByIdAsync(id))
+      );
+
+      // Filter out null values and incorrect types
+      const validFrames = selectedFrames.filter((node): node is FrameNode | ComponentNode | ComponentSetNode => 
+        node !== null && 
+        (node.type === 'FRAME' || node.type === 'COMPONENT' || node.type === 'COMPONENT_SET')
+      );
+      
+      // Get all children of selected frames
+      nodesToScan = validFrames.reduce<SceneNode[]>((acc, frame) => {
+        return [...acc, frame, ...frame.findAll()];
+      }, []);
+    } else {
+      nodesToScan = figma.currentPage.findAll();
+    }
+
+    let refs: MissingReference[] = [];
+    
+    switch (scanType) {
+      case 'vertical-gap':
+        refs = await scanForVerticalGap(progress => {
+          figma.ui.postMessage({ type: 'scan-progress', progress });
+        }, nodesToScan);
+        break;
+      case 'horizontal-padding':
+      case 'vertical-padding':
+        refs = await scanForPadding(progress => {
+          figma.ui.postMessage({ type: 'scan-progress', progress });
+        }, scanType);
+        break;
+      case 'corner-radius':
+        refs = await scanForCornerRadius(progress => {
+          figma.ui.postMessage({ type: 'scan-progress', progress });
+        });
+        break;
+      case 'fill':
+      case 'stroke':
+        refs = await scanForColorTokens(progress => {
+          figma.ui.postMessage({ type: 'scan-progress', progress });
+        });
+        break;
+      case 'typography':
+        refs = await scanForTextTokens(progress => {
+          figma.ui.postMessage({ type: 'scan-progress', progress });
+        });
+        break;
+    }
+    return refs;
+  } catch (error) {
+    console.error('Error in scanForMissingReferences:', error);
+    throw error; // Re-throw to handle in the message handler
+  }
+}
+
+// Update the message handler to properly handle errors
+figma.ui.onmessage = async (msg: PluginMessage) => {
   console.log('Plugin received message:', msg);
 
-  if (msg.type === 'resize') {
-    const { width, height } = msg;
+  if (msg.type === 'resize' && msg.width && msg.height) {
+    // Ensure width and height are numbers
+    const width = Number(msg.width);
+    const height = Number(msg.height);
     
-    // Only resize if dimensions actually changed
-    if (width !== currentWindowSize.width || height !== currentWindowSize.height) {
+    if (!isNaN(width) && !isNaN(height)) {
       currentWindowSize = { width, height };
-      
-      // Resize the window
       figma.ui.resize(width, height);
       
-      // Save the new size
       try {
         await figma.clientStorage.setAsync('windowSize', currentWindowSize);
       } catch (err) {
@@ -350,47 +445,17 @@ figma.ui.onmessage = async (msg) => {
         message: `Scanning for ${scanType}...` 
       });
 
-      let refs: MissingReference[] = [];
-      
-      switch (scanType) {
-        case 'vertical-gap':
-          refs = await scanForVerticalGap(progress => {
-            figma.ui.postMessage({ type: 'scan-progress', progress });
-          });
-          break;
-          
-        case 'horizontal-padding':
-        case 'vertical-padding':
-          refs = await scanForPadding(
-            progress => {
-              figma.ui.postMessage({ type: 'scan-progress', progress });
-            },
-            scanType
-          );
-          break;
-          
-        case 'corner-radius':
-          refs = await scanForCornerRadius(progress => {
-            figma.ui.postMessage({ type: 'scan-progress', progress });
-          });
-          break;
-          
-        case 'fill':
-        case 'stroke':
-          refs = await scanForColorTokens(progress => {
-            figma.ui.postMessage({ type: 'scan-progress', progress });
-          });
-          break;
-          
-        case 'typography':
-          refs = await scanForTextTokens(progress => {
-            figma.ui.postMessage({ type: 'scan-progress', progress });
-          });
-          break;
+      const refs = await scanForMissingReferences(
+        scanType,
+        msg.scanScope === 'selected-frames' ? msg.selectedFrameIds : undefined
+      );
+
+      if (isScanCancelled) {
+        figma.ui.postMessage({ type: 'scan-cancelled' });
+        return;
       }
 
       const groupedRefs = groupMissingReferences(refs);
-
       figma.ui.postMessage({ 
         type: 'missing-references-result', 
         references: groupedRefs 
@@ -400,23 +465,22 @@ figma.ui.onmessage = async (msg) => {
       console.error('Scan failed:', err);
       figma.ui.postMessage({ 
         type: 'error', 
-        message: 'Scan failed. Please try again.' 
+        message: err instanceof Error ? err.message : 'Scan failed. Please try again.' 
       });
     }
   }
   
-  if (msg.type === 'apply-token') {
-    const { nodeId, tokenType, tokenValue } = msg;
-    const node = figma.getNodeById(nodeId);
+  if (msg.type === 'apply-token' && msg.nodeId && msg.tokenType && msg.tokenValue) {
+    const node = figma.getNodeById(msg.nodeId);
     
     if (node) {
       try {
-        const variable = figma.variables.getVariableById(tokenValue);
+        const variable = await figma.variables.getVariableByIdAsync(msg.tokenValue);
         if (!variable) {
           throw new Error('Variable not found');
         }
 
-        if (tokenType === 'fill' && 'fills' in node) {
+        if (msg.tokenType === 'fill' && 'fills' in node) {
           const fills = [...(node.fills as Paint[])];
           if (fills.length > 0 && fills[0].type === 'SOLID') {
             await figma.variables.setBoundVariableForPaint(
@@ -426,7 +490,7 @@ figma.ui.onmessage = async (msg) => {
             );
             node.fills = fills;
           }
-        } else if (tokenType === 'stroke' && 'strokes' in node) {
+        } else if (msg.tokenType === 'stroke' && 'strokes' in node) {
           const strokes = [...(node.strokes as Paint[])];
           if (strokes.length > 0 && strokes[0].type === 'SOLID') {
             await figma.variables.setBoundVariableForPaint(
@@ -436,7 +500,7 @@ figma.ui.onmessage = async (msg) => {
             );
             node.strokes = strokes;
           }
-        } else if (tokenType === 'effect' && 'effects' in node) {
+        } else if (msg.tokenType === 'effect' && 'effects' in node) {
           const effects = [...(node.effects as Effect[])];
           if (effects.length > 0) {
             await figma.variables.setBoundVariableForEffect(
@@ -447,7 +511,7 @@ figma.ui.onmessage = async (msg) => {
             node.effects = effects;
           }
         }
-        figma.ui.postMessage({ type: 'success', message: `${tokenType} token applied successfully` });
+        figma.ui.postMessage({ type: 'success', message: `${msg.tokenType} token applied successfully` });
       } catch (error: any) {
         figma.ui.postMessage({ 
           type: 'error', 
@@ -457,62 +521,76 @@ figma.ui.onmessage = async (msg) => {
     }
   }
 
-  if (msg.type === 'apply-style') {
-    const { nodeId, styleType, styleId } = msg;
-    const node = figma.getNodeById(nodeId);
-    const style = figma.getStyleById(styleId);
+  if (msg.type === 'apply-style' && msg.nodeId && msg.styleType && msg.styleId) {
+    const node = figma.getNodeById(msg.nodeId);
+    const style = figma.getStyleById(msg.styleId);
     
     if (node && style) {
       try {
-        switch (styleType) {
+        switch (msg.styleType) {
           case 'fill':
             if ('fillStyleId' in node) {
-              node.fillStyleId = styleId;
+              try {
+                (node as any).fillStyleId = msg.styleId;
+              } catch (err) {
+                console.warn('Failed to set fillStyleId:', err);
+              }
             }
             break;
           case 'stroke':
             if ('strokeStyleId' in node) {
-              node.strokeStyleId = styleId;
+              try {
+                (node as any).strokeStyleId = msg.styleId;
+              } catch (err) {
+                console.warn('Failed to set strokeStyleId:', err);
+              }
             }
             break;
           case 'effect':
             if ('effectStyleId' in node) {
-              node.effectStyleId = styleId;
+              try {
+                (node as any).effectStyleId = msg.styleId;
+              } catch (err) {
+                console.warn('Failed to set effectStyleId:', err);
+              }
             }
             break;
           case 'text':
             if (node.type === 'TEXT') {
-              node.textStyleId = styleId;
+              try {
+                node.textStyleId = msg.styleId;
+              } catch (err) {
+                console.warn('Failed to set textStyleId:', err);
+              }
             }
             break;
         }
-        figma.ui.postMessage({ type: 'success', message: `${styleType} style applied successfully` });
-      } catch (error: any) {
+        figma.ui.postMessage({ type: 'success', message: `${msg.styleType} style applied successfully` });
+      } catch (error) {
         figma.ui.postMessage({ 
           type: 'error', 
-          message: `Failed to apply style: ${error.message}` 
+          message: `Failed to apply style: ${error instanceof Error ? error.message : String(error)}` 
         });
       }
     }
   }
 
-  if (msg.type === 'swap-component') {
-    const { nodeId } = msg;
-    const node = figma.getNodeById(nodeId);
+  if (msg.type === 'swap-component' && msg.nodeId) {
+    const node = figma.getNodeById(msg.nodeId);
     
     if (node && node.type === 'INSTANCE') {
       try {
-        // Use component browser instead of showComponentPicker
-        await figma.showUI(__html__, { width: 400, height: 600 });
-        const components = figma.currentPage.findAll(node => node.type === "COMPONENT");
+        const components = figma.currentPage.findAll(n => n.type === "COMPONENT");
         
         if (components.length > 0) {
           const newInstance = (components[0] as ComponentNode).createInstance();
-          newInstance.x = node.x;
-          newInstance.y = node.y;
-          newInstance.resize(node.width, node.height);
-          node.parent?.insertChild(node.parent.children.indexOf(node), newInstance);
-          node.remove();
+          if (node.parent) {
+            newInstance.x = node.x;
+            newInstance.y = node.y;
+            newInstance.resize(node.width, node.height);
+            node.parent.insertChild(node.parent.children.indexOf(node), newInstance);
+            node.remove();
+          }
           figma.ui.postMessage({ type: 'success', message: 'Component swapped successfully' });
         } else {
           throw new Error('No components found to swap with');
@@ -541,124 +619,49 @@ figma.ui.onmessage = async (msg) => {
   }
 
   if (msg.type === 'select-group') {
-    const { nodeIds } = msg;
-    console.log('Attempting to select nodes:', nodeIds);
-    
     try {
-      // Validate nodeIds array
-      if (!Array.isArray(nodeIds) || nodeIds.length === 0) {
+      // Check if nodeIds exists and is an array
+      if (!msg.nodeIds || !Array.isArray(msg.nodeIds)) {
         throw new Error('Invalid node IDs provided');
       }
 
-      // Add a timeout to prevent infinite waiting
-      const timeout = 5000; // 5 seconds
-      const getNodeWithTimeout = async (id: string) => {
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Timeout')), timeout);
-        });
-
-        try {
-          const nodePromise = figma.getNodeByIdAsync(id);
-          const node = await Promise.race([nodePromise, timeoutPromise]);
-          return node;
-        } catch (err) {
-          console.warn(`Failed to get node ${id}:`, err);
-          return null;
-        }
-      };
-
-      // Get nodes with timeout and error handling
+      // Fetch nodes asynchronously
       const nodes = await Promise.all(
-        nodeIds.map(async (id: string) => {
-          if (typeof id !== 'string') {
-            console.warn('Invalid node ID:', id);
-            return null;
-          }
-          return getNodeWithTimeout(id);
-        })
+        msg.nodeIds.map(id => figma.getNodeByIdAsync(id))
+      );
+      
+      // Filter out null values and ensure nodes are SceneNodes
+      const validNodes = nodes.filter((node): node is SceneNode => 
+        node !== null && 'type' in node && node.type !== 'DOCUMENT'
       );
 
-      // Use Figma's type checking
-      const validNodes = nodes.filter((node): node is SceneNode => {
-        if (!node) return false;
-        try {
-          // First check if node is a record/object
-          if (typeof node !== 'object' || node === null) return false;
-          
-          // Now we can safely check for properties
-          const nodeAsAny = node as any;
-          if (!nodeAsAny.type || !nodeAsAny.id) return false;
-          
-          // Check if it's a valid scene node type
-          const validSceneNodeTypes = new Set([
-            'RECTANGLE',
-            'ELLIPSE',
-            'POLYGON',
-            'STAR',
-            'VECTOR',
-            'TEXT',
-            'FRAME',
-            'COMPONENT',
-            'INSTANCE',
-            'BOOLEAN_OPERATION',
-            'GROUP',
-            'LINE',
-            'STAMP'
-          ]);
-          
-          const isSceneNode = validSceneNodeTypes.has(nodeAsAny.type as string);
-          console.log(`Node ${nodeAsAny.id} type: ${nodeAsAny.type}, isSceneNode: ${isSceneNode}`);
-          return isSceneNode;
-        } catch (err) {
-          console.warn('Error checking node validity:', err);
-          return false;
-        }
-      });
-
-      console.log('Valid nodes to select:', validNodes.length);
-      
       if (validNodes.length > 0) {
-        try {
-          // Ensure nodes are still valid and selectable
-          const accessibleNodes = validNodes.filter(node => {
-            try {
-              // Check if node is still valid and on the current page
-              return (
-                node.id && 
-                node.parent && 
-                (node.parent === figma.currentPage || node.parent.parent === figma.currentPage)
-              );
-            } catch {
-              return false;
-            }
-          });
-
-          if (accessibleNodes.length > 0) {
-            figma.currentPage.selection = accessibleNodes;
-            figma.viewport.scrollAndZoomIntoView(accessibleNodes);
-            figma.ui.postMessage({ 
-              type: 'success', 
-              message: `Selected ${accessibleNodes.length} nodes in Figma` 
-            });
-          } else {
-            throw new Error('No accessible nodes found');
-          }
-        } catch (error) {
-          throw new Error(`Failed to select nodes: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        }
+        figma.currentPage.selection = validNodes;
+        // Optionally scroll to show the selected nodes
+        figma.viewport.scrollAndZoomIntoView(validNodes);
       } else {
-        figma.ui.postMessage({ 
-          type: 'error', 
-          message: 'No valid nodes found to select' 
-        });
+        throw new Error('No valid nodes found to select');
       }
-    } catch (error) {
-      console.error('Error in select-group:', error);
+    } catch (err) {
+      console.error('Error in select-group:', err);
       figma.ui.postMessage({ 
         type: 'error', 
-        message: error instanceof Error ? error.message : 'Failed to select nodes'
+        message: err instanceof Error ? err.message : 'Failed to select nodes' 
       });
     }
+  }
+
+  if (msg.type === 'get-selected-frame-ids') {
+    const selectedFrames = figma.currentPage.selection.filter(node => 
+      node.type === 'FRAME' || 
+      node.type === 'COMPONENT' || 
+      node.type === 'COMPONENT_SET'
+    );
+    
+    figma.ui.postMessage({
+      type: 'selected-frame-ids',
+      ids: selectedFrames.map(frame => frame.id)
+    });
   }
 };
 
@@ -682,19 +685,27 @@ let currentWindowSize = {
 })();
 
 async function scanForVerticalGap(
-  progressCallback: (progress: number) => void
+  progressCallback: (progress: number) => void,
+  nodesToScan: SceneNode[]
 ): Promise<MissingReference[]> {
   const missingRefs: MissingReference[] = [];
   
   try {
-    const nodes = figma.currentPage.findAll(node => hasAutoLayout(node) && node.layoutMode === 'VERTICAL');
+    // Filter nodes with vertical auto-layout from the provided nodes
+    const nodes = nodesToScan.filter(node => 
+      hasAutoLayout(node) && node.layoutMode === 'VERTICAL'
+    );
+    
     console.log(`Found ${nodes.length} nodes with vertical auto-layout`);
 
+    // Process nodes with progress updates
     for (let i = 0; i < nodes.length; i++) {
       if (isScanCancelled) break;
       
       const node = nodes[i] as FrameNode;
-      if (!node.boundVariables?.itemSpacing) {
+      
+      // Check if itemSpacing is not bound to a variable and is greater than 0
+      if (node.itemSpacing > 0 && !node.boundVariables?.itemSpacing) {
         missingRefs.push({
           nodeId: node.id,
           nodeName: node.name,
@@ -705,7 +716,11 @@ async function scanForVerticalGap(
         });
       }
 
-      progressCallback((i / nodes.length) * 100);
+      // Calculate and report progress
+      const progress = ((i + 1) / nodes.length) * 100;
+      progressCallback(progress);
+
+      // Add a small delay to prevent UI freezing
       await new Promise(resolve => setTimeout(resolve, 0));
     }
   } catch (err) {
@@ -732,7 +747,7 @@ async function scanForPadding(
       const boundVars = node.boundVariables || {};
 
       if (type === 'horizontal-padding') {
-        if (!boundVars.paddingLeft && node.paddingLeft > 0) {
+        if (node.paddingLeft > 0 && !boundVars.paddingLeft) {
           missingRefs.push({
             nodeId: node.id,
             nodeName: node.name,
@@ -742,7 +757,7 @@ async function scanForPadding(
             location: 'Left Padding'
           });
         }
-        if (!boundVars.paddingRight && node.paddingRight > 0) {
+        if (node.paddingRight > 0 && !boundVars.paddingRight) {
           missingRefs.push({
             nodeId: node.id,
             nodeName: node.name,
@@ -753,7 +768,7 @@ async function scanForPadding(
           });
         }
       } else {
-        if (!boundVars.paddingTop && node.paddingTop > 0) {
+        if (node.paddingTop > 0 && !boundVars.paddingTop) {
           missingRefs.push({
             nodeId: node.id,
             nodeName: node.name,
@@ -763,7 +778,7 @@ async function scanForPadding(
             location: 'Top Padding'
           });
         }
-        if (!boundVars.paddingBottom && node.paddingBottom > 0) {
+        if (node.paddingBottom > 0 && !boundVars.paddingBottom) {
           missingRefs.push({
             nodeId: node.id,
             nodeName: node.name,
@@ -775,7 +790,11 @@ async function scanForPadding(
         }
       }
 
-      progressCallback((i / nodes.length) * 100);
+      // Calculate and report progress
+      const progress = ((i + 1) / nodes.length) * 100;
+      progressCallback(progress);
+
+      // Add a small delay to prevent UI freezing
       await new Promise(resolve => setTimeout(resolve, 0));
     }
   } catch (err) {
@@ -791,63 +810,34 @@ async function scanForCornerRadius(
   const missingRefs: MissingReference[] = [];
   
   try {
-    const nodes = figma.currentPage.findAll(hasCornerRadius);
-    console.log(`Found ${nodes.length} nodes with corner radius`);
-
+    // Update the type check for cornerRadius
+    const nodes = figma.currentPage.findAll(node => {
+      if ('cornerRadius' in node) {
+        const radius = (node as any).cornerRadius;
+        return typeof radius === 'number' && radius > 0;
+      }
+      return false;
+    });
+    
     for (let i = 0; i < nodes.length; i++) {
       if (isScanCancelled) break;
       
-      const node = nodes[i] as RectangleNode | ComponentNode | InstanceNode | FrameNode;
-      const cornerRadius = node.cornerRadius;
+      const node = nodes[i] as SceneNode & { cornerRadius: number };
+      const boundVars = (node as any).boundVariables || {};
       
-      // Cast boundVariables to our interface
-      const boundVars = node.boundVariables as CornerRadiusVariables | undefined;
-
-      // Check main corner radius
-      if (cornerRadius !== figma.mixed && 
-          typeof cornerRadius === 'number' && 
-          cornerRadius > 0 && 
-          !boundVars?.cornerRadius) {
+      if (!boundVars.cornerRadius) {
         missingRefs.push({
           nodeId: node.id,
           nodeName: node.name,
           type: 'corner-radius',
           property: 'cornerRadius',
-          currentValue: cornerRadius,
-          location: 'Corner Radius'
+          currentValue: node.cornerRadius,
+          location: 'Shape'
         });
       }
 
-      // Check individual corners if they exist
-      if ('topLeftRadius' in node) {
-        const corners = [
-          { prop: 'topLeftRadius', name: 'Top Left' },
-          { prop: 'topRightRadius', name: 'Top Right' },
-          { prop: 'bottomLeftRadius', name: 'Bottom Left' },
-          { prop: 'bottomRightRadius', name: 'Bottom Right' }
-        ] as const;
-
-        for (const corner of corners) {
-          const radius = node[corner.prop];
-          const hasBinding = boundVars?.[corner.prop];
-
-          // Simplified check - removed figma.mixed check
-          if (typeof radius === 'number' && 
-              radius > 0 && 
-              !hasBinding) {
-            missingRefs.push({
-              nodeId: node.id,
-              nodeName: node.name,
-              type: 'corner-radius',
-              property: corner.prop,
-              currentValue: radius,
-              location: `${corner.name} Corner Radius`
-            });
-          }
-        }
-      }
-
-      progressCallback((i / nodes.length) * 100);
+      const progress = ((i + 1) / nodes.length) * 100;
+      progressCallback(progress);
       await new Promise(resolve => setTimeout(resolve, 0));
     }
   } catch (err) {

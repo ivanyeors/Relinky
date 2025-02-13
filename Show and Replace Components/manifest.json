@@ -1,6 +1,6 @@
 {
-  "name": "Missing References Finder",
-  "id": "your-plugin-id",
+  "name": "linkify",
+  "id": "1307669275006892545",
   "api": "1.0.0",
   "main": "code.js",
   "capabilities": [],
