@@ -14,22 +14,52 @@
   <div id="app">
     <div v-cloak class="plugin-container">
       <header class="header">
-        <h2>linkify</h2>
+        <div class="step-container">
+          <div class="step-content">
+            <h3 class="step-title">Select frames or components</h3>
+            <div v-if="!hasSelection" class="toast warning">
+              <div class="toast-icon">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path fill-rule="evenodd" clip-rule="evenodd" d="M8 1.33337L14.6667 13.3334H1.33334L8 1.33337ZM8 4.00004L3.73334 12H12.2667L8 4.00004ZM7.33334 6.66671H8.66668V9.33337H7.33334V6.66671ZM7.33334 10.6667H8.66668V12H7.33334V10.6667Z" fill="currentColor"/>
+                </svg>
+              </div>
+              <span class="toast-message">Select a frame in Figma to start scanning</span>
+            </div>
+            <div v-else class="toast success">
+              <div class="toast-icon">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path fill-rule="evenodd" clip-rule="evenodd" d="M8 1.33334C4.31811 1.33334 1.33334 4.31811 1.33334 8C1.33334 11.6819 4.31811 14.6667 8 14.6667C11.6819 14.6667 14.6667 11.6819 14.6667 8C14.6667 4.31811 11.6819 1.33334 8 1.33334ZM11.0607 6.27274L7.39401 9.93941L5.27274 7.81814L6.06069 7.03019L7.39401 8.36351L10.2727 5.48479L11.0607 6.27274Z" fill="currentColor"/>
+                </svg>
+              </div>
+              <span class="toast-message">{{ selectedCount }} items selected</span>
+            </div>
+          </div>
+        </div>
       </header>
 
       <div class="content">
         <!-- Scan Type Selection -->
-        <div class="scan-type-selector">
-          <label for="scan-type">Select what to scan for:</label>
-          <select v-model="selectedScanType" id="scan-type" class="select-input">
-            <option value="vertical-gap">Vertical Gaps</option>
-            <option value="horizontal-padding">Horizontal Padding</option>
-            <option value="vertical-padding">Vertical Padding</option>
-            <option value="corner-radius">Corner Radius</option>
-            <option value="fill">Fill Colors</option>
-            <option value="stroke">Stroke Colors</option>
-            <option value="typography">Typography</option>
-          </select>
+        <div class="step-container">
+          <div class="step-content">
+            <h3 class="step-title">Choose what to scan for</h3>
+            <div class="scan-cards">
+              <div 
+                v-for="option in scanOptions" 
+                :key="option.value"
+                class="scan-card"
+                :class="{ 'selected': selectedScanType === option.value }"
+                @click="selectedScanType = option.value"
+              >
+                <div class="scan-card-icon">
+                  <component :is="option.icon"></component>
+                </div>
+                <div class="scan-card-content">
+                  <div class="scan-card-title">{{ option.label }}</div>
+                  <div class="scan-card-description">{{ option.description }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Scan Scope Selection -->
@@ -61,21 +91,26 @@
         </div>
 
         <!-- Scan Controls -->
-        <div class="scan-controls">
-          <button 
-            @click="startScan" 
-            :disabled="isScanning || (!hasSelection && !scanEntirePage)" 
-            class="button primary-button"
-          >
-            Start Scan
-          </button>
-          <button 
-            v-if="isScanning" 
-            @click="cancelScan" 
-            class="button secondary-button"
-          >
-            Cancel
-          </button>
+        <div class="step-container">
+          <div class="step-content">
+            <h3 class="step-title">Start scanning</h3>
+            <div class="scan-controls">
+              <button 
+                @click="startScan" 
+                :disabled="isScanning || (!hasSelection && !scanEntirePage)" 
+                class="button primary-button"
+              >
+                Start Scan
+              </button>
+              <button 
+                v-if="isScanning" 
+                @click="cancelScan" 
+                class="button secondary-button"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         </div>
 
         <!-- Progress Bar -->
@@ -93,37 +128,70 @@
         <div v-if="!isScanning && Object.keys(groupedReferences).length > 0" class="references-container">
           <div v-for="(group, groupKey) in groupedByValue" :key="groupKey" class="value-group">
             <!-- Value Group Header -->
-            <div class="value-group-header">
-              <span class="value-label">Value: {{ formatValue(group.value) }}</span>
-              <span class="total-count">{{ group.refs.length }} instances</span>
+            <div class="value-group-header" @click="toggleGroup(groupKey)">
+              <div class="header-left">
+                <span class="expand-icon">{{ isGroupExpanded(groupKey) ? '▼' : '▶' }}</span>
+                <template v-if="group.refs[0]?.type === 'typography'">
+                  <span class="value-label">
+                    {{ group.refs[0].currentValue.fontFamily }} 
+                    {{ group.refs[0].currentValue.fontWeight }} 
+                    {{ group.refs[0].currentValue.fontSize }}px
+                  </span>
+                </template>
+                <template v-else>
+                  <span class="value-label">Value: {{ formatValue(group.value) }}</span>
+                </template>
+              </div>
+              <div class="header-right">
+                <span class="total-count">{{ group.refs.length }} instances</span>
+                <button class="select-button" @click.stop="selectGroup(group.refs)">Select All</button>
+              </div>
             </div>
 
-            <!-- Properties with this value -->
-            <div class="reference-card">
-              <div class="reference-info">
-                <div class="reference-header" @click="toggleGroup(groupKey)">
-                  <div class="header-left">
-                    <span class="expand-icon">{{ isGroupExpanded(groupKey) ? '▼' : '▶' }}</span>
-                    <div class="properties-list">
-                      <span class="property-tag" v-for="prop in group.properties" :key="prop">
-                        {{ prop }}
-                      </span>
+            <!-- Expanded Content -->
+            <div v-if="isGroupExpanded(groupKey)" class="reference-details">
+              <div v-for="ref in group.refs" :key="ref.nodeId" class="reference-item">
+                <!-- Special handling for typography items -->
+                <template v-if="ref.type === 'typography'">
+                  <div class="typography-details">
+                    <div class="typography-preview">{{ ref.currentValue.content }}...</div>
+                    <div class="typography-specs">
+                      <div>Font: {{ ref.currentValue.fontFamily }}</div>
+                      <div>Weight: {{ ref.currentValue.fontWeight }}</div>
+                      <div>Size: {{ ref.currentValue.fontSize }}px</div>
+                      <div v-if="ref.currentValue.lineHeight">Line Height: {{ ref.currentValue.lineHeight }}</div>
+                      <div v-if="ref.currentValue.letterSpacing">Letter Spacing: {{ ref.currentValue.letterSpacing }}</div>
+                      <div v-if="ref.currentValue.paragraphSpacing">Paragraph Spacing: {{ ref.currentValue.paragraphSpacing }}</div>
+                      <div v-if="ref.currentValue.textCase">Text Case: {{ ref.currentValue.textCase }}</div>
+                      <div v-if="ref.currentValue.textDecoration">Text Decoration: {{ ref.currentValue.textDecoration }}</div>
                     </div>
                   </div>
-                </div>
-                
-                <!-- Collapsible content -->
-                <div v-if="isGroupExpanded(groupKey)" class="variable-details">
-                  <div v-for="ref in group.refs" :key="ref.nodeId" class="variable-item">
-                    <div class="node-info">{{ ref.nodeName }}</div>
-                    <div class="location-info">{{ ref.property }} in {{ ref.location }}</div>
-                  </div>
-                </div>
+                </template>
+                <template v-else>
+                  <div class="reference-name">{{ ref.nodeName }}</div>
+                  <div class="reference-location">{{ ref.location }}</div>
+                </template>
+                <button class="select-button" @click="selectGroup([ref])">Select</button>
               </div>
-              <button @click="selectGroup(group.refs)" class="button select-button">
-                Select All
-              </button>
             </div>
+          </div>
+        </div>
+
+        <!-- Add this after the scan results -->
+        <div v-if="!isScanning && Object.keys(groupedReferences).length > 0" class="watch-controls">
+          <div class="toggle-container">
+            <label class="toggle-label">
+              <span>Watch for Changes</span>
+              <div class="toggle-wrapper">
+                <input 
+                  type="checkbox" 
+                  v-model="isWatching"
+                  class="toggle-input"
+                  @change="toggleWatch"
+                >
+                <div class="toggle-slider"></div>
+              </div>
+            </label>
           </div>
         </div>
 
@@ -398,31 +466,51 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 4px 8px;
-      background: var(--figma-color-bg);
-      border-radius: 2px;
-      font-size: 11px;
+      padding: 8px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 4px;
+      cursor: pointer;
     }
 
-    .value-label {
-      font-weight: 500;
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
 
-    .total-count {
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .expand-icon {
+      font-size: 8px;
       color: var(--figma-color-text-secondary);
     }
 
-    .properties-list {
+    .reference-item {
       display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px;
+      background: var(--figma-color-bg-tertiary);
+      border-radius: 4px;
+      margin-top: 4px;
     }
 
-    .property-tag {
-      background: var(--figma-color-bg-tertiary);
-      padding: 2px 6px;
+    .select-button {
+      padding: 4px 8px;
+      background: var(--figma-color-bg-brand);
+      color: var(--figma-color-text-onbrand);
+      border: none;
       border-radius: 4px;
+      cursor: pointer;
       font-size: 11px;
+    }
+
+    .select-button:hover {
+      background: var(--figma-color-bg-brand-hover);
     }
 
     .scan-scope-selector {
@@ -550,16 +638,149 @@
       opacity: 0.4;
       cursor: not-allowed;
     }
+
+    /* Add these styles */
+    .typography-details {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 8px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 4px;
+    }
+
+    .typography-preview {
+      font-family: system-ui;
+      color: var(--figma-color-text);
+      opacity: 0.8;
+      font-style: italic;
+    }
+
+    .typography-specs {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 4px;
+      font-size: 12px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    /* Add these styles */
+    .section-title {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: var(--figma-color-text);
+    }
+
+    .scan-cards {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+
+    .scan-card {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.2s ease;
+    }
+
+    .scan-card:hover {
+      background: var(--figma-color-bg-hover);
+    }
+
+    .scan-card.selected {
+      background: var(--figma-color-bg-brand-tertiary);
+      border-color: var(--figma-color-border-brand);
+    }
+
+    .scan-card-icon {
+      flex-shrink: 0;
+      width: 24px;
+      height: 24px;
+      color: var(--figma-color-icon);
+    }
+
+    .scan-card-content {
+      flex: 1;
+    }
+
+    .scan-card-title {
+      font-weight: 500;
+      margin-bottom: 4px;
+      color: var(--figma-color-text);
+    }
+
+    .scan-card-description {
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+      line-height: 14px;
+    }
+
+    .scan-card.selected .scan-card-icon {
+      color: var(--figma-color-icon-brand);
+    }
+
+    .scan-card.selected .scan-card-title {
+      color: var(--figma-color-text-brand);
+    }
+
+    .toast {
+      display: flex;
+      align-items: center;
+      padding: 8px;
+      border-radius: 4px;
+      background-color: var(--figma-color-bg-warning-tertiary);
+      color: var(--figma-color-text-onwarning-tertiary);
+      border: 1px solid var(--figma-color-border-warning);
+    }
+
+    .toast-icon {
+      margin-right: 8px;
+      opacity: 0.8;
+      color: white;
+    }
+
+    .toast-message {
+      font-size: 11px;
+      font-weight: 500;
+      opacity: 0.9;
+      color: white;
+    }
+
+    .toast.success {
+      background: var(--figma-color-bg-success-tertiary);
+      color: white;
+      border: 1px solid var(--figma-color-border-success);
+    }
+
+    .toast.success .toast-icon {
+      margin-right: 8px;
+      opacity: 1;
+      color: white;
+    }
+
+    .toast.success .toast-message {
+      font-size: 11px;
+      font-weight: 500;
+      opacity: 1;
+      color: white;
+    }
   </style>
 
   <script>
     console.clear(); // Clear previous logs
     console.log('UI script started');
 
-    // First define the icon components
+    // Add these icon components before createApp
     const IconWarning = {
       template: `
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
           <path fill-rule="evenodd" clip-rule="evenodd" d="M6 1L11 10H1L6 1ZM6 3L2.8 9H9.2L6 3ZM5.5 5H6.5V7H5.5V5ZM5.5 8H6.5V9H5.5V8Z" fill="currentColor"/>
         </svg>
       `
@@ -567,8 +788,55 @@
 
     const IconInfo = {
       template: `
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
           <path fill-rule="evenodd" clip-rule="evenodd" d="M6 1C3.24 1 1 3.24 1 6C1 8.76 3.24 11 6 11C8.76 11 11 8.76 11 6C11 3.24 8.76 1 6 1ZM6 10C3.79 10 2 8.21 2 6C2 3.79 3.79 2 6 2C8.21 2 10 3.79 10 6C10 8.21 8.21 10 6 10ZM5 5H7V9H5V5ZM5 3H7V4H5V3Z" fill="currentColor"/>
+        </svg>
+      `
+    };
+
+    const IconTypography = {
+      template: `
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <path d="M8 4v16M16 4v16M4 12h6M14 12h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <path d="M7 8h2M15 8h2M7 16h2M15 16h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      `
+    };
+
+    const IconSpacing = {
+      template: `
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <rect x="4" y="6" width="16" height="4" rx="1" stroke="currentColor" stroke-width="2"/>
+          <rect x="4" y="14" width="16" height="4" rx="1" stroke="currentColor" stroke-width="2"/>
+          <path d="M12 10v4" stroke="currentColor" stroke-width="2" stroke-dasharray="2 2"/>
+        </svg>
+      `
+    };
+
+    const IconRadius = {
+      template: `
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <path d="M4 12C4 7.58172 7.58172 4 12 4" stroke="currentColor" stroke-width="2"/>
+          <path d="M12 4L12 7M12 4L9 4" stroke="currentColor" stroke-width="2"/>
+          <rect x="12" y="12" width="8" height="8" rx="2" stroke="currentColor" stroke-width="2"/>
+        </svg>
+      `
+    };
+
+    const IconFill = {
+      template: `
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <path fill-rule="evenodd" clip-rule="evenodd" d="M16 4H8a4 4 0 00-4 4v8a4 4 0 004 4h8a4 4 0 004-4V8a4 4 0 00-4-4zM8 6h8a2 2 0 012 2v8a2 2 0 01-2 2H8a2 2 0 01-2-2V8a2 2 0 012-2z" fill="currentColor"/>
+          <rect x="8" y="8" width="8" height="8" fill="currentColor"/>
+        </svg>
+      `
+    };
+
+    const IconStroke = {
+      template: `
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <rect x="6" y="6" width="12" height="12" rx="2" stroke="currentColor" stroke-width="2"/>
+          <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2"/>
         </svg>
       `
     };
@@ -579,7 +847,12 @@
     createApp({
       components: {
         IconWarning,
-        IconInfo
+        IconInfo,
+        IconTypography,
+        IconSpacing,
+        IconRadius,
+        IconFill,
+        IconStroke
       },
       data() {
         return {
@@ -591,6 +864,39 @@
           expandedGroups: new Set(),
           hasSelection: false,
           selectedCount: 0,
+          isWatching: false,
+          scanOptions: [
+            {
+              value: 'typography',
+              label: 'Typography',
+              description: 'Find text layers missing text style variables',
+              icon: 'IconTypography'
+            },
+            {
+              value: 'vertical-gap',
+              label: 'Spacing',
+              description: 'Find auto-layout frames with unlinked spacing',
+              icon: 'IconSpacing'
+            },
+            {
+              value: 'corner-radius',
+              label: 'Corner Radius',
+              description: 'Find shapes with unlinked corner radius',
+              icon: 'IconRadius'
+            },
+            {
+              value: 'fill',
+              label: 'Fill Colors',
+              description: 'Find layers with unlinked fill colors',
+              icon: 'IconFill'
+            },
+            {
+              value: 'stroke',
+              label: 'Stroke Colors',
+              description: 'Find layers with unlinked stroke colors',
+              icon: 'IconStroke'
+            }
+          ]
         }
       },
       computed: {
@@ -721,6 +1027,24 @@
         },
         getPropertyName(key) {
           return key.split(':')[0];
+        },
+        toggleWatch() {
+          if (this.isWatching) {
+            // Start watching with current scan type
+            parent.postMessage({ 
+              pluginMessage: { 
+                type: 'start-watching',
+                scanType: this.selectedScanType 
+              }
+            }, '*');
+          } else {
+            // Stop watching
+            parent.postMessage({ 
+              pluginMessage: { 
+                type: 'stop-watching' 
+              }
+            }, '*');
+          }
         }
       },
       mounted() {

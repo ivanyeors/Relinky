@@ -31,6 +31,7 @@ interface MissingReference {
   location: string;
   variableName?: string;
   variableValue?: any;
+  preview?: string;
 }
 
 // Update ScanType to match the UI options exactly
@@ -132,51 +133,94 @@ interface CornerRadiusVariables {
   bottomRightRadius?: VariableBinding;
 }
 
-// Function to scan for missing text styles
+// Add this helper function to format typography values
+function formatTypographyValue(value: any): string {
+  if (!value || typeof value !== 'object') return 'Unknown';
+  
+  const {
+    fontFamily = '',
+    fontWeight = '',
+    fontSize = ''
+  } = value;
+
+  return `${fontFamily} ${fontWeight} ${fontSize}px`;
+}
+
+// Update the scanForTextTokens function with better progress reporting
 async function scanForTextTokens(
   progressCallback: (progress: number) => void
 ): Promise<MissingReference[]> {
   const missingRefs: MissingReference[] = [];
   
   try {
-    const nodes = figma.currentPage.findAll(node => node.type === 'TEXT');
-    console.log(`Found ${nodes.length} text nodes`);
-
-    for (let i = 0; i < nodes.length; i++) {
-      if (isScanCancelled) {
-        console.log('Scan cancelled by user');
-        break;
-      }
+    // Use type guard to ensure we only get TextNodes
+    const textNodes = figma.currentPage.findAll(node => node.type === 'TEXT') as TextNode[];
+    const totalNodes = textNodes.length;
+    let processedNodes = 0;
+    
+    for (const node of textNodes) {
+      if (isScanCancelled) break;
       
-      const node = nodes[i] as TextNode;
       try {
-        if (node.textStyleId && typeof node.textStyleId === 'string') {
-          const style = await figma.getStyleByIdAsync(node.textStyleId);
-          if (!style || style.remote) {
-            console.log(`Missing text style in node: ${node.name}`);
-            missingRefs.push({
-              nodeId: node.id,
-              nodeName: node.name || 'Unnamed Text Node',
-              type: 'typography',
-              property: 'textStyleId',
-              currentValue: node.textStyleId,
-              location: 'Text Style'
-            });
+        // Now TypeScript knows this is a TextNode
+        if (!node.textStyleId) {
+          const fontName = node.fontName;
+          let fontFamily = '';
+          let fontWeight = '';
+          
+          if (typeof fontName === 'object' && 'family' in fontName) {
+            fontFamily = fontName.family;
+            fontWeight = fontName.style;
           }
-        }
 
-        progressCallback((i / nodes.length) * 100);
-        await new Promise(resolve => setTimeout(resolve, 0));
+          // Structure the typography data
+          const typographyValue = {
+            fontFamily,
+            fontWeight,
+            fontSize: node.fontSize,
+            lineHeight: node.lineHeight === figma.mixed ? 'MIXED' :
+                       typeof node.lineHeight === 'number' ? node.lineHeight :
+                       'unit' in (node.lineHeight || {}) ? node.lineHeight.unit :
+                       null,
+            letterSpacing: node.letterSpacing === figma.mixed ? 'MIXED' :
+                          typeof node.letterSpacing === 'number' ? node.letterSpacing :
+                          'value' in (node.letterSpacing || {}) ? node.letterSpacing.value :
+                          null,
+            paragraphSpacing: node.paragraphSpacing,
+            textCase: node.textCase,
+            textDecoration: node.textDecoration,
+            content: node.characters.substring(0, 50)
+          };
+
+          missingRefs.push({
+            nodeId: node.id,
+            nodeName: node.name,
+            type: 'typography',
+            property: 'textStyleId',
+            currentValue: typographyValue,
+            location: 'Text Layer',
+            preview: formatTypographyValue(typographyValue)
+          });
+        }
       } catch (err) {
-        console.warn(`Error checking text node ${node.name}:`, err);
+        console.warn(`Error processing text node ${node.name}:`, err);
+      }
+
+      // Update progress more frequently
+      processedNodes++;
+      const progress = (processedNodes / totalNodes) * 100;
+      progressCallback(progress);
+
+      // Add a small delay every few nodes to prevent UI freezing
+      if (processedNodes % 10 === 0) {
+        await new Promise(resolve => setTimeout(resolve, 0));
       }
     }
-
-    return missingRefs;
   } catch (err) {
-    console.error('Error scanning for text styles:', err);
-    return missingRefs;
+    console.error('Error scanning for text tokens:', err);
   }
+  
+  return missingRefs;
 }
 
 // Function to scan for missing color variables
@@ -262,18 +306,18 @@ async function scanForColorTokens(
                 });
               }
             });
-          }
-        }
-
-        // Check strokes
-        if ('strokes' in node) {
-          const strokes = node.strokes;
+      }
+    }
+    
+    // Check strokes
+    if ('strokes' in node) {
+      const strokes = node.strokes;
           if (Array.isArray(strokes)) {
             strokes.forEach((stroke: Paint, index) => {
               if (stroke.type === 'SOLID' && !node.boundVariables?.strokes?.[index]) {
                 console.log(`Missing color variable in stroke of node: ${node.name}`);
                 missingRefs.push({
-                  nodeId: node.id,
+            nodeId: node.id,
                   nodeName: node.name || 'Unnamed Node',
                   type: 'stroke',
                   property: `strokes[${index}]`,
@@ -350,7 +394,8 @@ figma.on('selectionchange', () => {
 // Update scanForMissingReferences to use async node fetching
 async function scanForMissingReferences(
   scanType: ScanType,
-  selectedFrameIds?: string[]
+  selectedFrameIds?: string[],
+  progressCallback?: (progress: number) => void
 ): Promise<MissingReference[]> {
   let nodesToScan: SceneNode[] = [];
   
@@ -381,29 +426,39 @@ async function scanForMissingReferences(
     switch (scanType) {
       case 'vertical-gap':
         refs = await scanForVerticalGap(progress => {
-          figma.ui.postMessage({ type: 'scan-progress', progress });
+          if (progressCallback) {
+            progressCallback((progress / 100) * 100);
+          }
         }, nodesToScan);
         break;
       case 'horizontal-padding':
       case 'vertical-padding':
         refs = await scanForPadding(progress => {
-          figma.ui.postMessage({ type: 'scan-progress', progress });
+          if (progressCallback) {
+            progressCallback((progress / 100) * 100);
+          }
         }, scanType);
         break;
       case 'corner-radius':
         refs = await scanForCornerRadius(progress => {
-          figma.ui.postMessage({ type: 'scan-progress', progress });
+          if (progressCallback) {
+            progressCallback((progress / 100) * 100);
+          }
         });
         break;
       case 'fill':
       case 'stroke':
         refs = await scanForColorTokens(progress => {
-          figma.ui.postMessage({ type: 'scan-progress', progress });
+          if (progressCallback) {
+            progressCallback((progress / 100) * 100);
+          }
         });
         break;
       case 'typography':
         refs = await scanForTextTokens(progress => {
-          figma.ui.postMessage({ type: 'scan-progress', progress });
+          if (progressCallback) {
+            progressCallback((progress / 100) * 100);
+          }
         });
         break;
     }
@@ -414,7 +469,81 @@ async function scanForMissingReferences(
   }
 }
 
-// Update the message handler to properly handle errors
+// Add at the top with other interfaces
+interface DocumentChangeHandler {
+  lastScanType?: ScanType;
+  isWatching: boolean;
+  timeoutId?: number;
+  changeHandler?: () => void;
+}
+
+// Add this state object near the top of the file
+const documentState: DocumentChangeHandler = {
+  isWatching: false
+};
+
+// Update the startWatchingDocument function
+async function startWatchingDocument(scanType: ScanType) {
+  if (documentState.isWatching) {
+    return; // Already watching
+  }
+
+  try {
+    // Load all pages before registering document change handler
+    await figma.loadAllPagesAsync();
+    
+    documentState.isWatching = true;
+    documentState.lastScanType = scanType;
+
+    const documentChangeHandler = async () => {
+      if (documentState.timeoutId) {
+        clearTimeout(documentState.timeoutId);
+      }
+
+      documentState.timeoutId = setTimeout(async () => {
+        if (!documentState.lastScanType) return;
+
+        // Show scanning state in UI
+        figma.ui.postMessage({ type: 'scan-progress', progress: 0 });
+
+        // Perform a new scan
+        const missingRefs = await scanForMissingReferences(
+          documentState.lastScanType,
+          undefined
+        );
+
+        // Send updated results to UI
+        figma.ui.postMessage({
+          type: 'missing-references-result',
+          references: groupMissingReferences(missingRefs)
+        });
+      }, 500);
+    };
+
+    // Store the handler in the state
+    documentState.changeHandler = documentChangeHandler;
+    figma.on('documentchange', documentChangeHandler);
+  } catch (err) {
+    console.error('Failed to start document watching:', err);
+    figma.ui.postMessage({ 
+      type: 'error', 
+      message: 'Failed to start watching document for changes' 
+    });
+  }
+}
+
+// Add this function to stop watching
+function stopWatchingDocument() {
+  documentState.isWatching = false;
+  if (documentState.timeoutId) {
+    clearTimeout(documentState.timeoutId);
+  }
+  if (documentState.changeHandler) {
+    figma.off('documentchange', documentState.changeHandler);
+  }
+}
+
+// Update the message handler to include watch controls
 figma.ui.onmessage = async (msg: PluginMessage) => {
   console.log('Plugin received message:', msg);
 
@@ -461,6 +590,8 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
         references: groupedRefs 
       });
 
+      // Start watching after initial scan
+      startWatchingDocument(scanType);
     } catch (err) {
       console.error('Scan failed:', err);
       figma.ui.postMessage({ 
@@ -468,6 +599,8 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
         message: err instanceof Error ? err.message : 'Scan failed. Please try again.' 
       });
     }
+  } else if (msg.type === 'stop-watching') {
+    stopWatchingDocument();
   }
   
   if (msg.type === 'apply-token' && msg.nodeId && msg.tokenType && msg.tokenValue) {
@@ -483,9 +616,9 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
         if (msg.tokenType === 'fill' && 'fills' in node) {
           const fills = [...(node.fills as Paint[])];
           if (fills.length > 0 && fills[0].type === 'SOLID') {
-            await figma.variables.setBoundVariableForPaint(
+          await figma.variables.setBoundVariableForPaint(
               fills[0] as SolidPaint,
-              'color',
+            'color',
               variable
             );
             node.fills = fills;
@@ -493,9 +626,9 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
         } else if (msg.tokenType === 'stroke' && 'strokes' in node) {
           const strokes = [...(node.strokes as Paint[])];
           if (strokes.length > 0 && strokes[0].type === 'SOLID') {
-            await figma.variables.setBoundVariableForPaint(
+          await figma.variables.setBoundVariableForPaint(
               strokes[0] as SolidPaint,
-              'color',
+            'color',
               variable
             );
             node.strokes = strokes;
@@ -592,12 +725,12 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
             node.remove();
           }
           figma.ui.postMessage({ type: 'success', message: 'Component swapped successfully' });
-        } else {
+    } else {
           throw new Error('No components found to swap with');
         }
       } catch (error: any) {
-        figma.ui.postMessage({ 
-          type: 'error', 
+      figma.ui.postMessage({ 
+        type: 'error', 
           message: `Failed to swap component: ${error.message}` 
         });
       }
