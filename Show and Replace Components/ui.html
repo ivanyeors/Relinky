@@ -15,82 +15,100 @@
     <div v-cloak class="plugin-container">
       <header class="header">
         <h2>Missing References Finder</h2>
-        
-        <!-- Add scan type selector -->
-        <div class="scan-controls">
-          <select v-model="selectedScanType" class="scan-type-select">
-            <option value="colors">Color Variables</option>
-            <option value="text">Text Styles</option>
-            <option value="spacing">Auto-layout & Spacing</option>
-            <option value="effects">Effects</option>
-            <option value="grid">Layout Grid</option>
-          </select>
-          
-          <button @click="scanForReferences" 
-                  class="button primary"
-                  :disabled="isLoading">
-            {{ isLoading ? 'Scanning...' : 'Scan' }}
-          </button>
-        </div>
       </header>
 
-      <!-- Progress bar -->
-      <div v-if="isLoading" class="progress-container">
-        <div class="progress-text">
-          {{ scanStatus }}
-          <div class="progress-detail">{{ currentScanType }}: {{ Math.round(scanProgress) }}%</div>
-        </div>
-        <div class="progress-bar">
-          <div class="progress-fill" :style="{ width: scanProgress + '%' }"></div>
-        </div>
-        <button @click="cancelScan" class="button secondary cancel-button">
-          Cancel Scan
-        </button>
-      </div>
-
-      <!-- Results with scroll -->
-      <div class="results-container">
-        <!-- Empty state -->
-        <div v-if="!isLoading && missingRefs.length === 0" class="empty-state">
-          <span>No missing references found or start by scanning the page.</span>
+      <div class="content">
+        <!-- Scan Type Selection -->
+        <div class="scan-type-selector">
+          <label for="scan-type">Select what to scan for:</label>
+          <select v-model="selectedScanType" id="scan-type" class="select-input">
+            <option value="vertical-gap">Vertical Gaps</option>
+            <option value="horizontal-padding">Horizontal Padding</option>
+            <option value="vertical-padding">Vertical Padding</option>
+            <option value="corner-radius">Corner Radius</option>
+            <option value="fill">Fill Colors</option>
+            <option value="stroke">Stroke Colors</option>
+            <option value="typography">Typography</option>
+          </select>
         </div>
 
-        <!-- References list -->
-        <div v-else-if="!isLoading" class="references-container">
-          <div class="reference-list">
-            <div v-for="ref in filteredRefs" 
-                 :key="ref.nodeId" 
-                 class="reference-item">
+        <!-- Scan Controls -->
+        <div class="scan-controls">
+          <button 
+            @click="startScan" 
+            :disabled="isScanning" 
+            class="button primary-button"
+          >
+            Start Scan
+          </button>
+          <button 
+            v-if="isScanning" 
+            @click="cancelScan" 
+            class="button secondary-button"
+          >
+            Cancel
+          </button>
+        </div>
+
+        <!-- Progress Bar -->
+        <div v-if="isScanning" class="progress-container">
+          <div class="progress-bar">
+            <div 
+              class="progress-fill" 
+              :style="{ width: `${scanProgress}%` }"
+            ></div>
+          </div>
+          <div class="progress-text">{{ Math.round(scanProgress) }}%</div>
+        </div>
+
+        <!-- Results Section -->
+        <div v-if="!isScanning && Object.keys(groupedReferences).length > 0" class="references-container">
+          <div v-for="(refs, property) in groupedReferences" :key="property" class="reference-group">
+            <div class="reference-card">
               <div class="reference-info">
                 <div class="reference-header">
-                  <span class="node-name">{{ ref.nodeName }}</span>
-                  <span class="property-type">{{ ref.propertyType }}</span>
+                  <span class="parameter-name">{{ property }}</span>
+                  <span class="missing-count">{{ refs.length }} missing</span>
                 </div>
-                <div v-if="ref.missingSource" class="missing-source">
-                  Originally from: {{ ref.missingSource }}
+                <!-- Add variable details -->
+                <div class="variable-details">
+                  <div v-for="ref in refs" :key="ref.nodeId" class="variable-item">
+                    <div class="variable-name">{{ ref.variableName || 'Unnamed Variable' }}</div>
+                    <div class="variable-value" v-if="ref.variableValue">
+                      Value: {{ formatValue(ref.variableValue) }}
+                    </div>
+                    <div class="node-info">
+                      Used in: {{ ref.nodeName }}
+                    </div>
+                    <div class="location-info">
+                      Location: {{ ref.location }}
+                    </div>
+                    <div class="current-value">
+                      Current Value: {{ formatValue(ref.currentValue) }}
+                    </div>
+                  </div>
                 </div>
               </div>
+              <button @click="selectGroup(refs)" class="button select-button">Select</button>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- Fade edges for scroll indication -->
-      <div class="fade-edge fade-edge-top"></div>
-      <div class="fade-edge fade-edge-bottom"></div>
-
-      <!-- Resize handle -->
-      <div class="resize-handle" id="resize-handle">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-          <path d="M16 0V16H0L16 0Z" fill="white" fillOpacity="0.3"/>
-          <path d="M6.22577 16H3L16 3V6.22576L6.22577 16Z" fill="white" fillOpacity="0.5"/>
-          <path d="M11.8602 16H8.63441L16 8.63441V11.8602L11.8602 16Z" fill="white" fillOpacity="0.5"/>
-        </svg>
+        <!-- Empty State -->
+        <div v-else-if="!isScanning" class="empty-state">
+          <p>No missing references found.</p>
+          <p>Select a scan type and click "Start Scan" to begin.</p>
+        </div>
       </div>
     </div>
   </div>
 
   <style>
+    /* Add Figma's font stack at the top of your styles */
+    :root {
+      --font-stack: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen-Sans, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
+    }
+
     [v-cloak] { display: none; }
     
     html, body {
@@ -100,6 +118,9 @@
       overflow: hidden;
       background-color: #2C2C2C;
       color: #FFFFFF;
+      font-family: var(--font-stack);
+      font-size: 11px;
+      line-height: 16px;
     }
 
     #app {
@@ -108,40 +129,44 @@
     }
 
     .plugin-container {
-      height: 100vh;
       padding: 16px;
-      font-family: Inter, sans-serif;
       display: flex;
       flex-direction: column;
-      background-color: #2C2C2C;
-      box-sizing: border-box;
-      overflow: hidden; /* Prevent double scrollbars */
+      gap: 16px;
+      height: 100vh;
     }
 
     .header {
-      position: sticky;
-      top: 0;
-      background-color: #2C2C2C;
-      z-index: 2;
-      margin: -16px -16px 0 -16px;
-      padding: 16px;
-      border-bottom: 1px solid #444444;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--figma-color-border);
     }
 
     .header h2 {
-      font-size: 16px;
-      font-weight: 500;
-      color: #FFFFFF;
+      font-family: var(--font-stack);
+      font-weight: 600;
+      font-size: 13px;
+      line-height: 24px;
       margin: 0;
     }
 
-    .filter-controls {
-      position: sticky;
-      top: 0;
-      background-color: #2C2C2C;
-      padding: 16px 0;
-      margin: -16px 0 16px 0;
-      z-index: 1;
+    .scan-type-selector {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .select-input {
+      padding: 8px;
+      border: 1px solid var(--figma-color-border);
+      border-radius: 4px;
+      background: var(--figma-color-bg);
+      color: var(--figma-color-text);
+      font-family: var(--font-stack);
+      font-size: 11px;
+      line-height: 16px;
+    }
+
+    .scan-controls {
       display: flex;
       gap: 8px;
     }
@@ -151,77 +176,65 @@
       border-radius: 6px;
       border: none;
       cursor: pointer;
+      font-family: var(--font-stack);
+      font-size: 11px;
+      line-height: 16px;
       font-weight: 500;
-      transition: all 0.2s ease;
-      font-size: 13px;
     }
 
-    .button.primary {
-      background-color: #0D99FF;
-      color: white;
+    .primary-button {
+      background: var(--figma-color-bg-brand);
+      color: var(--figma-color-text-onbrand);
     }
 
-    .button.primary:hover {
-      background-color: #0088EE;
+    .secondary-button {
+      background: var(--figma-color-bg-secondary);
+      color: var(--figma-color-text);
     }
 
-    .button.secondary {
-      background-color: #444444;
-      color: #FFFFFF;
+    .progress-container {
+      margin: 16px 0;
     }
 
-    .button.secondary:hover {
-      background-color: #555555;
+    .progress-bar {
+      height: 4px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 2px;
+      overflow: hidden;
     }
 
-    .results-container {
-      flex: 1;
-      overflow-y: auto;
-      margin: 24px -16px 0 -16px;
-      padding: 0 16px;
+    .progress-fill {
+      height: 100%;
+      background: var(--figma-color-bg-brand);
+      transition: width 0.3s ease;
+    }
+
+    .progress-text {
+      margin-top: 4px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--figma-color-text-secondary);
     }
 
     .references-container {
-      padding-bottom: 24px; /* Add space for bottom content */
-    }
-
-    .reference-sections {
       display: flex;
       flex-direction: column;
-      gap: 24px;
-      padding-bottom: 16px;
+      gap: 16px;
+      overflow-y: auto;
     }
 
-    .section-title {
-      position: sticky;
-      top: 120px;
-      background-color: #2C2C2C;
-      padding: 8px 0;
-      z-index: 1;
-      font-size: 12px;
-      font-weight: 600;
-      color: #999999;
-      margin-bottom: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    .reference-list {
+    .reference-card {
+      padding: 16px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 8px;
       display: flex;
-      flex-direction: column;
-      gap: 8px;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
     }
 
-    .reference-item {
-      padding: 12px;
-      border: 1px solid #444444;
-      border-radius: 6px;
-      background: #363636;
-      transition: background-color 0.2s ease;
-    }
-
-    .reference-item:hover {
-      background: #404040;
+    .reference-info {
+      flex: 1;
     }
 
     .reference-header {
@@ -231,197 +244,58 @@
       margin-bottom: 8px;
     }
 
-    .node-name {
+    .parameter-name {
+      font-family: var(--font-stack);
       font-weight: 500;
-      color: #FFFFFF;
-      font-size: 13px;
-    }
-
-    .property-type {
       font-size: 11px;
-      color: #999999;
-      padding: 2px 8px;
-      background: #444444;
-      border-radius: 4px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
     }
 
-    .missing-source {
+    .missing-count {
       font-size: 12px;
-      color: #999999;
-      margin-bottom: 8px;
+      color: var(--figma-color-text-secondary);
+      font-family: var(--font-stack);
+      font-size: 11px;
+      line-height: 16px;
     }
 
-    .select, .search-input {
-      width: 100%;
-      padding: 8px;
-      border-radius: 4px;
-      border: 1px solid #444444;
-      background-color: #363636;
-      color: #FFFFFF;
-      font-size: 13px;
-      transition: border-color 0.2s ease;
-    }
-
-    .select:hover, .search-input:hover {
-      border-color: #555555;
-    }
-
-    .select:focus, .search-input:focus {
-      border-color: #0D99FF;
-      outline: none;
-    }
-
-    .select option {
-      background-color: #363636;
-      color: #FFFFFF;
-    }
-
-    .search-input {
-      flex: 1;
-    }
-
-    .search-input::placeholder {
-      color: #999999;
-    }
-
-    .loading, .empty-state {
-      text-align: center;
-      padding: 48px 16px;
-      color: #999999;
-      font-size: 13px;
-    }
-
-    .action-wrapper {
-      margin-top: 8px;
-    }
-
-    /* Scrollbar styling */
-    ::-webkit-scrollbar {
-      width: 8px;
-      height: 8px;
-    }
-
-    ::-webkit-scrollbar-track {
-      background: #2C2C2C;
-    }
-
-    ::-webkit-scrollbar-thumb {
-      background: #444444;
-      border-radius: 4px;
-    }
-
-    ::-webkit-scrollbar-thumb:hover {
-      background: #555555;
-    }
-
-    /* Loading state */
-    #loading {
-      background-color: #2C2C2C;
-      color: #FFFFFF;
-      font-family: Inter, sans-serif;
-      font-size: 13px;
-    }
-
-    /* Add resize handle styling */
-    .resize-handle {
-      position: absolute;
-      bottom: 0;
-      right: 0;
-      width: 16px;
-      height: 16px;
-      cursor: nwse-resize;
-      z-index: 99999;
-    }
-
-    .resize-handle svg {
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
-    }
-
-    .progress-container {
-      position: sticky;
-      top: 64px; /* Height of header + padding */
-      background-color: #2C2C2C;
-      z-index: 2;
-      padding: 16px 0;
-      margin: 0 -16px;
-      border-bottom: 1px solid #444444;
-    }
-
-    .progress-text {
-      font-size: 13px;
-      color: #999999;
-      margin-bottom: 8px;
-      text-align: center;
-    }
-
-    .progress-bar {
-      width: 100%;
-      height: 4px;
-      background: #444444;
-      border-radius: 2px;
-      overflow: hidden;
-    }
-
-    .progress-fill {
-      height: 100%;
-      background: #0D99FF;
-      transition: width 0.2s ease;
-    }
-
-    /* Add styles for cancel button */
-    .cancel-button {
-      margin-top: 16px;
-      width: 100%;
-      background-color: #444444;
-    }
-
-    .cancel-button:hover {
-      background-color: #555555;
-    }
-
-    /* Add fade effect for scrolling */
-    .fade-edge {
-      position: fixed;
-      left: 0;
-      right: 0;
-      height: 32px;
-      pointer-events: none;
-      z-index: 1;
-    }
-
-    .fade-edge-top {
-      top: 0;
-      background: linear-gradient(to bottom, rgba(44, 44, 44, 1), rgba(44, 44, 44, 0));
-    }
-
-    .fade-edge-bottom {
-      bottom: 0;
-      background: linear-gradient(to top, rgba(44, 44, 44, 1), rgba(44, 44, 44, 0));
-    }
-
-    .scan-controls {
+    .variable-details {
       display: flex;
-      gap: 8px;
-      align-items: center;
+      flex-direction: column;
+      gap: 12px;
     }
 
-    .scan-type-select {
-      background: #444444;
-      color: #FFFFFF;
-      border: 1px solid #555555;
-      border-radius: 6px;
+    .variable-item {
       padding: 8px;
-      font-size: 13px;
-      min-width: 160px;
+      background: var(--figma-color-bg-tertiary);
+      border-radius: 4px;
     }
 
-    .scan-type-select:focus {
-      outline: none;
-      border-color: #0D99FF;
+    .variable-name {
+      font-family: var(--font-stack);
+      font-weight: 500;
+      font-size: 11px;
+      margin-bottom: 4px;
+    }
+
+    .variable-value,
+    .node-info,
+    .location-info,
+    .current-value {
+      font-family: var(--font-stack);
+      font-size: 11px;
+      line-height: 16px;
+      margin-top: 2px;
+    }
+
+    .select-button {
+      background: var(--figma-color-bg-brand);
+      color: var(--figma-color-text-onbrand);
+    }
+
+    .empty-state {
+      text-align: center;
+      color: var(--figma-color-text-secondary);
+      padding: 32px 16px;
     }
   </style>
 
@@ -434,211 +308,75 @@
     createApp({
       data() {
         return {
-          missingRefs: [],
-          availableVariables: [],
-          availableStyles: [],
-          isLoading: false,
-          selectedFilter: 'all',
-          searchQuery: '',
-          windowSize: {
-            width: window.innerWidth,
-            height: window.innerHeight
-          },
-          scanStatus: '',
-          currentScanType: '',
+          selectedScanType: 'vertical-gap',
+          isScanning: false,
           scanProgress: 0,
-          selectedScanType: 'colors'
-        }
-      },
-      computed: {
-        groupedReferences() {
-          const filtered = this.missingRefs.filter(ref => {
-            const matchesSearch = ref.nodeName.toLowerCase().includes(this.searchQuery.toLowerCase());
-            const matchesFilter = this.selectedFilter === 'all' || ref.referenceType === this.selectedFilter;
-            return matchesSearch && matchesFilter;
-          });
-
-          return filtered.reduce((groups, ref) => {
-            const type = ref.referenceType;
-            if (!groups[type]) {
-              groups[type] = [];
-            }
-            groups[type].push(ref);
-            return groups;
-          }, {});
-        },
-        filteredRefs() {
-          return this.missingRefs.filter(ref => 
-            ref.nodeName.toLowerCase().includes(this.searchQuery.toLowerCase())
-          );
+          groupedReferences: {},
         }
       },
       methods: {
-        async scanForReferences() {
-          console.log('Scan button clicked');
-          this.isLoading = true;
+        async startScan() {
+          this.isScanning = true;
+          this.scanProgress = 0;
+          this.groupedReferences = {};
+
           parent.postMessage({ 
             pluginMessage: { 
               type: 'scan-for-tokens',
               scanType: this.selectedScanType
-            } 
+            }
           }, '*');
         },
-        
-        formatSectionTitle(type) {
-          return type.charAt(0).toUpperCase() + type.slice(1) + 's';
-        },
-
-        shouldShowSection(type) {
-          return this.selectedFilter === 'all' || this.selectedFilter === type;
-        },
-
-        filterVariablesByType(propertyType) {
-          return this.availableVariables.filter(v => v.type === propertyType);
-        },
-
-        filterStylesByType(propertyType) {
-          return this.availableStyles.filter(s => s.type === propertyType);
-        },
-        
-        async applyToken(ref) {
-          if (!ref.selectedVariable) return;
-          
-          parent.postMessage({ 
-            pluginMessage: { 
-              type: 'apply-token',
-              nodeId: ref.nodeId,
-              tokenType: ref.propertyType,
-              tokenValue: ref.selectedVariable
-            } 
-          }, '*');
-        },
-
-        async applyStyle(ref) {
-          if (!ref.selectedStyle) return;
-          
-          parent.postMessage({ 
-            pluginMessage: { 
-              type: 'apply-style',
-              nodeId: ref.nodeId,
-              styleType: ref.propertyType,
-              styleId: ref.selectedStyle
-            } 
-          }, '*');
-        },
-
-        async swapComponent(ref) {
-          parent.postMessage({ 
-            pluginMessage: { 
-              type: 'swap-component',
-              nodeId: ref.nodeId
-            } 
-          }, '*');
-        },
-
         cancelScan() {
           parent.postMessage({ 
             pluginMessage: { 
               type: 'cancel-scan' 
-            } 
+            }
           }, '*');
+        },
+        selectGroup(refs) {
+          const nodeIds = refs.map(ref => ref.nodeId);
+          parent.postMessage({ 
+            pluginMessage: { 
+              type: 'select-group',
+              nodeIds
+            }
+          }, '*');
+        },
+        formatValue(value) {
+          if (!value) return 'None';
+          if (typeof value === 'object') {
+            if ('r' in value && 'g' in value && 'b' in value) {
+              return `RGB(${Math.round(value.r * 255)}, ${Math.round(value.g * 255)}, ${Math.round(value.b * 255)})`;
+            }
+            return JSON.stringify(value);
+          }
+          return String(value);
         }
       },
       mounted() {
         console.log('Vue app mounted');
         window.onmessage = (event) => {
-          const message = event.data.pluginMessage;
-          console.log('UI received message:', message);
-          
-          if (message.type === 'missing-references-result') {
-            console.log('Updating refs:', message.references);
-            this.missingRefs = message.references;
-            this.isLoading = false;
-          }
-          
-          if (message.type === 'error') {
-            console.error(message.message);
-          }
+          const msg = event.data.pluginMessage;
+          if (!msg) return;
 
-          if (message.type === 'scan-status') {
-            this.scanStatus = message.message;
-          }
-
-          if (message.type === 'scan-progress') {
-            this.currentScanType = message.scanType;
-            this.scanProgress = message.progress;
-          }
-
-          if (message.type === 'scan-cancelled') {
-            this.isLoading = false;
-            this.scanProgress = 0;
-            this.scanStatus = '';
-            this.currentScanType = '';
-          }
-        }
-
-        // Add window resize listener
-        window.onresize = () => {
-          this.windowSize = {
-            width: window.innerWidth,
-            height: window.innerHeight
-          };
-        };
-
-        // Setup resize handle
-        const handle = document.getElementById('resize-handle');
-        let isResizing = false;
-        let startWidth = 0;
-        let startHeight = 0;
-        let startX = 0;
-        let startY = 0;
-
-        // Get the plugin container element
-        const container = document.querySelector('.plugin-container');
-
-        handle.addEventListener('mousedown', (e) => {
-          isResizing = true;
-          startX = e.clientX;
-          startY = e.clientY;
-          // Use container dimensions instead of window
-          startWidth = container.offsetWidth;
-          startHeight = container.offsetHeight;
-          
-          document.addEventListener('mousemove', handleMouseMove);
-          document.addEventListener('mouseup', handleMouseUp);
-        });
-
-        const handleMouseMove = (e) => {
-          if (!isResizing) return;
-          
-          const deltaX = e.clientX - startX;
-          const deltaY = e.clientY - startY;
-          
-          const newWidth = Math.max(320, startWidth + deltaX);
-          const newHeight = Math.max(400, startHeight + deltaY);
-
-          // Only send message if dimensions actually changed
-          if (newWidth !== startWidth || newHeight !== startHeight) {
-            parent.postMessage({ 
-              pluginMessage: { 
-                type: 'resize',
-                width: newWidth,
-                height: newHeight
-              }
-            }, '*');
+          switch (msg.type) {
+            case 'scan-progress':
+              this.scanProgress = msg.progress;
+              break;
+            case 'missing-references-result':
+              this.groupedReferences = msg.references;
+              this.isScanning = false;
+              break;
+            case 'scan-cancelled':
+              this.isScanning = false;
+              break;
+            case 'error':
+              console.error(msg.message);
+              this.isScanning = false;
+              break;
           }
         };
-
-        const handleMouseUp = () => {
-          isResizing = false;
-          document.removeEventListener('mousemove', handleMouseMove);
-          document.removeEventListener('mouseup', handleMouseUp);
-        };
-
-        // Remove the ResizeObserver as we're handling resize manually
-        if (this.resizeObserver) {
-          this.resizeObserver.disconnect();
-        }
       }
     }).mount('#app');
 
