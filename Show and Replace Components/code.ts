@@ -21,193 +21,233 @@ figma.showUI(__html__, {
 console.clear(); // Clear previous logs
 console.log('Plugin code started');
 
+// Simplified type definitions
 interface MissingReference {
   nodeId: string;
   nodeName: string;
-  referenceType: string;
-  propertyType: string;
+  type: 'color' | 'text' | 'effect' | 'grid' | 'spacing';
+  property: string;
   currentValue: any;
-  missingSource?: string;
+  location: string;
 }
 
-// Add scan type definitions
-type ScanType = 'colors' | 'typography' | 'spacing' | 'effects';
+// Update ScanType to include all token types
+type ScanType = 'colors' | 'typography' | 'spacing' | 'effects' | 'grids';
 
 interface ScanProgress {
   type: ScanType;
   progress: number;
 }
 
-async function findMissingColorTokens(
+// Add a flag to track if scanning should be cancelled
+let isScanCancelled = false;
+
+// Add type definitions at the top of the file
+type VariableBinding = {
+  type: 'VARIABLE';
+  id: string;
+  name: string;
+};
+
+// Update the type guard function
+function hasVariableBindings(node: BaseNode): node is SceneNode & { 
+  boundVariables: { 
+    [key: string]: {
+      type: 'VARIABLE';
+      id: string;
+      value?: any;
+    } 
+  } 
+} {
+  return 'boundVariables' in node;
+}
+
+// Update the effect properties type
+type EffectProperty = 'offset' | 'radius' | 'spread' | 'color';
+
+type EffectPropertyMap = {
+  'DROP_SHADOW': EffectProperty[];
+  'INNER_SHADOW': EffectProperty[];
+  'LAYER_BLUR': EffectProperty[];
+  'BACKGROUND_BLUR': EffectProperty[];
+};
+
+// Add more type guards based on Figma's API
+function hasAutoLayout(node: BaseNode): node is FrameNode | ComponentNode | InstanceNode {
+  return 'layoutMode' in node;
+}
+
+function hasTextProperties(node: BaseNode): node is TextNode {
+  return node.type === 'TEXT';
+}
+
+// Add more type guards
+function hasTextStyles(node: BaseNode): node is TextNode {
+  return node.type === 'TEXT';
+}
+
+function hasEffectStyles(node: BaseNode): node is (SceneNode & { effectStyleId: string }) {
+  return 'effectStyleId' in node;
+}
+
+// Add proper type guards based on Figma's API
+function hasFills(node: BaseNode): node is SceneNode & { fills: readonly Paint[] } {
+  return 'fills' in node && Array.isArray((node as any).fills);
+}
+
+function hasStrokes(node: BaseNode): node is SceneNode & { strokes: readonly Paint[] } {
+  return 'strokes' in node && Array.isArray((node as any).strokes);
+}
+
+function hasEffects(node: BaseNode): node is SceneNode & { effects: readonly Effect[] } {
+  return 'effects' in node && Array.isArray((node as any).effects);
+}
+
+// Separate scanning functions for each type
+async function scanForColorTokens(
   progressCallback: (progress: number) => void
 ): Promise<MissingReference[]> {
   const missingRefs: MissingReference[] = [];
   
   try {
-    // Only get nodes that can have color properties
     const nodes = figma.currentPage.findAll(node => {
       if (!node || node.removed) return false;
-      return 'fills' in node || 'strokes' in node;
+      return 'fills' in node || 'strokes' in node || 'backgroundColor' in node;
     });
 
-    const totalNodes = nodes.length;
     for (let i = 0; i < nodes.length; i++) {
-      const node = nodes[i];
+      if (isScanCancelled) break;
       
+      const node = nodes[i];
       try {
         // Check fills
         if ('fills' in node) {
           const fills = node.fills;
           if (Array.isArray(fills)) {
-            fills.forEach(fill => {
-              if (fill.type === 'SOLID' && !fill.boundVariables?.color) {
+            fills.forEach((fill: Paint, index) => {
+              if (fill.type === 'SOLID') {
                 missingRefs.push({
                   nodeId: node.id,
-                  nodeName: node.name || 'Unnamed Node',
-                  referenceType: 'token',
-                  propertyType: 'fill',
+                  nodeName: node.name,
+                  type: 'color',
+                  property: 'fill',
                   currentValue: fill.color,
-                  missingSource: 'Color Token'
+                  location: `Fill ${index + 1}`
                 });
               }
             });
           }
         }
 
-        // Check strokes
-        if ('strokes' in node) {
-          const strokes = node.strokes;
-          if (Array.isArray(strokes)) {
-            strokes.forEach(stroke => {
-              if (stroke.type === 'SOLID' && !stroke.boundVariables?.color) {
-                missingRefs.push({
-                  nodeId: node.id,
-                  nodeName: node.name || 'Unnamed Node',
-                  referenceType: 'token',
-                  propertyType: 'stroke',
-                  currentValue: stroke.color,
-                  missingSource: 'Color Token'
-                });
-              }
-            });
-          }
-        }
-
-        // Update progress
-        if (i % 10 === 0) {
-          progressCallback((i / totalNodes) * 100);
-          await new Promise(resolve => setTimeout(resolve, 0));
-        }
+        progressCallback((i / nodes.length) * 100);
+        await new Promise(resolve => setTimeout(resolve, 0));
       } catch (err) {
-        console.warn('Error checking node:', node.name, err);
+        console.warn(`Error checking node ${node.name}:`, err);
       }
     }
 
-    progressCallback(100);
     return missingRefs;
   } catch (err) {
-    console.error('Error scanning for color tokens:', err);
+    console.error('Error scanning for colors:', err);
     return missingRefs;
   }
 }
 
-async function findMissingTypographyTokens(
+async function scanForTextTokens(
   progressCallback: (progress: number) => void
 ): Promise<MissingReference[]> {
   const missingRefs: MissingReference[] = [];
   
   try {
-    // Only get text nodes
     const nodes = figma.currentPage.findAll(node => node.type === 'TEXT');
-    const totalNodes = nodes.length;
 
     for (let i = 0; i < nodes.length; i++) {
+      if (isScanCancelled) break;
+      
       const node = nodes[i] as TextNode;
       try {
         if (!node.textStyleId) {
           missingRefs.push({
             nodeId: node.id,
-            nodeName: node.name || 'Unnamed Text',
-            referenceType: 'style',
-            propertyType: 'typography',
+            nodeName: node.name,
+            type: 'text',
+            property: 'style',
             currentValue: {
               fontSize: node.fontSize,
               fontName: node.fontName
             },
-            missingSource: 'Typography Style'
+            location: 'Text Style'
           });
         }
 
-        // Update progress
-        if (i % 10 === 0) {
-          progressCallback((i / totalNodes) * 100);
-          await new Promise(resolve => setTimeout(resolve, 0));
-        }
+        progressCallback((i / nodes.length) * 100);
+        await new Promise(resolve => setTimeout(resolve, 0));
       } catch (err) {
-        console.warn('Error checking text node:', node.name, err);
+        console.warn(`Error checking text node ${node.name}:`, err);
       }
     }
 
-    progressCallback(100);
     return missingRefs;
   } catch (err) {
-    console.error('Error scanning for typography tokens:', err);
+    console.error('Error scanning for text styles:', err);
     return missingRefs;
   }
 }
 
-// Handle messages from the UI
+// Update the message handler
 figma.ui.onmessage = async (msg) => {
   console.log('Plugin received message:', msg);
 
   if (msg.type === 'resize') {
-    // Get the new size
     const { width, height } = msg;
     
-    // Apply minimum dimensions
-    const newWidth = Math.max(320, width);
-    const newHeight = Math.max(400, height);
-    
-    // Resize the window
-    figma.ui.resize(newWidth, newHeight);
+    // Only resize if dimensions actually changed
+    if (width !== currentWindowSize.width || height !== currentWindowSize.height) {
+      currentWindowSize = { width, height };
+      
+      // Resize the window
+      figma.ui.resize(width, height);
+      
+      // Save the new size
+      try {
+        await figma.clientStorage.setAsync('windowSize', currentWindowSize);
+      } catch (err) {
+        console.error('Failed to save window size:', err);
+      }
+    }
   }
   
   if (msg.type === 'scan-for-tokens') {
     try {
-      // Scan for colors first
+      isScanCancelled = false;
+      const scanType = msg.scanType;
+
       figma.ui.postMessage({ 
         type: 'scan-status', 
-        message: 'Scanning for color tokens...' 
-      });
-      
-      const colorRefs = await findMissingColorTokens(progress => {
-        figma.ui.postMessage({ 
-          type: 'scan-progress',
-          scanType: 'colors',
-          progress 
-        });
+        message: `Scanning for ${scanType}...` 
       });
 
-      // Then scan for typography
-      figma.ui.postMessage({ 
-        type: 'scan-status', 
-        message: 'Scanning for typography tokens...' 
-      });
+      let refs: MissingReference[] = [];
       
-      const typographyRefs = await findMissingTypographyTokens(progress => {
-        figma.ui.postMessage({ 
-          type: 'scan-progress',
-          scanType: 'typography',
-          progress 
-        });
-      });
+      switch (scanType) {
+        case 'colors':
+          refs = await scanForColorTokens(progress => {
+            figma.ui.postMessage({ type: 'scan-progress', progress });
+          });
+          break;
+          
+        case 'text':
+          refs = await scanForTextTokens(progress => {
+            figma.ui.postMessage({ type: 'scan-progress', progress });
+          });
+          break;
+          
+        // Add other scan types...
+      }
 
-      // Combine results
-      const allRefs = [...colorRefs, ...typographyRefs];
-      
       figma.ui.postMessage({ 
         type: 'missing-references-result', 
-        references: allRefs
+        references: refs 
       });
 
     } catch (err) {
@@ -340,17 +380,33 @@ figma.ui.onmessage = async (msg) => {
     }
   }
 
+  // Add cancel handler
+  if (msg.type === 'cancel-scan') {
+    isScanCancelled = true;
+    figma.ui.postMessage({ 
+      type: 'scan-cancelled', 
+      message: 'Scan cancelled by user' 
+    });
+  }
+
   // Only close the plugin when explicitly requested
   if (msg.type === 'close-plugin') {
     figma.closePlugin();
   }
 };
 
-// Wrap the window size restoration in an IIFE
-(async function restoreWindowSize() {
+// At the start of the file, after the UI setup
+let currentWindowSize = {
+  width: 400,
+  height: 600
+};
+
+// Initialize window size
+(async function initializeWindowSize() {
   try {
     const savedSize = await figma.clientStorage.getAsync('windowSize');
     if (savedSize) {
+      currentWindowSize = savedSize;
       figma.ui.resize(savedSize.width, savedSize.height);
     }
   } catch (err) {

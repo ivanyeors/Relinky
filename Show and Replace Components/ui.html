@@ -15,9 +15,23 @@
     <div v-cloak class="plugin-container">
       <header class="header">
         <h2>Missing References Finder</h2>
-        <button @click="scanForReferences" class="button primary">
-          {{ isLoading ? 'Scanning...' : 'Scan Page' }}
-        </button>
+        
+        <!-- Add scan type selector -->
+        <div class="scan-controls">
+          <select v-model="selectedScanType" class="scan-type-select">
+            <option value="colors">Color Variables</option>
+            <option value="text">Text Styles</option>
+            <option value="spacing">Auto-layout & Spacing</option>
+            <option value="effects">Effects</option>
+            <option value="grid">Layout Grid</option>
+          </select>
+          
+          <button @click="scanForReferences" 
+                  class="button primary"
+                  :disabled="isLoading">
+            {{ isLoading ? 'Scanning...' : 'Scan' }}
+          </button>
+        </div>
       </header>
 
       <!-- Progress bar -->
@@ -29,17 +43,20 @@
         <div class="progress-bar">
           <div class="progress-fill" :style="{ width: scanProgress + '%' }"></div>
         </div>
+        <button @click="cancelScan" class="button secondary cancel-button">
+          Cancel Scan
+        </button>
       </div>
 
-      <!-- Results -->
-      <div v-else>
+      <!-- Results with scroll -->
+      <div class="results-container">
         <!-- Empty state -->
-        <div v-if="missingRefs.length === 0" class="empty-state">
+        <div v-if="!isLoading && missingRefs.length === 0" class="empty-state">
           <span>No missing references found or start by scanning the page.</span>
         </div>
 
         <!-- References list -->
-        <div v-else class="references-container">
+        <div v-else-if="!isLoading" class="references-container">
           <div class="reference-list">
             <div v-for="ref in filteredRefs" 
                  :key="ref.nodeId" 
@@ -57,6 +74,10 @@
           </div>
         </div>
       </div>
+
+      <!-- Fade edges for scroll indication -->
+      <div class="fade-edge fade-edge-top"></div>
+      <div class="fade-edge fade-edge-bottom"></div>
 
       <!-- Resize handle -->
       <div class="resize-handle" id="resize-handle">
@@ -87,13 +108,14 @@
     }
 
     .plugin-container {
-      height: 100%;
+      height: 100vh;
       padding: 16px;
       font-family: Inter, sans-serif;
       display: flex;
       flex-direction: column;
       background-color: #2C2C2C;
       box-sizing: border-box;
+      overflow: hidden; /* Prevent double scrollbars */
     }
 
     .header {
@@ -101,11 +123,9 @@
       top: 0;
       background-color: #2C2C2C;
       z-index: 2;
-      margin: -16px -16px 24px -16px;
+      margin: -16px -16px 0 -16px;
       padding: 16px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+      border-bottom: 1px solid #444444;
     }
 
     .header h2 {
@@ -154,12 +174,15 @@
       background-color: #555555;
     }
 
-    .references-container {
+    .results-container {
       flex: 1;
-      min-height: 0;
       overflow-y: auto;
-      margin: 0 -16px;
+      margin: 24px -16px 0 -16px;
       padding: 0 16px;
+    }
+
+    .references-container {
+      padding-bottom: 24px; /* Add space for bottom content */
     }
 
     .reference-sections {
@@ -265,7 +288,7 @@
 
     .loading, .empty-state {
       text-align: center;
-      padding: 32px;
+      padding: 48px 16px;
       color: #999999;
       font-size: 13px;
     }
@@ -319,7 +342,13 @@
     }
 
     .progress-container {
-      margin: 16px 0;
+      position: sticky;
+      top: 64px; /* Height of header + padding */
+      background-color: #2C2C2C;
+      z-index: 2;
+      padding: 16px 0;
+      margin: 0 -16px;
+      border-bottom: 1px solid #444444;
     }
 
     .progress-text {
@@ -341,6 +370,58 @@
       height: 100%;
       background: #0D99FF;
       transition: width 0.2s ease;
+    }
+
+    /* Add styles for cancel button */
+    .cancel-button {
+      margin-top: 16px;
+      width: 100%;
+      background-color: #444444;
+    }
+
+    .cancel-button:hover {
+      background-color: #555555;
+    }
+
+    /* Add fade effect for scrolling */
+    .fade-edge {
+      position: fixed;
+      left: 0;
+      right: 0;
+      height: 32px;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .fade-edge-top {
+      top: 0;
+      background: linear-gradient(to bottom, rgba(44, 44, 44, 1), rgba(44, 44, 44, 0));
+    }
+
+    .fade-edge-bottom {
+      bottom: 0;
+      background: linear-gradient(to top, rgba(44, 44, 44, 1), rgba(44, 44, 44, 0));
+    }
+
+    .scan-controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .scan-type-select {
+      background: #444444;
+      color: #FFFFFF;
+      border: 1px solid #555555;
+      border-radius: 6px;
+      padding: 8px;
+      font-size: 13px;
+      min-width: 160px;
+    }
+
+    .scan-type-select:focus {
+      outline: none;
+      border-color: #0D99FF;
     }
   </style>
 
@@ -365,7 +446,8 @@
           },
           scanStatus: '',
           currentScanType: '',
-          scanProgress: 0
+          scanProgress: 0,
+          selectedScanType: 'colors'
         }
       },
       computed: {
@@ -397,7 +479,8 @@
           this.isLoading = true;
           parent.postMessage({ 
             pluginMessage: { 
-              type: 'scan-for-tokens' 
+              type: 'scan-for-tokens',
+              scanType: this.selectedScanType
             } 
           }, '*');
         },
@@ -451,6 +534,14 @@
               nodeId: ref.nodeId
             } 
           }, '*');
+        },
+
+        cancelScan() {
+          parent.postMessage({ 
+            pluginMessage: { 
+              type: 'cancel-scan' 
+            } 
+          }, '*');
         }
       },
       mounted() {
@@ -477,6 +568,13 @@
             this.currentScanType = message.scanType;
             this.scanProgress = message.progress;
           }
+
+          if (message.type === 'scan-cancelled') {
+            this.isLoading = false;
+            this.scanProgress = 0;
+            this.scanStatus = '';
+            this.currentScanType = '';
+          }
         }
 
         // Add window resize listener
@@ -487,31 +585,6 @@
           };
         };
 
-        // Add resize observer
-        const resizeObserver = new ResizeObserver((entries) => {
-          for (const entry of entries) {
-            const { width, height } = entry.contentRect;
-            parent.postMessage({ 
-              pluginMessage: { 
-                type: 'resize',
-                width: Math.max(320, width),
-                height: Math.max(400, height)
-              }
-            }, '*');
-          }
-        });
-
-        // Observe the container
-        const container = document.querySelector('.plugin-container');
-        if (container) {
-          resizeObserver.observe(container);
-        }
-
-        // Cleanup
-        this.$onBeforeUnmount = () => {
-          resizeObserver.disconnect();
-        };
-
         // Setup resize handle
         const handle = document.getElementById('resize-handle');
         let isResizing = false;
@@ -520,12 +593,16 @@
         let startX = 0;
         let startY = 0;
 
+        // Get the plugin container element
+        const container = document.querySelector('.plugin-container');
+
         handle.addEventListener('mousedown', (e) => {
           isResizing = true;
           startX = e.clientX;
           startY = e.clientY;
-          startWidth = window.innerWidth;
-          startHeight = window.innerHeight;
+          // Use container dimensions instead of window
+          startWidth = container.offsetWidth;
+          startHeight = container.offsetHeight;
           
           document.addEventListener('mousemove', handleMouseMove);
           document.addEventListener('mouseup', handleMouseUp);
@@ -537,16 +614,19 @@
           const deltaX = e.clientX - startX;
           const deltaY = e.clientY - startY;
           
-          const newWidth = startWidth + deltaX;
-          const newHeight = startHeight + deltaY;
+          const newWidth = Math.max(320, startWidth + deltaX);
+          const newHeight = Math.max(400, startHeight + deltaY);
 
-          parent.postMessage({ 
-            pluginMessage: { 
-              type: 'resize',
-              width: newWidth,
-              height: newHeight
-            }
-          }, '*');
+          // Only send message if dimensions actually changed
+          if (newWidth !== startWidth || newHeight !== startHeight) {
+            parent.postMessage({ 
+              pluginMessage: { 
+                type: 'resize',
+                width: newWidth,
+                height: newHeight
+              }
+            }, '*');
+          }
         };
 
         const handleMouseUp = () => {
@@ -555,8 +635,10 @@
           document.removeEventListener('mouseup', handleMouseUp);
         };
 
-        // Prevent text selection while resizing
-        handle.addEventListener('selectstart', (e) => e.preventDefault());
+        // Remove the ResizeObserver as we're handling resize manually
+        if (this.resizeObserver) {
+          this.resizeObserver.disconnect();
+        }
       }
     }).mount('#app');
 
