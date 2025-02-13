@@ -375,19 +375,20 @@ interface PluginMessage {
   references?: Record<string, MissingReference[]>;
 }
 
-// In your main plugin code
-figma.on('selectionchange', () => {
+// Add this function near the top of the file
+figma.on('selectionchange', async () => {
   const selection = figma.currentPage.selection;
-  const frameNodes = selection.filter(node => 
+  const validSelection = selection.filter(node => 
     node.type === 'FRAME' || 
     node.type === 'COMPONENT' || 
-    node.type === 'COMPONENT_SET'
+    node.type === 'COMPONENT_SET' || 
+    node.type === 'SECTION'
   );
   
   figma.ui.postMessage({ 
     type: 'selection-updated',
-    count: frameNodes.length,
-    hasSelection: frameNodes.length > 0
+    hasSelection: validSelection.length > 0,
+    count: validSelection.length
   });
 });
 
@@ -409,14 +410,24 @@ async function scanForMissingReferences(
         selectedFrameIds.map(id => figma.getNodeByIdAsync(id))
       );
 
-      // Filter out null values and incorrect types
-      const validFrames = selectedFrames.filter((node): node is FrameNode | ComponentNode | ComponentSetNode => 
+      // Filter out null values and include SECTION type
+      const validFrames = selectedFrames.filter((node): node is FrameNode | ComponentNode | ComponentSetNode | SectionNode => 
         node !== null && 
-        (node.type === 'FRAME' || node.type === 'COMPONENT' || node.type === 'COMPONENT_SET')
+        (node.type === 'FRAME' || node.type === 'COMPONENT' || node.type === 'COMPONENT_SET' || node.type === 'SECTION')
       );
       
-      // Get all children of selected frames
+      // Get all children of selected frames and sections
       nodesToScan = validFrames.reduce<SceneNode[]>((acc, frame) => {
+        // For sections, we need to get all their child frames
+        if (frame.type === 'SECTION') {
+          const sectionChildren = frame.children.reduce<SceneNode[]>((children, child) => {
+            if (child.type === 'FRAME' || child.type === 'COMPONENT' || child.type === 'COMPONENT_SET') {
+              return [...children, child, ...child.findAll()];
+            }
+            return children;
+          }, []);
+          return [...acc, ...sectionChildren];
+        }
         return [...acc, frame, ...frame.findAll()];
       }, []);
     } else {
@@ -861,15 +872,16 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
   }
 
   if (msg.type === 'get-selected-frame-ids') {
-    const selectedFrames = figma.currentPage.selection.filter(node => 
+    const selection = figma.currentPage.selection;
+    const validSelection = selection.filter(node => 
       node.type === 'FRAME' || 
       node.type === 'COMPONENT' || 
-      node.type === 'COMPONENT_SET'
+      node.type === 'COMPONENT_SET' || 
+      node.type === 'SECTION'
     );
-    
     figma.ui.postMessage({
       type: 'selected-frame-ids',
-      ids: selectedFrames.map(frame => frame.id)
+      ids: validSelection.map(node => node.id)
     });
   }
 };
