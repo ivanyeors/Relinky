@@ -91,6 +91,8 @@
         </div>
 
         <!-- Scan Controls -->
+        <div class="divider"></div>
+
         <div class="step-container">
           <div class="step-content">
             <h3 class="step-title">Start scanning</h3>
@@ -193,16 +195,6 @@
               </div>
             </label>
           </div>
-        </div>
-
-        <!-- Empty State -->
-        <div v-else-if="!isScanning" class="empty-state">
-          <p>No missing references found.</p>
-          <p class="empty-state-steps">
-            1. Select frames or components in Figma<br>
-            2. Choose a scan type from the dropdown<br>
-            3. Click "Start Scan" to begin
-          </p>
         </div>
       </div>
     </div>
@@ -440,9 +432,9 @@
     }
 
     .empty-state {
+      padding: 16px;
       text-align: center;
       color: var(--figma-color-text-secondary);
-      padding: 32px 16px;
     }
 
     .empty-state p {
@@ -770,6 +762,12 @@
       font-weight: 500;
       opacity: 1;
       color: white;
+    }
+
+    .divider {
+      height: 1px;
+      background-color: var(--figma-color-border);
+      margin: 16px 0;
     }
   </style>
 
