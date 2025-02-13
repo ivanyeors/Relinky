@@ -13,10 +13,10 @@
   <!-- Main app -->
   <div id="app">
     <div v-cloak class="plugin-container">
-      <header class="header">
-        <div class="step-container">
-          <div class="step-content">
-            <h3 class="step-title">Select frames or components</h3>
+      <div class="step-container first-section">
+        <div class="step-content">
+          <h3 class="step-title">Select frames or components</h3>
+          <div class="selection-container">
             <div v-if="!hasSelection" class="toast warning">
               <div class="toast-icon">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -34,8 +34,28 @@
               <span class="toast-message">{{ selectedCount }} items selected</span>
             </div>
           </div>
+
+          <!-- Add margin-top to create space -->
+          <div class="watch-controls" style="margin-top: 16px;">
+            <div class="toggle-container">
+              <label class="toggle-label">
+                <span>Watch for Changes</span>
+                <div class="toggle-wrapper">
+                  <input 
+                    type="checkbox" 
+                    v-model="isWatching"
+                    class="toggle-input"
+                    @change="toggleWatch"
+                  >
+                  <div class="toggle-slider"></div>
+                </div>
+              </label>
+            </div>
+          </div>
         </div>
-      </header>
+      </div>
+
+      <div class="divider"></div>
 
       <div class="content">
         <!-- Scan Type Selection -->
@@ -126,76 +146,67 @@
           <div class="progress-text">{{ Math.round(scanProgress) }}%</div>
         </div>
 
-        <!-- Results Section -->
-        <div v-if="!isScanning && Object.keys(groupedReferences).length > 0" class="references-container">
-          <div v-for="(group, groupKey) in groupedByValue" :key="groupKey" class="value-group">
-            <!-- Value Group Header -->
-            <div class="value-group-header" @click="toggleGroup(groupKey)">
-              <div class="header-left">
-                <span class="expand-icon">{{ isGroupExpanded(groupKey) ? '▼' : '▶' }}</span>
-                <template v-if="group.refs[0]?.type === 'typography'">
-                  <span class="value-label">
-                    {{ group.refs[0].currentValue.fontFamily }} 
-                    {{ group.refs[0].currentValue.fontWeight }} 
-                    {{ group.refs[0].currentValue.fontSize }}px
-                  </span>
-                </template>
-                <template v-else>
-                  <span class="value-label">Value: {{ formatValue(group.value) }}</span>
-                </template>
-              </div>
-              <div class="header-right">
-                <span class="total-count">{{ group.refs.length }} instances</span>
-                <button class="select-button" @click.stop="selectGroup(group.refs)">Select All</button>
-              </div>
-            </div>
-
-            <!-- Expanded Content -->
-            <div v-if="isGroupExpanded(groupKey)" class="reference-details">
-              <div v-for="ref in group.refs" :key="ref.nodeId" class="reference-item">
-                <!-- Special handling for typography items -->
-                <template v-if="ref.type === 'typography'">
-                  <div class="typography-details">
-                    <div class="typography-preview">{{ ref.currentValue.content }}...</div>
-                    <div class="typography-specs">
-                      <div>Font: {{ ref.currentValue.fontFamily }}</div>
-                      <div>Weight: {{ ref.currentValue.fontWeight }}</div>
-                      <div>Size: {{ ref.currentValue.fontSize }}px</div>
-                      <div v-if="ref.currentValue.lineHeight">Line Height: {{ ref.currentValue.lineHeight }}</div>
-                      <div v-if="ref.currentValue.letterSpacing">Letter Spacing: {{ ref.currentValue.letterSpacing }}</div>
-                      <div v-if="ref.currentValue.paragraphSpacing">Paragraph Spacing: {{ ref.currentValue.paragraphSpacing }}</div>
-                      <div v-if="ref.currentValue.textCase">Text Case: {{ ref.currentValue.textCase }}</div>
-                      <div v-if="ref.currentValue.textDecoration">Text Decoration: {{ ref.currentValue.textDecoration }}</div>
+        <!-- Add a new section for scan results with consistent styling -->
+        <template v-if="!isScanning && Object.keys(groupedReferences).length > 0">
+          <div class="divider"></div>
+          
+          <div class="step-container">
+            <div class="step-content">
+              <h3 class="step-title">Scan results</h3>
+              <div class="results-container">
+                <div v-for="(group, groupKey) in groupedByValue" :key="groupKey" class="value-group">
+                  <!-- Value Group Header -->
+                  <div class="value-group-header" @click="toggleGroup(groupKey)">
+                    <div class="header-left">
+                      <span class="expand-icon">{{ isGroupExpanded(groupKey) ? '▼' : '▶' }}</span>
+                      <template v-if="group.refs[0]?.type === 'typography'">
+                        <span class="value-label">
+                          {{ group.refs[0].currentValue.fontFamily }} 
+                          {{ group.refs[0].currentValue.fontWeight }} 
+                          {{ group.refs[0].currentValue.fontSize }}px
+                        </span>
+                      </template>
+                      <template v-else>
+                        <span class="value-label">Value: {{ formatValue(group.value) }}</span>
+                      </template>
+                    </div>
+                    <div class="header-right">
+                      <span class="total-count">{{ group.refs.length }} instances</span>
+                      <button class="select-button" @click.stop="selectGroup(group.refs)">Select All</button>
                     </div>
                   </div>
-                </template>
-                <template v-else>
-                  <div class="reference-name">{{ ref.nodeName }}</div>
-                  <div class="reference-location">{{ ref.location }}</div>
-                </template>
-                <button class="select-button" @click="selectGroup([ref])">Select</button>
+
+                  <!-- Expanded Content -->
+                  <div v-if="isGroupExpanded(groupKey)" class="reference-details">
+                    <div v-for="ref in group.refs" :key="ref.nodeId" class="reference-item">
+                      <!-- Special handling for typography items -->
+                      <template v-if="ref.type === 'typography'">
+                        <div class="typography-details">
+                          <div class="typography-preview">{{ ref.currentValue.content }}...</div>
+                          <div class="typography-specs">
+                            <div>Font: {{ ref.currentValue.fontFamily }}</div>
+                            <div>Weight: {{ ref.currentValue.fontWeight }}</div>
+                            <div>Size: {{ ref.currentValue.fontSize }}px</div>
+                            <div v-if="ref.currentValue.lineHeight">Line Height: {{ ref.currentValue.lineHeight }}</div>
+                            <div v-if="ref.currentValue.letterSpacing">Letter Spacing: {{ ref.currentValue.letterSpacing }}</div>
+                            <div v-if="ref.currentValue.paragraphSpacing">Paragraph Spacing: {{ ref.currentValue.paragraphSpacing }}</div>
+                            <div v-if="ref.currentValue.textCase">Text Case: {{ ref.currentValue.textCase }}</div>
+                            <div v-if="ref.currentValue.textDecoration">Text Decoration: {{ ref.currentValue.textDecoration }}</div>
+                          </div>
+                        </div>
+                      </template>
+                      <template v-else>
+                        <div class="reference-name">{{ ref.nodeName }}</div>
+                        <div class="reference-location">{{ ref.location }}</div>
+                      </template>
+                      <button class="select-button" @click="selectGroup([ref])">Select</button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-
-        <!-- Add this after the scan results -->
-        <div v-if="!isScanning && Object.keys(groupedReferences).length > 0" class="watch-controls">
-          <div class="toggle-container">
-            <label class="toggle-label">
-              <span>Watch for Changes</span>
-              <div class="toggle-wrapper">
-                <input 
-                  type="checkbox" 
-                  v-model="isWatching"
-                  class="toggle-input"
-                  @change="toggleWatch"
-                >
-                <div class="toggle-slider"></div>
-              </div>
-            </label>
-          </div>
-        </div>
+        </template>
       </div>
     </div>
   </div>
@@ -235,7 +246,7 @@
     .content {
       flex: 1;
       overflow-y: auto;
-      padding: 16px;
+      padding: 0;
     }
 
     .header {
@@ -506,7 +517,8 @@
     }
 
     .scan-scope-selector {
-      margin: 8px 0;
+      margin: 0 16px;
+      padding: 16px 0;
     }
 
     .toggle-container {
@@ -767,7 +779,15 @@
     .divider {
       height: 1px;
       background-color: var(--figma-color-border);
-      margin: 16px 0;
+      margin: 0;
+    }
+
+    .first-section {
+      padding: 16px;
+    }
+
+    .step-container {
+      padding: 16px;
     }
   </style>
 
