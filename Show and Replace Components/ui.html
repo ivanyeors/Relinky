@@ -20,13 +20,18 @@
         </button>
       </header>
 
+      <div v-if="isLoading" class="progress-container">
+        <div class="progress-text">
+          Scanning for missing references... {{ Math.round(scanProgress) }}%
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" :style="{ width: scanProgress + '%' }"></div>
+        </div>
+      </div>
+
       <pre v-if="missingRefs.length">{{ missingRefs }}</pre>
       <div v-else class="empty-state">
         No missing references found or start by scanning the page.
-      </div>
-
-      <div v-if="isLoading" class="loading">
-        <span>Scanning for missing references...</span>
       </div>
 
       <div v-else-if="missingRefs.length === 0" class="empty-state">
@@ -310,6 +315,31 @@
       height: 100%;
       pointer-events: none;
     }
+
+    .progress-container {
+      margin: 16px 0;
+    }
+
+    .progress-text {
+      font-size: 13px;
+      color: #999999;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 4px;
+      background: #444444;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: #0D99FF;
+      transition: width 0.2s ease;
+    }
   </style>
 
   <script>
@@ -330,7 +360,8 @@
           windowSize: {
             width: window.innerWidth,
             height: window.innerHeight
-          }
+          },
+          scanProgress: 0
         }
       },
       computed: {
@@ -433,6 +464,10 @@
           if (message.type === 'error') {
             console.error(message.message);
           }
+
+          if (message.type === 'scan-progress') {
+            this.scanProgress = message.progress;
+          }
         }
 
         // Add window resize listener
@@ -476,37 +511,43 @@
         let startX = 0;
         let startY = 0;
 
-        handle.addEventListener('pointerdown', (e) => {
+        handle.addEventListener('mousedown', (e) => {
           isResizing = true;
           startX = e.clientX;
           startY = e.clientY;
           startWidth = window.innerWidth;
           startHeight = window.innerHeight;
           
-          document.addEventListener('pointermove', handlePointerMove);
-          document.addEventListener('pointerup', handlePointerUp);
-          handle.setPointerCapture(e.pointerId);
+          document.addEventListener('mousemove', handleMouseMove);
+          document.addEventListener('mouseup', handleMouseUp);
         });
 
-        const handlePointerMove = (e) => {
+        const handleMouseMove = (e) => {
           if (!isResizing) return;
           
-          const width = startWidth + (e.clientX - startX);
-          const height = startHeight + (e.clientY - startY);
+          const deltaX = e.clientX - startX;
+          const deltaY = e.clientY - startY;
+          
+          const newWidth = startWidth + deltaX;
+          const newHeight = startHeight + deltaY;
 
           parent.postMessage({ 
             pluginMessage: { 
               type: 'resize',
-              size: { w: width, h: height }
+              width: newWidth,
+              height: newHeight
             }
           }, '*');
         };
 
-        const handlePointerUp = () => {
+        const handleMouseUp = () => {
           isResizing = false;
-          document.removeEventListener('pointermove', handlePointerMove);
-          document.removeEventListener('pointerup', handlePointerUp);
+          document.removeEventListener('mousemove', handleMouseMove);
+          document.removeEventListener('mouseup', handleMouseUp);
         };
+
+        // Prevent text selection while resizing
+        handle.addEventListener('selectstart', (e) => e.preventDefault());
       }
     }).mount('#app');
 

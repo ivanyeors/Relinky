@@ -30,13 +30,19 @@ interface MissingReference {
   missingSource?: string;
 }
 
-async function findMissingReferences(): Promise<MissingReference[]> {
+async function findMissingReferences(
+  progressCallback: (current: number) => void
+): Promise<MissingReference[]> {
   const missingRefs: MissingReference[] = [];
-  console.log('Scanning current page...'); // Debug log
   const nodes = figma.currentPage.findAll();
-  console.log('Found nodes:', nodes.length); // Debug log
+  let processedNodes = 0;
   
   for (const node of nodes) {
+    processedNodes++;
+    if (processedNodes % 10 === 0) { // Update every 10 nodes to avoid UI spam
+      progressCallback(processedNodes);
+    }
+    
     // Check component instances
     if (node.type === 'INSTANCE') {
       console.log('Checking instance:', node.name); // Debug log
@@ -168,7 +174,7 @@ async function findMissingReferences(): Promise<MissingReference[]> {
     }
   }
   
-  console.log('Scan complete, found:', missingRefs.length); // Debug log
+  progressCallback(nodes.length); // Final update
   return missingRefs;
 }
 
@@ -177,23 +183,30 @@ figma.ui.onmessage = async (msg) => {
   console.log('Plugin received message:', msg);
 
   if (msg.type === 'resize') {
-    const { size } = msg;
-    // Apply minimum dimensions
-    const width = Math.max(320, size.w);
-    const height = Math.max(400, size.h);
-    figma.ui.resize(width, height);
+    // Get the new size
+    const { width, height } = msg;
     
-    // Store size in client storage for persistence
-    try {
-      await figma.clientStorage.setAsync('windowSize', { width, height });
-    } catch (err) {
-      console.error('Failed to save window size:', err);
-    }
+    // Apply minimum dimensions
+    const newWidth = Math.max(320, width);
+    const newHeight = Math.max(400, height);
+    
+    // Resize the window
+    figma.ui.resize(newWidth, newHeight);
   }
   
   if (msg.type === 'scan-for-tokens') {
     console.log('Starting scan...');
-    const missingRefs = await findMissingReferences();
+    const totalNodes = figma.currentPage.findAll().length;
+    let scannedNodes = 0;
+    
+    const updateProgress = (current: number) => {
+      figma.ui.postMessage({ 
+        type: 'scan-progress', 
+        progress: (current / totalNodes) * 100 
+      });
+    };
+
+    const missingRefs = await findMissingReferences(updateProgress);
     console.log('Found refs:', missingRefs);
     
     figma.ui.postMessage({ 
