@@ -1,6 +1,6 @@
 {
-  "name": "Show and Replace Components",
-  "id": "1471733787255414682",
+  "name": "Missing References Finder",
+  "id": "your-plugin-id",
   "api": "1.0.0",
   "main": "code.js",
   "capabilities": [],
@@ -11,8 +11,6 @@
   ],
   "ui": "ui.html",
   "networkAccess": {
-    "allowedDomains": [
-      "none"
-    ]
+    "allowedDomains": ["https://unpkg.com"]
   }
 }

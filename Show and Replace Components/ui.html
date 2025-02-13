@@ -1,17 +1,517 @@
-<h2>Rectangle Creator</h2>
-<p>Count: <input id="count" type="number" value="5"></p>
-<button id="create">Create</button>
-<button id="cancel">Cancel</button>
-<script>
+<!DOCTYPE html>
+<html>
+<head>
+  <!-- Replace the mock Vue implementation with the actual Vue.js library -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+</head>
+<body>
+  <!-- Loading indicator -->
+  <div id="loading" style="display: flex; justify-content: center; align-items: center; height: 100vh;">
+    Loading...
+  </div>
 
-document.getElementById('create').onclick = () => {
-  const textbox = document.getElementById('count');
-  const count = parseInt(textbox.value, 10);
-  parent.postMessage({ pluginMessage: { type: 'create-shapes', count } }, '*')
-}
+  <!-- Main app -->
+  <div id="app">
+    <div v-cloak class="plugin-container">
+      <header class="header">
+        <h2>Missing References Finder</h2>
+        <button @click="scanForReferences" class="button primary">
+          {{ isLoading ? 'Scanning...' : 'Scan Page' }}
+        </button>
+      </header>
 
-document.getElementById('cancel').onclick = () => {
-  parent.postMessage({ pluginMessage: { type: 'cancel' } }, '*')
-}
+      <pre v-if="missingRefs.length">{{ missingRefs }}</pre>
+      <div v-else class="empty-state">
+        No missing references found or start by scanning the page.
+      </div>
 
-</script>
+      <div v-if="isLoading" class="loading">
+        <span>Scanning for missing references...</span>
+      </div>
+
+      <div v-else-if="missingRefs.length === 0" class="empty-state">
+        <span>No missing references found or start by scanning the page.</span>
+      </div>
+
+      <div v-else class="references-container">
+        <div class="reference-list">
+          <div v-for="ref in filteredRefs" 
+               :key="ref.nodeId" 
+               class="reference-item">
+            <div class="reference-info">
+              <div class="reference-header">
+                <span class="node-name">{{ ref.nodeName }}</span>
+                <span class="property-type">{{ ref.propertyType }}</span>
+              </div>
+              <div v-if="ref.missingSource" class="missing-source">
+                Originally from: {{ ref.missingSource }}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Resize handle -->
+      <div class="resize-handle" id="resize-handle">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M16 0V16H0L16 0Z" fill="white" fillOpacity="0.3"/>
+          <path d="M6.22577 16H3L16 3V6.22576L6.22577 16Z" fill="white" fillOpacity="0.5"/>
+          <path d="M11.8602 16H8.63441L16 8.63441V11.8602L11.8602 16Z" fill="white" fillOpacity="0.5"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    [v-cloak] { display: none; }
+    
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow: hidden;
+      background-color: #2C2C2C;
+      color: #FFFFFF;
+    }
+
+    #app {
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .plugin-container {
+      height: 100%;
+      padding: 16px;
+      font-family: Inter, sans-serif;
+      display: flex;
+      flex-direction: column;
+      background-color: #2C2C2C;
+      box-sizing: border-box;
+    }
+
+    .header {
+      position: sticky;
+      top: 0;
+      background-color: #2C2C2C;
+      z-index: 2;
+      margin: -16px -16px 24px -16px;
+      padding: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .header h2 {
+      font-size: 16px;
+      font-weight: 500;
+      color: #FFFFFF;
+      margin: 0;
+    }
+
+    .filter-controls {
+      position: sticky;
+      top: 0;
+      background-color: #2C2C2C;
+      padding: 16px 0;
+      margin: -16px 0 16px 0;
+      z-index: 1;
+      display: flex;
+      gap: 8px;
+    }
+
+    .button {
+      padding: 8px 16px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      font-weight: 500;
+      transition: all 0.2s ease;
+      font-size: 13px;
+    }
+
+    .button.primary {
+      background-color: #0D99FF;
+      color: white;
+    }
+
+    .button.primary:hover {
+      background-color: #0088EE;
+    }
+
+    .button.secondary {
+      background-color: #444444;
+      color: #FFFFFF;
+    }
+
+    .button.secondary:hover {
+      background-color: #555555;
+    }
+
+    .references-container {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      margin: 0 -16px;
+      padding: 0 16px;
+    }
+
+    .reference-sections {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      padding-bottom: 16px;
+    }
+
+    .section-title {
+      position: sticky;
+      top: 120px;
+      background-color: #2C2C2C;
+      padding: 8px 0;
+      z-index: 1;
+      font-size: 12px;
+      font-weight: 600;
+      color: #999999;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .reference-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .reference-item {
+      padding: 12px;
+      border: 1px solid #444444;
+      border-radius: 6px;
+      background: #363636;
+      transition: background-color 0.2s ease;
+    }
+
+    .reference-item:hover {
+      background: #404040;
+    }
+
+    .reference-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .node-name {
+      font-weight: 500;
+      color: #FFFFFF;
+      font-size: 13px;
+    }
+
+    .property-type {
+      font-size: 11px;
+      color: #999999;
+      padding: 2px 8px;
+      background: #444444;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .missing-source {
+      font-size: 12px;
+      color: #999999;
+      margin-bottom: 8px;
+    }
+
+    .select, .search-input {
+      width: 100%;
+      padding: 8px;
+      border-radius: 4px;
+      border: 1px solid #444444;
+      background-color: #363636;
+      color: #FFFFFF;
+      font-size: 13px;
+      transition: border-color 0.2s ease;
+    }
+
+    .select:hover, .search-input:hover {
+      border-color: #555555;
+    }
+
+    .select:focus, .search-input:focus {
+      border-color: #0D99FF;
+      outline: none;
+    }
+
+    .select option {
+      background-color: #363636;
+      color: #FFFFFF;
+    }
+
+    .search-input {
+      flex: 1;
+    }
+
+    .search-input::placeholder {
+      color: #999999;
+    }
+
+    .loading, .empty-state {
+      text-align: center;
+      padding: 32px;
+      color: #999999;
+      font-size: 13px;
+    }
+
+    .action-wrapper {
+      margin-top: 8px;
+    }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #2C2C2C;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #444444;
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #555555;
+    }
+
+    /* Loading state */
+    #loading {
+      background-color: #2C2C2C;
+      color: #FFFFFF;
+      font-family: Inter, sans-serif;
+      font-size: 13px;
+    }
+
+    /* Add resize handle styling */
+    .resize-handle {
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      width: 16px;
+      height: 16px;
+      cursor: nwse-resize;
+      z-index: 99999;
+    }
+
+    .resize-handle svg {
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+  </style>
+
+  <script>
+    console.clear(); // Clear previous logs
+    console.log('UI script started');
+
+    const { createApp } = Vue;
+    
+    createApp({
+      data() {
+        return {
+          missingRefs: [],
+          availableVariables: [],
+          availableStyles: [],
+          isLoading: false,
+          selectedFilter: 'all',
+          searchQuery: '',
+          windowSize: {
+            width: window.innerWidth,
+            height: window.innerHeight
+          }
+        }
+      },
+      computed: {
+        groupedReferences() {
+          const filtered = this.missingRefs.filter(ref => {
+            const matchesSearch = ref.nodeName.toLowerCase().includes(this.searchQuery.toLowerCase());
+            const matchesFilter = this.selectedFilter === 'all' || ref.referenceType === this.selectedFilter;
+            return matchesSearch && matchesFilter;
+          });
+
+          return filtered.reduce((groups, ref) => {
+            const type = ref.referenceType;
+            if (!groups[type]) {
+              groups[type] = [];
+            }
+            groups[type].push(ref);
+            return groups;
+          }, {});
+        },
+        filteredRefs() {
+          return this.missingRefs.filter(ref => 
+            ref.nodeName.toLowerCase().includes(this.searchQuery.toLowerCase())
+          );
+        }
+      },
+      methods: {
+        async scanForReferences() {
+          console.log('Scan button clicked');
+          this.isLoading = true;
+          parent.postMessage({ 
+            pluginMessage: { 
+              type: 'scan-for-tokens' 
+            } 
+          }, '*');
+        },
+        
+        formatSectionTitle(type) {
+          return type.charAt(0).toUpperCase() + type.slice(1) + 's';
+        },
+
+        shouldShowSection(type) {
+          return this.selectedFilter === 'all' || this.selectedFilter === type;
+        },
+
+        filterVariablesByType(propertyType) {
+          return this.availableVariables.filter(v => v.type === propertyType);
+        },
+
+        filterStylesByType(propertyType) {
+          return this.availableStyles.filter(s => s.type === propertyType);
+        },
+        
+        async applyToken(ref) {
+          if (!ref.selectedVariable) return;
+          
+          parent.postMessage({ 
+            pluginMessage: { 
+              type: 'apply-token',
+              nodeId: ref.nodeId,
+              tokenType: ref.propertyType,
+              tokenValue: ref.selectedVariable
+            } 
+          }, '*');
+        },
+
+        async applyStyle(ref) {
+          if (!ref.selectedStyle) return;
+          
+          parent.postMessage({ 
+            pluginMessage: { 
+              type: 'apply-style',
+              nodeId: ref.nodeId,
+              styleType: ref.propertyType,
+              styleId: ref.selectedStyle
+            } 
+          }, '*');
+        },
+
+        async swapComponent(ref) {
+          parent.postMessage({ 
+            pluginMessage: { 
+              type: 'swap-component',
+              nodeId: ref.nodeId
+            } 
+          }, '*');
+        }
+      },
+      mounted() {
+        console.log('Vue app mounted');
+        window.onmessage = (event) => {
+          const message = event.data.pluginMessage;
+          console.log('UI received message:', message);
+          
+          if (message.type === 'missing-references-result') {
+            console.log('Updating refs:', message.references);
+            this.missingRefs = message.references;
+            this.isLoading = false;
+          }
+          
+          if (message.type === 'error') {
+            console.error(message.message);
+          }
+        }
+
+        // Add window resize listener
+        window.onresize = () => {
+          this.windowSize = {
+            width: window.innerWidth,
+            height: window.innerHeight
+          };
+        };
+
+        // Add resize observer
+        const resizeObserver = new ResizeObserver((entries) => {
+          for (const entry of entries) {
+            const { width, height } = entry.contentRect;
+            parent.postMessage({ 
+              pluginMessage: { 
+                type: 'resize',
+                width: Math.max(320, width),
+                height: Math.max(400, height)
+              }
+            }, '*');
+          }
+        });
+
+        // Observe the container
+        const container = document.querySelector('.plugin-container');
+        if (container) {
+          resizeObserver.observe(container);
+        }
+
+        // Cleanup
+        this.$onBeforeUnmount = () => {
+          resizeObserver.disconnect();
+        };
+
+        // Setup resize handle
+        const handle = document.getElementById('resize-handle');
+        let isResizing = false;
+        let startWidth = 0;
+        let startHeight = 0;
+        let startX = 0;
+        let startY = 0;
+
+        handle.addEventListener('pointerdown', (e) => {
+          isResizing = true;
+          startX = e.clientX;
+          startY = e.clientY;
+          startWidth = window.innerWidth;
+          startHeight = window.innerHeight;
+          
+          document.addEventListener('pointermove', handlePointerMove);
+          document.addEventListener('pointerup', handlePointerUp);
+          handle.setPointerCapture(e.pointerId);
+        });
+
+        const handlePointerMove = (e) => {
+          if (!isResizing) return;
+          
+          const width = startWidth + (e.clientX - startX);
+          const height = startHeight + (e.clientY - startY);
+
+          parent.postMessage({ 
+            pluginMessage: { 
+              type: 'resize',
+              size: { w: width, h: height }
+            }
+          }, '*');
+        };
+
+        const handlePointerUp = () => {
+          isResizing = false;
+          document.removeEventListener('pointermove', handlePointerMove);
+          document.removeEventListener('pointerup', handlePointerUp);
+        };
+      }
+    }).mount('#app');
+
+    // Add this at the end of your Vue initialization
+    document.getElementById('loading').style.display = 'none';
+  </script>
+</body>
+</html>
