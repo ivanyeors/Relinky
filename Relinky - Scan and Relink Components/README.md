@@ -1,40 +1,59 @@
-Below are the steps to get your plugin running. You can also find instructions at:
+# Missing References Finder - Figma Plugin
 
-  https://www.figma.com/plugin-docs/plugin-quickstart-guide/
+A powerful Figma plugin to help you find and manage unlinked design tokens and styles across your files.
 
-This plugin template uses Typescript and NPM, two standard tools in creating JavaScript applications.
+## Features
 
-First, download Node.js which comes with NPM. This will allow you to install TypeScript and other
-libraries. You can find the download link here:
+### 🔍 Comprehensive Scanning
+- **Typography**: Find text layers missing text style variables
+- **Spacing**: Detect auto-layout frames with unlinked spacing
+- **Corner Radius**: Identify shapes with unlinked corner radius
+- **Fill Colors**: Find layers with unlinked fill colors
+- **Stroke Colors**: Detect layers with unlinked stroke colors
 
-  https://nodejs.org/en/download/
+### 🎯 Smart Selection
+- Scan entire page or selected frames/components
+- Group similar unlinked values for easier management
+- Quick selection of affected layers
+- Navigate to specific instances
 
-Next, install TypeScript using the command:
+### 👀 Live Watching
+- Watch for changes in real-time
+- Automatically scan as you work
+- Toggle watching on/off
 
-  npm install -g typescript
+### 💡 Smart Features
+- Detailed typography information display
+- Grouped results by value
+- Progress tracking during scans
+- Success notifications
+- Rescan and clear results options
 
-Finally, in the directory of your plugin, get the latest type definitions for the plugin API by running:
+## Usage
 
-  npm install --save-dev @figma/plugin-typings
+### Installation
+1. Open Figma and go to the Community tab
+2. Search for "Missing References Finder"
+3. Click "Install"
 
-If you are familiar with JavaScript, TypeScript will look very familiar. In fact, valid JavaScript code
-is already valid Typescript code.
+### Basic Usage
+1. Select the frames or components you want to scan (or leave unselected to scan entire page)
+2. Open the plugin from Plugins > Missing References Finder
+3. Choose which references to scan for (typography, spacing, colors, etc.)
+4. Click "Start Scan" to begin the analysis
 
-TypeScript adds type annotations to variables. This allows code editors such as Visual Studio Code
-to provide information about the Figma API while you are writing code, as well as help catch bugs
-you previously didn't notice.
+### Working with Results
+- Results are grouped by type and value for easier management
+- Click on any result to select the affected layers in your design
+- Use the navigation arrows to jump between instances
+- Apply suggested styles directly from the results panel
 
-For more information, visit https://www.typescriptlang.org/
+### Live Watching Mode
+1. Toggle "Watch Mode" to enable real-time scanning
+2. The plugin will automatically detect unlinked values as you work
+3. Disable Watch Mode when you want to stop automatic scanning
 
-Using TypeScript requires a compiler to convert TypeScript (code.ts) into JavaScript (code.js)
-for the browser to run.
-
-We recommend writing TypeScript code using Visual Studio code:
-
-1. Download Visual Studio Code if you haven't already: https://code.visualstudio.com/.
-2. Open this directory in Visual Studio Code.
-3. Compile TypeScript to JavaScript: Run the "Terminal > Run Build Task..." menu item,
-    then select "npm: watch". You will have to do this again every time
-    you reopen Visual Studio Code.
-
-That's it! Visual Studio Code will regenerate the JavaScript file every time you save.
+### Tips
+- Use the grouped results to quickly standardize similar unlinked values
+- Regular scanning helps maintain design system consistency
+- Consider scanning before sharing designs or creating documentation
