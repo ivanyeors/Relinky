@@ -123,11 +123,6 @@
             <icon-warning class="warning-icon" />
             Scanning the entire page may take longer
           </div>
-          <!-- Message when no frames are selected -->
-          <div v-if="!hasSelection" class="info-message">
-            <icon-info class="info-icon" />
-            Select frames or sections to start scanning
-          </div>
         </div>
 
         <!-- Scan Controls -->
@@ -703,8 +698,10 @@
     }
 
     .warning-message {
-      background-color: var(--figma-color-bg-warning);
-      color: var(--figma-color-text-warning);
+      background-color: var(--figma-color-bg-warning-secondary);
+      color: white;
+      border: 1px solid var(--figma-color-border-warning);
+      background: var(--figma-color-bg-warning);
     }
 
     .info-message {
@@ -717,6 +714,7 @@
       width: 12px;
       height: 12px;
       flex-shrink: 0;
+      color: white;
     }
 
     /* Add icon components */
