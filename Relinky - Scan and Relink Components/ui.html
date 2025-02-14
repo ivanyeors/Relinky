@@ -250,13 +250,20 @@
     <!-- Success Toast -->
     <div 
       class="success-toast" 
-      :class="{ visible: showSuccessToast }"
+      :class="{ 
+        visible: showSuccessToast,
+        warning: successMessage === 'Scanning the entire page may take longer'
+      }"
       v-if="showSuccessToast"
     >
       <div class="success-toast-content">
         <div class="success-toast-icon">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <svg v-if="successMessage !== 'Scanning the entire page may take longer'" 
+            width="16" height="16" viewBox="0 0 16 16" fill="none">
             <path fill-rule="evenodd" clip-rule="evenodd" d="M8 1.33334C4.31811 1.33334 1.33334 4.31811 1.33334 8C1.33334 11.6819 4.31811 14.6667 8 14.6667C11.6819 14.6667 14.6667 11.6819 14.6667 8C14.6667 4.31811 11.6819 1.33334 8 1.33334ZM11.0607 6.27274L7.39401 9.93941L5.27274 7.81814L6.06069 7.03019L7.39401 8.36351L10.2727 5.48479L11.0607 6.27274Z" fill="currentColor"/>
+          </svg>
+          <svg v-else width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path fill-rule="evenodd" clip-rule="evenodd" d="M8 1L14.6667 13H1.33334L8 1ZM8 3.66667L3.73334 11.6667H12.2667L8 3.66667ZM7.33334 6H8.66668V8.66667H7.33334V6ZM7.33334 10H8.66668V11.3333H7.33334V10Z" fill="currentColor"/>
           </svg>
         </div>
         <span class="success-toast-message">{{ successMessage }}</span>
@@ -1050,6 +1057,16 @@
       opacity: 0.7;
       cursor: not-allowed;
     }
+
+    .success-toast.warning {
+      background: var(--figma-color-bg-warning);
+      border: 1px solid var(--figma-color-border-warning);
+    }
+
+    .success-toast.warning .success-toast-message,
+    .success-toast.warning .success-toast-icon {
+      color: white;
+    }
   </style>
 
   <script>
@@ -1279,11 +1296,15 @@
       methods: {
         handleScanScopeChange() {
           if (this.scanEntirePage) {
-            // Optional: Show a confirmation dialog for large pages
-            if (confirm('Scanning the entire page may take a long time. Continue?')) {
-              return;
-            }
-            this.scanEntirePage = false;
+            // Show warning toast
+            this.successMessage = 'Scanning the entire page may take longer';
+            this.showSuccessToast = true;
+            // Auto-dismiss after 3 seconds
+            setTimeout(() => {
+              if (this.successMessage === 'Scanning the entire page may take longer') {
+                this.showSuccessToast = false;
+              }
+            }, 3000);
           }
         },
         async startScan(isRescan = false, event) {
@@ -1333,7 +1354,7 @@
         stopScan() {
           parent.postMessage({ 
             pluginMessage: { 
-              type: 'stop-scan' 
+              type: 'cancel-scan' 
             }
           }, '*');
         },
