@@ -848,6 +848,8 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
         figma.currentPage.selection = validNodes;
         // Optionally scroll to show the selected nodes
         figma.viewport.scrollAndZoomIntoView(validNodes);
+        // Notify UI that selection is complete
+        figma.ui.postMessage({ type: 'selection-complete' });
       } else {
         throw new Error('No valid nodes found to select');
       }

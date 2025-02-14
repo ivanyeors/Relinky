@@ -198,7 +198,15 @@
                     </div>
                     <div class="header-right">
                       <span class="total-count">{{ group.refs.length }} instances</span>
-                      <button class="select-button" @click.stop="selectGroup(group.refs)">Select All</button>
+                      <button 
+                        class="select-button" 
+                        :class="{ 'loading': isSelecting(groupKey) }"
+                        @click.stop="selectGroup(group.refs, groupKey)"
+                        :disabled="isSelecting(groupKey)"
+                      >
+                        <span v-if="!isSelecting(groupKey)">Select All</span>
+                        <span v-else class="loading-spinner"></span>
+                      </button>
                     </div>
                   </div>
 
@@ -225,7 +233,15 @@
                         <div class="reference-name">{{ ref.nodeName }}</div>
                         <div class="reference-location">{{ ref.location }}</div>
                       </template>
-                      <button class="select-button" @click="selectGroup([ref])">Select</button>
+                      <button 
+                        class="select-button"
+                        :class="{ 'loading': isSelecting(ref.nodeId) }"
+                        @click="selectGroup([ref], ref.nodeId)"
+                        :disabled="isSelecting(ref.nodeId)"
+                      >
+                        <span v-if="!isSelecting(ref.nodeId)">Select</span>
+                        <span v-else class="loading-spinner"></span>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1003,6 +1019,39 @@
     ::-webkit-scrollbar-thumb:hover {
       background: var(--figma-color-bg-secondary);
     }
+
+    .select-button.loading {
+      position: relative;
+      color: transparent;
+      pointer-events: none;
+    }
+    
+    .loading-spinner {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 12px;
+      height: 12px;
+      border: 2px solid var(--figma-color-icon-onbrand);
+      border-radius: 50%;
+      border-right-color: transparent;
+      animation: spin 0.8s linear infinite;
+    }
+    
+    @keyframes spin {
+      from {
+        transform: translate(-50%, -50%) rotate(0deg);
+      }
+      to {
+        transform: translate(-50%, -50%) rotate(360deg);
+      }
+    }
+    
+    .select-button:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+    }
   </style>
 
   <script>
@@ -1182,6 +1231,7 @@
           ],
           showSuccessToast: false,
           successMessage: '',
+          selectingNodeIds: new Set(), // Track which groups are being selected
         }
       },
       computed: {
@@ -1289,7 +1339,8 @@
             }
           }, '*');
         },
-        selectGroup(refs) {
+        async selectGroup(refs, groupId) {
+          this.selectingNodeIds.add(groupId);
           const nodeIds = refs.map(ref => ref.nodeId);
           parent.postMessage({ 
             pluginMessage: { 
@@ -1297,6 +1348,11 @@
               nodeIds
             }
           }, '*');
+          
+          // Remove the loading state after selection is complete
+          setTimeout(() => {
+            this.selectingNodeIds.delete(groupId);
+          }, 500); // Minimum loading time for better UX
         },
         formatValue(value) {
           if (!value) return 'None';
@@ -1353,6 +1409,9 @@
           console.log(`Updating progress bar: ${progress}%`);
           this.scanProgress = progress;
         },
+        isSelecting(id) {
+          return this.selectingNodeIds.has(id);
+        },
       },
       mounted() {
         console.log('Vue app mounted');
@@ -1408,6 +1467,10 @@
               break;
             case 'resize':
               this.handleResize(msg);
+              break;
+            case 'selection-complete':
+              // Clear all loading states
+              this.selectingNodeIds.clear();
               break;
           }
         };
