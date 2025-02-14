@@ -1,4 +1,4 @@
-# Missing References Finder - Figma Plugin
+# Relinky - Scan and Replace Missing Token
 
 A powerful Figma plugin to help you find and manage unlinked design tokens and styles across your files.
 
@@ -33,12 +33,12 @@ A powerful Figma plugin to help you find and manage unlinked design tokens and s
 
 ### Installation
 1. Open Figma and go to the Community tab
-2. Search for "Missing References Finder"
+2. Search for "Relinky"
 3. Click "Install"
 
 ### Basic Usage
 1. Select the frames or components you want to scan (or leave unselected to scan entire page)
-2. Open the plugin from Plugins > Missing References Finder
+2. Open the plugin from Plugins > Relinky
 3. Choose which references to scan for (typography, spacing, colors, etc.)
 4. Click "Start Scan" to begin the analysis
 

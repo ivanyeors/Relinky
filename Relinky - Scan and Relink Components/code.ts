@@ -11,7 +11,7 @@ figma.showUI(__html__, {
   width: 400, 
   height: 600,
   themeColors: true,
-  title: "Missing References Finder"
+  title: "Relinky"
 });
 
 // Calls to "parent.postMessage" from within the HTML page will trigger this

@@ -1,5 +1,5 @@
 {
-  "name": "Show-and-Replace-Components",
+  "name": "relinky-scan-and-replace-missing-tokens",
   "version": "1.0.0",
   "description": "Your Figma Plugin",
   "main": "code.js",
