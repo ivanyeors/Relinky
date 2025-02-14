@@ -376,6 +376,7 @@ interface PluginMessage {
   message?: string;
   progress?: number;
   references?: Record<string, MissingReference[]>;
+  scanEntirePage?: boolean;
 }
 
 // Add this function near the top of the file
@@ -501,6 +502,8 @@ interface DocumentChangeHandler {
   isWatching: boolean;
   timeoutId?: number;
   changeHandler?: () => void;
+  scanEntirePage?: boolean;
+  selectedFrameIds?: string[];
 }
 
 // Add this state object near the top of the file
@@ -509,7 +512,7 @@ const documentState: DocumentChangeHandler = {
 };
 
 // Update the startWatchingDocument function
-async function startWatchingDocument(scanType: ScanType) {
+async function startWatchingDocument(scanType: ScanType, scanEntirePage: boolean = false) {
   if (documentState.isWatching) {
     return; // Already watching
   }
@@ -519,6 +522,20 @@ async function startWatchingDocument(scanType: ScanType) {
     
     documentState.isWatching = true;
     documentState.lastScanType = scanType;
+    documentState.scanEntirePage = scanEntirePage;
+    
+    // If not scanning entire page, store the current selection
+    if (!scanEntirePage) {
+      const selection = figma.currentPage.selection;
+      documentState.selectedFrameIds = selection
+        .filter(node => 
+          node.type === 'FRAME' || 
+          node.type === 'COMPONENT' || 
+          node.type === 'COMPONENT_SET' || 
+          node.type === 'SECTION'
+        )
+        .map(node => node.id);
+    }
 
     const documentChangeHandler = async () => {
       if (documentState.timeoutId) {
@@ -537,7 +554,7 @@ async function startWatchingDocument(scanType: ScanType) {
           // Perform a new scan
           const missingRefs = await scanForMissingReferences(
             documentState.lastScanType,
-            undefined,
+            documentState.scanEntirePage ? undefined : documentState.selectedFrameIds,
             (progress) => {
               figma.ui.postMessage({ 
                 type: 'scan-progress', 
@@ -665,7 +682,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
       });
 
       // Start watching after initial scan
-      startWatchingDocument(scanType);
+      startWatchingDocument(scanType, msg.scanEntirePage ?? false);
     } catch (err) {
       console.error('Scan failed:', err);
       figma.ui.postMessage({ 
@@ -674,7 +691,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
       });
     }
   } else if (msg.type === 'start-watching') {
-    await startWatchingDocument(msg.scanType as ScanType);
+    await startWatchingDocument(msg.scanType as ScanType, msg.scanEntirePage ?? false);
   } else if (msg.type === 'stop-watching') {
     stopWatchingDocument();
   }

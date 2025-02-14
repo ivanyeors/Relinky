@@ -20,39 +20,25 @@
               <h3 class="step-title">Select frames or components</h3>
               <button 
                 class="watch-toggle" 
-                :class="{ active: isWatching }"
+                :class="{ 
+                  active: isWatching,
+                  disabled: !scanEntirePage 
+                }"
                 @click="toggleWatch"
-                :title="isWatching ? 'Stop watching for changes' : 'Watch for changes'"
+                :disabled="!scanEntirePage"
+                :title="watchButtonTitle"
               >
                 <div class="watch-toggle-content">
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path v-if="isWatching" d="M8 3.33333C11.3333 3.33333 14.1667 5.33333 15.3333 8C14.1667 10.6667 11.3333 12.6667 8 12.6667C4.66667 12.6667 1.83333 10.6667 0.666667 8C1.83333 5.33333 4.66667 3.33333 8 3.33333ZM8 11C9.65685 11 11 9.65685 11 8C11 6.34315 9.65685 5 8 5C6.34315 5 5 6.34315 5 8C5 9.65685 6.34315 11 8 11ZM8 9.66667C7.07953 9.66667 6.33333 8.92047 6.33333 8C6.33333 7.07953 7.07953 6.33333 8 6.33333C8.92047 6.33333 9.66667 7.07953 9.66667 8C9.66667 8.92047 8.92047 9.66667 8 9.66667Z" fill="currentColor"/>
+                    <path v-if="isWatching && scanEntirePage" d="M8 3.33333C11.3333 3.33333 14.1667 5.33333 15.3333 8C14.1667 10.6667 11.3333 12.6667 8 12.6667C4.66667 12.6667 1.83333 10.6667 0.666667 8C1.83333 5.33333 4.66667 3.33333 8 3.33333Z" fill="currentColor"/>
                     <g v-else>
                       <path d="M2.66667 2L13.3333 14" stroke="currentColor" stroke-width="1.5"/>
                       <path d="M8 3.33333C11.3333 3.33333 14.1667 5.33333 15.3333 8C14.1667 10.6667 11.3333 12.6667 8 12.6667C4.66667 12.6667 1.83333 10.6667 0.666667 8C1.83333 5.33333 4.66667 3.33333 8 3.33333Z" fill="currentColor" fill-opacity="0.5"/>
                     </g>
                   </svg>
-                  <span class="watch-toggle-text">{{ isWatching ? 'Watching' : 'Watch changes' }}</span>
+                  <span class="watch-toggle-text">{{ isWatching && scanEntirePage ? 'Watching' : 'Watch changes' }}</span>
                 </div>
               </button>
-            </div>
-            <div class="selection-container">
-              <div v-if="!hasSelection && !scanEntirePage" class="toast warning">
-                <div class="toast-icon">
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path fill-rule="evenodd" clip-rule="evenodd" d="M8 1.33337L14.6667 13.3334H1.33334L8 1.33337ZM8 4.00004L3.73334 12H12.2667L8 4.00004ZM7.33334 6.66671H8.66668V9.33337H7.33334V6.66671ZM7.33334 10.6667H8.66668V12H7.33334V10.6667Z" fill="currentColor"/>
-                  </svg>
-                </div>
-                <span class="toast-message">Select frames or sections to start scanning</span>
-              </div>
-              <div v-else-if="hasSelection && !scanEntirePage" class="toast success">
-                <div class="toast-icon">
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path fill-rule="evenodd" clip-rule="evenodd" d="M8 1.33334C4.31811 1.33334 1.33334 4.31811 1.33334 8C1.33334 11.6819 4.31811 14.6667 8 14.6667C11.6819 14.6667 14.6667 11.6819 14.6667 8C14.6667 4.31811 11.6819 1.33334 8 1.33334ZM11.0607 6.27274L7.39401 9.93941L5.27274 7.81814L6.06069 7.03019L7.39401 8.36351L10.2727 5.48479L11.0607 6.27274Z" fill="currentColor"/>
-                  </svg>
-                </div>
-                <span class="toast-message">{{ selectedCount }} {{ selectedCount === 1 ? 'item' : 'items' }} selected</span>
-              </div>
             </div>
 
             <!-- Scan Scope Selection -->
@@ -73,6 +59,25 @@
                     <div class="toggle-slider"></div>
                   </div>
                 </label>
+              </div>
+            </div>
+
+            <div class="selection-container">
+              <div v-if="!hasSelection && !scanEntirePage" class="toast warning">
+                <div class="toast-icon">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path fill-rule="evenodd" clip-rule="evenodd" d="M8 1.33337L14.6667 13.3334H1.33334L8 1.33337ZM8 4.00004L3.73334 12H12.2667L8 4.00004ZM7.33334 6.66671H8.66668V9.33337H7.33334V6.66671ZM7.33334 10.6667H8.66668V12H7.33334V10.6667Z" fill="currentColor"/>
+                  </svg>
+                </div>
+                <span class="toast-message">Select frames or sections to start scanning</span>
+              </div>
+              <div v-else-if="hasSelection && !scanEntirePage" class="toast success">
+                <div class="toast-icon">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path fill-rule="evenodd" clip-rule="evenodd" d="M8 1.33334C4.31811 1.33334 1.33334 4.31811 1.33334 8C1.33334 11.6819 4.31811 14.6667 8 14.6667C11.6819 14.6667 14.6667 11.6819 14.6667 8C14.6667 4.31811 11.6819 1.33334 8 1.33334ZM11.0607 6.27274L7.39401 9.93941L5.27274 7.81814L6.06069 7.03019L7.39401 8.36351L10.2727 5.48479L11.0607 6.27274Z" fill="currentColor"/>
+                  </svg>
+                </div>
+                <span class="toast-message">{{ selectedCount }} {{ selectedCount === 1 ? 'item' : 'items' }} selected</span>
               </div>
             </div>
 
@@ -966,13 +971,29 @@
     }
 
     .watch-toggle:hover {
-      background: var(--figma-color-bg-hover);
-      color: var(--figma-color-text);
+      &:not(.disabled) {
+        background: var(--figma-color-bg-hover);
+        color: var(--figma-color-text);
+      }
     }
 
     .watch-toggle.active {
-      color: var(--figma-color-text-brand);
-      background: var(--figma-color-bg-brand-tertiary);
+      &:not(.disabled) {
+        color: var(--figma-color-text-brand);
+        background: var(--figma-color-bg-brand-tertiary);
+      }
+    }
+
+    .watch-toggle.disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      background: var(--figma-color-bg-disabled);
+      color: var(--figma-color-text-disabled);
+    }
+
+    .watch-toggle.disabled:hover {
+      background: var(--figma-color-bg-disabled);
+      color: var(--figma-color-text-disabled);
     }
 
     .results-header {
@@ -1086,6 +1107,32 @@
     .success-toast.warning .success-toast-message,
     .success-toast.warning .success-toast-icon {
       color: white;
+    }
+
+    .watch-toggle.disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      background: var(--figma-color-bg-disabled);
+      color: var(--figma-color-text-disabled);
+    }
+
+    .watch-toggle.disabled:hover {
+      background: var(--figma-color-bg-disabled);
+      color: var(--figma-color-text-disabled);
+    }
+
+    .watch-toggle:hover {
+      &:not(.disabled) {
+        background: var(--figma-color-bg-hover);
+        color: var(--figma-color-text);
+      }
+    }
+
+    .watch-toggle.active {
+      &:not(.disabled) {
+        color: var(--figma-color-text-brand);
+        background: var(--figma-color-bg-brand-tertiary);
+      }
     }
   </style>
 
@@ -1311,24 +1358,40 @@
           });
           
           return valueGroups;
+        },
+        watchButtonTitle() {
+          if (!this.scanEntirePage) {
+            return 'Enable "Scan Entire Page" to use watch mode';
+          }
+          return this.isWatching ? 'Stop watching for changes' : 'Watch for changes';
+        },
+        canWatch() {
+          return this.scanEntirePage;
         }
       },
       methods: {
         handleScanScopeChange() {
           if (this.scanEntirePage) {
-            // Show warning toast
             this.successMessage = 'Scanning the entire page may take longer';
             this.showSuccessToast = true;
-            // Auto-dismiss after 3 seconds
             setTimeout(() => {
               if (this.successMessage === 'Scanning the entire page may take longer') {
                 this.showSuccessToast = false;
               }
             }, 3000);
+          } else {
+            this.stopWatching();
           }
         },
+        stopWatching() {
+          this.isWatching = false;
+          parent.postMessage({ 
+            pluginMessage: { 
+              type: 'stop-watching'
+            }
+          }, '*');
+        },
         async startScan(isRescan = false, event) {
-          // Prevent event from being included in the message
           event?.preventDefault?.();
 
           if (!this.canStartScan) return;
@@ -1388,10 +1451,9 @@
             }
           }, '*');
           
-          // Remove the loading state after selection is complete
           setTimeout(() => {
             this.selectingNodeIds.delete(groupId);
-          }, 500); // Minimum loading time for better UX
+          }, 500);
         },
         formatValue(value) {
           if (!value) return 'None';
@@ -1417,11 +1479,15 @@
           return key.split(':')[0];
         },
         toggleWatch() {
+          if (!this.canWatch) return;
+          
           this.isWatching = !this.isWatching;
           parent.postMessage({ 
             pluginMessage: { 
               type: this.isWatching ? 'start-watching' : 'stop-watching',
-              scanType: this.selectedScanType 
+              scanType: this.selectedScanType,
+              scanScope: this.scanScope,
+              scanEntirePage: this.scanEntirePage
             }
           }, '*');
         },
@@ -1438,12 +1504,10 @@
             
             if (!isNaN(width) && !isNaN(height)) {
               this.windowSize = { width, height };
-              // The plugin will automatically resize
             }
           }
         },
         updateProgress(newProgress) {
-          // Ensure progress is a number and between 0-100
           const progress = Math.min(Math.max(0, Number(newProgress) || 0), 100);
           console.log(`Updating progress bar: ${progress}%`);
           this.scanProgress = progress;
@@ -1477,7 +1541,7 @@
             case 'missing-references-result':
               this.groupedReferences = msg.references;
               this.isScanning = false;
-              this.updateProgress(100); // Keep progress at 100%
+              this.updateProgress(100);
               break;
             case 'scan-cancelled':
               this.isScanning = false;
@@ -1490,7 +1554,7 @@
               break;
             case 'scan-complete':
               this.isScanning = false;
-              this.scanProgress = 100; // Keep at 100% for success
+              this.scanProgress = 100;
               if (msg.status === 'success') {
                 this.successMessage = msg.message;
                 this.showSuccessToast = true;
@@ -1498,7 +1562,7 @@
               }
               break;
             case 'watch-status':
-              this.isWatching = msg.isWatching;
+              this.isWatching = msg.isWatching && this.scanEntirePage;
               if (!msg.isWatching) {
                 this.isScanning = false;
                 this.scanProgress = 0;
@@ -1508,7 +1572,6 @@
               this.handleResize(msg);
               break;
             case 'selection-complete':
-              // Clear all loading states
               this.selectingNodeIds.clear();
               break;
           }
@@ -1516,7 +1579,6 @@
       }
     }).mount('#app');
 
-    // Add this at the end of your Vue initialization
     document.getElementById('loading').style.display = 'none';
   </script>
 </body>
