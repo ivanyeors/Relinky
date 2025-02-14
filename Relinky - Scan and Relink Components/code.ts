@@ -34,7 +34,7 @@ interface MissingReference {
   preview?: string;
 }
 
-// Update ScanType to match the UI options exactly
+// Update ScanType to include new types
 type ScanType = 'vertical-gap' | 'horizontal-padding' | 'vertical-padding' | 'corner-radius' | 'fill' | 'stroke' | 'typography';
 
 interface ScanProgress {
@@ -933,7 +933,7 @@ async function scanForVerticalGap(
           type: 'vertical-gap',
           property: 'itemSpacing',
           currentValue: node.itemSpacing,
-          location: 'Auto Layout'
+          location: 'Vertical Gap'
         });
       }
 
