@@ -141,11 +141,18 @@
                 Start Scan
               </button>
               <button 
-                v-if="isScanning" 
-                @click="cancelScan" 
+                @click="rescan"
+                :disabled="!hasSelection && !scanEntirePage"
                 class="button secondary-button"
               >
-                Cancel
+                Rescan
+              </button>
+              <button 
+                v-if="isScanning" 
+                @click="stopScan" 
+                class="button secondary-button"
+              >
+                Stop
               </button>
             </div>
           </div>
@@ -160,13 +167,6 @@
               <div class="results-header">
                 <h3 class="step-title">Scan results</h3>
                 <div class="results-actions">
-                  <button 
-                    class="button secondary-button"
-                    @click="rescan"
-                    :disabled="isScanning"
-                  >
-                    Rescan
-                  </button>
                   <button 
                     class="button secondary-button"
                     @click="clearResults"
@@ -1215,7 +1215,8 @@
               type: 'scan-for-tokens',
               scanType: this.selectedScanType,
               scanScope: this.scanScope,
-              selectedFrameIds
+              selectedFrameIds,
+              isRescan
             }
           }, '*');
         },
@@ -1235,10 +1236,10 @@
             window.addEventListener('message', handler);
           });
         },
-        cancelScan() {
+        stopScan() {
           parent.postMessage({ 
             pluginMessage: { 
-              type: 'cancel-scan' 
+              type: 'stop-scan' 
             }
           }, '*');
         },
@@ -1284,18 +1285,8 @@
           }, '*');
         },
         rescan() {
-          // Reset scanning state but keep existing results
-          this.isScanning = true;
-          this.scanProgress = 0;
-          
-          parent.postMessage({ 
-            pluginMessage: { 
-              type: 'scan-for-tokens',
-              scanType: this.selectedScanType,
-              scanScope: this.scanScope,
-              isRescan: true // Add flag to indicate this is a rescan
-            }
-          }, '*');
+          // Call startScan with isRescan flag
+          this.startScan(true);
         },
         clearResults() {
           this.groupedReferences = {};
