@@ -148,13 +148,15 @@ function formatTypographyValue(value: any): string {
 
 // Update the scanForTextTokens function with better progress reporting
 async function scanForTextTokens(
-  progressCallback: (progress: number) => void
+  progressCallback: (progress: number) => void,
+  nodesToScan?: SceneNode[]
 ): Promise<MissingReference[]> {
   const missingRefs: MissingReference[] = [];
   
   try {
     // Use type guard to ensure we only get TextNodes
-    const textNodes = figma.currentPage.findAll(node => node.type === 'TEXT') as TextNode[];
+    const textNodes = (nodesToScan || figma.currentPage.findAll())
+      .filter(node => node.type === 'TEXT') as TextNode[];
     const totalNodes = textNodes.length;
     let processedNodes = 0;
     
@@ -226,12 +228,13 @@ async function scanForTextTokens(
 
 // Function to scan for missing color variables
 async function scanForColorTokens(
-  progressCallback: (progress: number) => void
+  progressCallback: (progress: number) => void,
+  nodesToScan?: SceneNode[]
 ): Promise<MissingReference[]> {
   const missingRefs: MissingReference[] = [];
   
   try {
-    const nodes = figma.currentPage.findAll(node => {
+    const nodes = (nodesToScan || figma.currentPage.findAll()).filter(node => {
       if (!node || node.removed) return false;
       return 'fills' in node || 'strokes' in node || 'backgroundColor' in node;
     });
@@ -428,7 +431,8 @@ async function scanForMissingReferences(
           }, []);
           return [...acc, ...sectionChildren];
         }
-        return [...acc, frame, ...frame.findAll()];
+        // Include the frame itself and its immediate children only
+        return [...acc, frame, ...frame.children];
       }, []);
     } else {
       console.log('Scanning entire page');
@@ -441,45 +445,30 @@ async function scanForMissingReferences(
     switch (scanType) {
       case 'vertical-gap':
         refs = await scanForVerticalGap(progress => {
-          if (progressCallback) {
-            console.log(`Scan progress: ${progress}%`);
-            progressCallback(progress);
-          }
+          if (progressCallback) progressCallback(progress);
         }, nodesToScan);
         break;
       case 'horizontal-padding':
       case 'vertical-padding':
         refs = await scanForPadding(progress => {
-          if (progressCallback) {
-            console.log(`Scan progress: ${progress}%`);
-            progressCallback(progress);
-          }
-        }, scanType);
+          if (progressCallback) progressCallback(progress);
+        }, scanType, nodesToScan);
         break;
       case 'corner-radius':
         refs = await scanForCornerRadius(progress => {
-          if (progressCallback) {
-            console.log(`Scan progress: ${progress}%`);
-            progressCallback(progress);
-          }
-        });
+          if (progressCallback) progressCallback(progress);
+        }, nodesToScan);
         break;
       case 'fill':
       case 'stroke':
         refs = await scanForColorTokens(progress => {
-          if (progressCallback) {
-            console.log(`Scan progress: ${progress}%`);
-            progressCallback(progress);
-          }
-        });
+          if (progressCallback) progressCallback(progress);
+        }, nodesToScan);
         break;
       case 'typography':
         refs = await scanForTextTokens(progress => {
-          if (progressCallback) {
-            console.log(`Scan progress: ${progress}%`);
-            progressCallback(progress);
-          }
-        });
+          if (progressCallback) progressCallback(progress);
+        }, nodesToScan);
         break;
     }
 
@@ -953,12 +942,13 @@ async function scanForVerticalGap(
 
 async function scanForPadding(
   progressCallback: (progress: number) => void,
-  type: 'horizontal-padding' | 'vertical-padding'
+  type: 'horizontal-padding' | 'vertical-padding',
+  nodesToScan?: SceneNode[]
 ): Promise<MissingReference[]> {
   const missingRefs: MissingReference[] = [];
   
   try {
-    const nodes = figma.currentPage.findAll(hasAutoLayout);
+    const nodes = (nodesToScan || figma.currentPage.findAll()).filter(hasAutoLayout);
     console.log(`Found ${nodes.length} nodes with auto-layout`);
 
     for (let i = 0; i < nodes.length; i++) {
@@ -1026,13 +1016,14 @@ async function scanForPadding(
 }
 
 async function scanForCornerRadius(
-  progressCallback: (progress: number) => void
+  progressCallback: (progress: number) => void,
+  nodesToScan?: SceneNode[]
 ): Promise<MissingReference[]> {
   const missingRefs: MissingReference[] = [];
   
   try {
     // Update the type check for cornerRadius
-    const nodes = figma.currentPage.findAll(node => {
+    const nodes = (nodesToScan || figma.currentPage.findAll()).filter(node => {
       if ('cornerRadius' in node) {
         const radius = (node as any).cornerRadius;
         return typeof radius === 'number' && radius > 0;
