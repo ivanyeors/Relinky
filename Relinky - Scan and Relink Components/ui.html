@@ -61,11 +61,15 @@
               <div 
                 class="progress-fill" 
                 :style="{ 
-                  width: isScanning ? `${scanProgress}%` : '0%',
-                  opacity: isScanning ? 1 : 0.3
+                  width: isScanning ? `${scanProgress}%` : scanProgress === 100 ? '100%' : '0%',
+                  opacity: isScanning ? 1 : scanProgress === 100 ? 1 : 0.3,
+                  background: scanProgress === 100 && !isScanning ? 'var(--figma-color-bg-success)' : 'var(--figma-color-bg-brand)'
                 }"
               ></div>
-              <div class="progress-text">{{ isScanning ? Math.round(scanProgress) : 0 }}%</div>
+              <div class="progress-text">
+                {{ scanProgress === 100 && !isScanning ? 'Scan complete' : 
+                   isScanning ? `${Math.round(scanProgress)}%` : '0%' }}
+              </div>
             </div>
           </div>
         </div>
@@ -386,14 +390,17 @@
 
     .progress-fill {
       height: 100%;
+      transition: all 0.2s ease;
+      animation: pulse 2s infinite;
+      border-radius: 6px;
+    }
+
+    .progress-fill:not(.complete) {
       background: linear-gradient(
         90deg,
         var(--figma-color-bg-brand) 0%,
         var(--figma-color-bg-brand-hover) 100%
       );
-      transition: all 0.2s ease;
-      animation: pulse 2s infinite;
-      border-radius: 6px;
     }
 
     .progress-text {
@@ -404,7 +411,7 @@
       margin: 0;
       font-size: 11px;
       font-weight: 500;
-      color: var(--figma-color-text);
+      color: var(--figma-color-text-onbrand);
       z-index: 1;
       text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
       padding: 0 4px;
@@ -1344,7 +1351,6 @@
           // Ensure progress is a number and between 0-100
           const progress = Math.min(Math.max(0, Number(newProgress) || 0), 100);
           console.log(`Updating progress bar: ${progress}%`);
-          // Only update if the new progress is greater than current
           this.scanProgress = progress;
         },
       },
@@ -1373,12 +1379,7 @@
             case 'missing-references-result':
               this.groupedReferences = msg.references;
               this.isScanning = false;
-              this.updateProgress(100); // Ensure we reach 100%
-              setTimeout(() => {
-                if (!this.isScanning) {
-                  this.scanProgress = 0;
-                }
-              }, 300); // Shorter delay
+              this.updateProgress(100); // Keep progress at 100%
               break;
             case 'scan-cancelled':
               this.isScanning = false;
@@ -1391,7 +1392,7 @@
               break;
             case 'scan-complete':
               this.isScanning = false;
-              this.scanProgress = 0;
+              this.scanProgress = 100; // Keep at 100% for success
               if (msg.status === 'success') {
                 this.successMessage = msg.message;
                 this.showSuccessToast = true;
