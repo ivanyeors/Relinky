@@ -93,7 +93,8 @@
                   }"
                 ></div>
                 <div class="progress-text">
-                  {{ scanProgress === 100 && !isScanning ? 'Scan complete' : 
+                  {{ scanProgress === 100 && !isScanning && Object.keys(groupedReferences).length === 0 ? 'Scan complete - No issues found' :
+                     scanProgress === 100 && !isScanning ? 'Scan complete' :
                      isScanning ? `${Math.round(scanProgress)}%` : '0%' }}
                 </div>
               </div>
@@ -2147,6 +2148,9 @@
               this.isAnalyzing = false;
               this.successMessage = msg.message;
               this.showSuccessToast = true;
+              break;
+            case 'clear-results':
+              this.groupedReferences = {};
               break;
           }
         };
