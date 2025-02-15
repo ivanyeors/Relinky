@@ -41,6 +41,34 @@ A powerful Figma plugin to help you find and manage unlinked design tokens and s
   - Ignore hidden layers
   - Include/exclude specific layer types
 
+## 🗺 Roadmap
+
+### ✅ Implemented
+- Have a success state for no results found
+- Release version number
+- Donation button
+- Rename to "Scan Whole Page"
+- Fix progress bar
+
+### 🛠 In Progress / Experimental
+- Ignore hidden layers for scan
+- Watch for changes to work
+
+### �� Planned
+- Feedback CTA
+- Pro version vs free version features
+- Scan for linked tokens from non-active libraries
+- Scan selected similar variable tokens
+- Work on similar typography groupings
+  - Ignore different content but group same font settings
+- Horizontal padding improvements
+  - Add toggle for left and right
+- Vertical padding improvements
+  - Add toggle for top and bottom
+- Typography UI improvements
+  - Split results in small labels
+- Fix instances and instance word corrections
+
 ## Usage
 
 ### Installation
