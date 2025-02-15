@@ -37,6 +37,9 @@ A powerful Figma plugin to help you find and manage unlinked design tokens and s
 - Rescan and clear results options
 - Library variable analysis
 - Variable collection insights
+- Scan filters:
+  - Ignore hidden layers
+  - Include/exclude specific layer types
 
 ## Usage
 
@@ -48,8 +51,11 @@ A powerful Figma plugin to help you find and manage unlinked design tokens and s
 ### Basic Usage
 1. Select the frames, components, or sections you want to scan (or leave unselected to scan entire page)
 2. Open the plugin from Plugins > Relinky
-3. Choose which references to scan for (typography, spacing, colors, etc.)
-4. Click "Start Scan" to begin the analysis
+3. Configure scan settings (optional):
+   - Toggle "Ignore Hidden Layers"
+   - Select layer types to include
+4. Choose which references to scan for (typography, spacing, colors, etc.)
+5. Click "Start Scan" to begin the analysis
 
 ### Working with Results
 - Results are grouped by type and value for easier management

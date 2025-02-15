@@ -41,24 +41,66 @@
               </button>
             </div>
 
-            <!-- Scan Scope Selection -->
-            <div class="scan-scope-selector">
-              <div class="toggle-container">
-                <label class="toggle-label">
-                  <div class="toggle-label-content">
-                    <span>Scan Entire Page</span>
-                    <span v-if="scanEntirePage" class="slow-badge">slow</span>
-                  </div>
-                  <div class="toggle-wrapper">
-                    <input 
-                      type="checkbox" 
-                      v-model="scanEntirePage"
-                      class="toggle-input"
-                      @change="handleScanScopeChange"
-                    >
-                    <div class="toggle-slider"></div>
-                  </div>
-                </label>
+            <!-- After the scan-scope-selector div -->
+            <div class="scan-settings">
+              <div class="settings-header">
+                <h4 class="settings-title">Scan Settings</h4>
+                <button 
+                  class="settings-toggle"
+                  @click="showSettings = !showSettings"
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path 
+                      :d="showSettings 
+                        ? 'M4 10L8 6L12 10' 
+                        : 'M4 6L8 10L12 6'" 
+                      stroke="currentColor" 
+                      stroke-width="1.5" 
+                      stroke-linecap="round" 
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                </button>
+              </div>
+              
+              <div class="settings-content" v-show="showSettings">
+                <!-- Move Scan Entire Page here -->
+                <div class="setting-item">
+                  <label class="toggle-label">
+                    <div class="toggle-label-content">
+                      <span>Scan Entire Page</span>
+                      <span v-if="scanEntirePage" class="slow-badge">slow</span>
+                      <span class="info-badge" title="Scan the entire page instead of selected frames">ⓘ</span>
+                    </div>
+                    <div class="toggle-wrapper">
+                      <input 
+                        type="checkbox" 
+                        v-model="scanEntirePage"
+                        class="toggle-input"
+                        @change="handleScanScopeChange"
+                      >
+                      <div class="toggle-slider"></div>
+                    </div>
+                  </label>
+                </div>
+
+                <!-- Existing Ignore Hidden Layers setting -->
+                <div class="setting-item">
+                  <label class="toggle-label">
+                    <div class="toggle-label-content">
+                      <span>Ignore Hidden Layers</span>
+                      <span class="info-badge" title="Hidden layers will be excluded from the scan">ⓘ</span>
+                    </div>
+                    <div class="toggle-wrapper">
+                      <input 
+                        type="checkbox" 
+                        v-model="ignoreHiddenLayers"
+                        class="toggle-input"
+                      >
+                      <div class="toggle-slider"></div>
+                    </div>
+                  </label>
+                </div>
               </div>
             </div>
 
@@ -1303,26 +1345,42 @@
     }
 
     .select-button.loading {
+      position: relative !important;
+      color: transparent !important;
+      pointer-events: none !important;
+    }
+    
+    /* Update the loading spinner styles */
+    .select-button.loading {
       position: relative;
       color: transparent;
-      pointer-events: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
-    
-    .loading-spinner {
-      width: 20px;
-      height: 20px;
-      border: 2px solid rgba(0, 0, 0, 0.1);
-      border-right: 2px solid var(--figma-color-bg-brand);
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
+
+    .select-button .loading-spinner {
+      width: 12px;
+      height: 12px;
+      border-width: 2px;
+      border-top-color: var(--figma-color-text-onbrand);
+      border-right-color: var(--figma-color-text-onbrand);
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      margin: auto;
     }
-    
-    @keyframes spin {
-      to { 
-        transform: translate(-50%, -50%) rotate(360deg);
-      }
+
+    /* Add specific styles for analysis loading spinner */
+    .analysis-loading .loading-spinner {
+      width: 24px;
+      height: 24px;
+      border-width: 2.5px;
+      margin: 8px auto;
     }
-    
+
     .select-button:disabled {
       opacity: 0.7;
       cursor: not-allowed;
@@ -1534,56 +1592,51 @@
     }
 
     .loading-spinner {
-      width: 20px;
-      height: 20px;
-      border: 2px solid rgba(0, 0, 0, 0.1);
-      border-right: 2px solid var(--figma-color-bg-brand);
+      width: 16px;
+      height: 16px;
       border-radius: 50%;
-      animation: spin 1s linear infinite;
+      border: 2px solid transparent;
+      border-top-color: var(--figma-color-bg-brand);
+      border-right-color: var(--figma-color-bg-brand);
+      animation: spinner 0.6s linear infinite;
     }
-
-    @keyframes spin {
-      to { 
-        transform: translate(-50%, -50%) rotate(360deg);
+    
+    @keyframes spinner {
+      from {
+        transform: rotate(0deg);
+      }
+      to {
+        transform: rotate(360deg);
       }
     }
 
     /* Add specific styles for button loading spinner */
     .select-button .loading-spinner {
       position: absolute;
-      left: 50%;
-      top: 50%;
-      transform: translate(-50%, -50%) rotate(0deg);
+      left: 0;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      margin: auto;
       width: 12px;
       height: 12px;
-      border-width: 1.5px;
-      border: 1.5px solid rgba(255, 255, 255, 0.2);
+      border-width: 2px;
+      border-top-color: var(--figma-color-text-onbrand);
+      border-right-color: var(--figma-color-text-onbrand);
     }
 
     /* Add specific styles for analysis loading spinner */
     .analysis-loading .loading-spinner {
       width: 24px;
       height: 24px;
-      border-width: 2px;
-      border: 2px solid rgba(0, 0, 0, 0.1);
-      border-right: 2px solid var(--figma-color-bg-brand);
-      transform: rotate(0deg);
+      border-width: 2.5px;
+      margin: 8px auto;
     }
 
-    /* Separate animation for non-positioned spinners */
-    @keyframes spin-center {
-      to {
-        transform: rotate(360deg);
-      }
-    }
-
-    /* Apply different animations based on spinner type */
-    .select-button .loading-spinner {
-      animation: spin 1s linear infinite;
-    }
-    
-    .analysis-loading .loading-spinner {
-      animation: spin-center 1s linear infinite;
+    /* Container for select button spinner */
+    .select-button.loading {
+      position: relative;
+      color: transparent;
     }
 
     .button.button-disabled {
@@ -1644,6 +1697,77 @@
 
     .donate-button:hover .cat-icon {
       transform: scale(1.1);
+    }
+
+    /* Add these styles */
+    .scan-settings {
+      margin-top: 8px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .settings-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      cursor: pointer;
+    }
+
+    .settings-title {
+      margin: 0;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--figma-color-text);
+    }
+
+    .settings-toggle {
+      background: none;
+      border: none;
+      padding: 8px;
+      cursor: pointer;
+      color: var(--figma-color-text-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.1s ease;
+      border-radius: 6px;
+      margin: -4px;
+    }
+
+    .settings-toggle:hover {
+      background: var(--figma-color-bg-hover);
+      color: var(--figma-color-text);
+    }
+
+    .settings-toggle:active {
+      background: var(--figma-color-bg-pressed);
+      color: var(--figma-color-text);
+    }
+
+    .settings-content {
+      padding: 0 12px 12px;
+    }
+
+    .setting-item {
+      margin-bottom: 8px;
+    }
+
+    .setting-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .toggle-label-content {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .info-badge {
+      color: var(--figma-color-text-secondary);
+      font-size: 11px;
+      cursor: help;
     }
   </style>
 
@@ -1840,6 +1964,8 @@
           libraryResults: {},  // Separate results for library scan
           variableAnalysis: null,
           isAnalyzing: false,
+          showSettings: false,
+          ignoreHiddenLayers: false,
         }
       },
       computed: {
@@ -1945,7 +2071,8 @@
               scanType: this.selectedScanType,
               scanScope: this.scanScope,
               selectedFrameIds,
-              isRescan
+              isRescan,
+              ignoreHiddenLayers: this.ignoreHiddenLayers
             }
           }, '*');
         },
