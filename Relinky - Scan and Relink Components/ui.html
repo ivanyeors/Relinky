@@ -13,439 +13,251 @@
   <!-- Main app -->
   <div id="app">
     <div v-cloak class="plugin-container">
-      <div class="first-section">
-        <div class="step-container">
-          <div class="step-content">
-            <div class="step-header">
-              <h3 class="step-title">Select frames or components</h3>
-              <button 
-                class="watch-toggle" 
-                :class="{ 
-                  active: isWatching,
-                  disabled: !scanEntirePage 
-                }"
-                @click="toggleWatch"
-                :disabled="!scanEntirePage"
-                :title="watchButtonTitle"
-              >
-                <div class="watch-toggle-content">
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path v-if="isWatching && scanEntirePage" d="M8 3.33333C11.3333 3.33333 14.1667 5.33333 15.3333 8C14.1667 10.6667 11.3333 12.6667 8 12.6667C4.66667 12.6667 1.83333 10.6667 0.666667 8C1.83333 5.33333 4.66667 3.33333 8 3.33333Z" fill="currentColor"/>
-                    <g v-else>
-                      <path d="M2.66667 2L13.3333 14" stroke="currentColor" stroke-width="1.5"/>
-                      <path d="M8 3.33333C11.3333 3.33333 14.1667 5.33333 15.3333 8C14.1667 10.6667 11.3333 12.6667 8 12.6667C4.66667 12.6667 1.83333 10.6667 0.666667 8C1.83333 5.33333 4.66667 3.33333 8 3.33333Z" fill="currentColor" fill-opacity="0.5"/>
-                    </g>
-                  </svg>
-                  <span class="watch-toggle-text">{{ isWatching && scanEntirePage ? 'Watching' : 'Watch changes' }}</span>
-                </div>
-              </button>
-            </div>
-
-            <!-- After the scan-scope-selector div -->
-            <div class="scan-settings">
-              <div class="settings-header">
-                <h4 class="settings-title">Scan Settings</h4>
-                <button 
-                  class="settings-toggle"
-                  @click="showSettings = !showSettings"
-                >
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path 
-                      :d="showSettings 
-                        ? 'M4 10L8 6L12 10' 
-                        : 'M4 6L8 10L12 6'" 
-                      stroke="currentColor" 
-                      stroke-width="1.5" 
-                      stroke-linecap="round" 
-                      stroke-linejoin="round"
-                    />
-                  </svg>
-                </button>
-              </div>
-              
-              <div class="settings-content" v-show="showSettings">
-                <!-- Move Scan Entire Page here -->
-                <div class="setting-item">
-                  <label class="toggle-label">
-                    <div class="toggle-label-content">
-                      <span>Scan Entire Page</span>
-                      <span v-if="scanEntirePage" class="slow-badge">slow</span>
-                      <span class="info-badge" title="Scan the entire page instead of selected frames">ⓘ</span>
-                    </div>
-                    <div class="toggle-wrapper">
-                      <input 
-                        type="checkbox" 
-                        v-model="scanEntirePage"
-                        class="toggle-input"
-                        @change="handleScanScopeChange"
-                      >
-                      <div class="toggle-slider"></div>
-                    </div>
-                  </label>
-                </div>
-
-                <!-- Existing Ignore Hidden Layers setting -->
-                <div class="setting-item">
-                  <label class="toggle-label">
-                    <div class="toggle-label-content">
-                      <span>Ignore Hidden Layers</span>
-                      <span class="info-badge" title="Hidden layers will be excluded from the scan">ⓘ</span>
-                    </div>
-                    <div class="toggle-wrapper">
-                      <input 
-                        type="checkbox" 
-                        v-model="ignoreHiddenLayers"
-                        class="toggle-input"
-                      >
-                      <div class="toggle-slider"></div>
-                    </div>
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            <div class="selection-container">
-              <div v-if="!hasSelection && !scanEntirePage" class="toast warning">
-                <div class="toast-icon">
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path fill-rule="evenodd" clip-rule="evenodd" d="M8 1.33337L14.6667 13.3334H1.33334L8 1.33337ZM8 4.00004L3.73334 12H12.2667L8 4.00004ZM7.33334 6.66671H8.66668V9.33337H7.33334V6.66671ZM7.33334 10.6667H8.66668V12H7.33334V10.6667Z" fill="currentColor"/>
-                  </svg>
-                </div>
-                <span class="toast-message">Select frames or sections to start scanning</span>
-              </div>
-              <div v-else-if="hasSelection && !scanEntirePage" class="toast success">
-                <div class="toast-icon">
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path fill-rule="evenodd" clip-rule="evenodd" d="M8 1.33334C4.31811 1.33334 1.33334 4.31811 1.33334 8C1.33334 11.6819 4.31811 14.6667 8 14.6667C11.6819 14.6667 14.6667 11.6819 14.6667 8C14.6667 4.31811 11.6819 1.33334 8 1.33334ZM11.0607 6.27274L7.39401 9.93941L5.27274 7.81814L6.06069 7.03019L7.39401 8.36351L10.2727 5.48479L11.0607 6.27274Z" fill="currentColor"/>
-                  </svg>
-                </div>
-                <span class="toast-message">{{ selectedCount }} {{ selectedCount === 1 ? 'item' : 'items' }} selected</span>
-              </div>
-            </div>
-
-            <!-- Progress Bar -->
-            <div class="progress-container">
-              <div class="progress-bar">
-                <div 
-                  class="progress-fill" 
-                  :style="{ 
-                    width: isScanning ? `${scanProgress}%` : scanProgress === 100 ? '100%' : '0%',
-                    opacity: isScanning ? 1 : scanProgress === 100 ? 1 : 0.3,
-                    background: scanProgress === 100 && !isScanning ? 'var(--figma-color-bg-success)' : 'var(--figma-color-bg-brand)'
-                  }"
-                ></div>
-                <div class="progress-text">
-                  {{ scanProgress === 100 && !isScanning && Object.keys(groupedReferences).length === 0 ? 'Scan complete - No issues found' :
-                     scanProgress === 100 && !isScanning ? 'Scan complete' :
-                     isScanning ? `${Math.round(scanProgress)}%` : '0%' }}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="divider"></div>
-
-      <div class="content">
-        <!-- Tab Navigation -->
-        <div class="tab-navigation">
-          <button 
-            class="tab-button" 
-            :class="{ active: activeTab === 'tokens' }"
-            @click="activeTab = 'tokens'"
-          >
-            Unlinked Values
-          </button>
-          <button 
-            class="tab-button tab-button-disabled"
-            disabled
-            @click.prevent
-            style="pointer-events: none;"
-          >
-            <div class="tab-button-content">
-              <span>Unlinked Tokens</span>
-              <svg class="lock-icon" width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <path d="M3.5 4V3.5C3.5 2.11929 4.61929 1 6 1C7.38071 1 8.5 2.11929 8.5 3.5V4" stroke="currentColor"/>
-                <rect x="2.5" y="4" width="7" height="6" rx="1" stroke="currentColor"/>
-              </svg>
-            </div>
-          </button>
-        </div>
-
-        <!-- Design Tokens Tab -->
-        <div v-if="activeTab === 'tokens'" class="tab-content">
-          <!-- Scan Type Selection -->
+      <div class="content-section">
+        <!-- First section content (selection and settings) -->
+        <div class="scan-section">
           <div class="step-container">
             <div class="step-content">
-              <h3 class="step-title">Choose what to scan for</h3>
-              <div class="scan-cards">
-                <div 
-                  v-for="option in tokenScanOptions" 
-                  :key="option.value"
-                  class="scan-card"
-                  :class="{ 'selected': selectedScanType === option.value }"
-                  @click="selectedScanType = option.value"
-                >
-                  <div class="scan-card-icon">
-                    <component :is="option.icon"></component>
-                  </div>
-                  <div class="scan-card-content">
-                    <div class="scan-card-title">{{ option.label }}</div>
-                    <div class="scan-card-description">{{ option.description }}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Scan Controls -->
-          <div class="divider"></div>
-
-          <div class="step-container">
-            <div class="step-content">
-              <h3 class="step-title">Start scanning</h3>
-              <div class="scan-controls">
+              <div class="step-header">
+                <h3 class="step-title">Select frames or components</h3>
                 <button 
-                  @click="(e) => startScan(false, e)" 
-                  :disabled="isScanning || (!hasSelection && !scanEntirePage)" 
-                  class="button primary-button"
-                >
-                  Start Scan
-                </button>
-                <button 
-                  @click="(e) => startScan(true, e)"
-                  :disabled="!hasResults"
+                  class="watch-toggle" 
                   :class="{ 
-                    'button': true,
-                    'secondary-button': true,
-                    'button-disabled': !hasResults 
+                    active: isWatching,
+                    disabled: !scanEntirePage 
                   }"
-                  class="button secondary-button"
+                  @click="toggleWatch"
+                  :disabled="!scanEntirePage"
+                  :title="watchButtonTitle"
                 >
-                  Rescan
-                </button>
-                <button 
-                  v-if="isScanning" 
-                  @click="stopScan" 
-                  class="button secondary-button"
-                >
-                  Stop
+                  <div class="watch-toggle-content">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <path v-if="isWatching && scanEntirePage" d="M8 3.33333C11.3333 3.33333 14.1667 5.33333 15.3333 8C14.1667 10.6667 11.3333 12.6667 8 12.6667C4.66667 12.6667 1.83333 10.6667 0.666667 8C1.83333 5.33333 4.66667 3.33333 8 3.33333Z" fill="currentColor"/>
+                      <g v-else>
+                        <path d="M2.66667 2L13.3333 14" stroke="currentColor" stroke-width="1.5"/>
+                        <path d="M8 3.33333C11.3333 3.33333 14.1667 5.33333 15.3333 8C14.1667 10.6667 11.3333 12.6667 8 12.6667C4.66667 12.6667 1.83333 10.6667 0.666667 8C1.83333 5.33333 4.66667 3.33333 8 3.33333Z" fill="currentColor" fill-opacity="0.5"/>
+                      </g>
+                    </svg>
+                    <span class="watch-toggle-text">{{ isWatching && scanEntirePage ? 'Watching' : 'Watch changes' }}</span>
+                  </div>
                 </button>
               </div>
-            </div>
-          </div>
 
-          <!-- Add a new section for scan results with consistent styling -->
-          <template v-if="!isScanning && Object.keys(groupedReferences).length > 0">
-            <div class="divider"></div>
-            
-            <div class="step-container">
-              <div class="step-content">
-                <div class="results-header">
-                  <h3 class="step-title">Scan results</h3>
-                  <div class="results-actions">
-                    <button 
-                      class="button secondary-button"
-                      @click="clearResults"
-                    >
-                      Clear
-                    </button>
-                  </div>
+              <!-- After the scan-scope-selector div -->
+              <div class="scan-settings">
+                <div class="settings-header">
+                  <h4 class="settings-title">Scan Settings</h4>
+                  <button 
+                    class="settings-toggle"
+                    @click="showSettings = !showSettings"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <path 
+                        :d="showSettings 
+                          ? 'M4 10L8 6L12 10' 
+                          : 'M4 6L8 10L12 6'" 
+                        stroke="currentColor" 
+                        stroke-width="1.5" 
+                        stroke-linecap="round" 
+                        stroke-linejoin="round"
+                      />
+                    </svg>
+                  </button>
                 </div>
-                <div class="results-container">
-                  <div v-for="(group, groupKey) in groupedByValue" :key="groupKey" class="value-group">
-                    <!-- Value Group Header -->
-                    <div class="value-group-header" @click="toggleGroup(groupKey)">
-                      <div class="header-left">
-                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" class="expand-icon">
-                          <path 
-                            :d="isGroupExpanded(groupKey) 
-                              ? 'M4 10L8 6L12 10' 
-                              : 'M4 6L8 10L12 6'" 
-                            stroke="currentColor" 
-                            stroke-width="1.5" 
-                            stroke-linecap="round" 
-                            stroke-linejoin="round"
-                          />
-                        </svg>
-                        <template v-if="group.refs[0]?.type === 'fill' || group.refs[0]?.type === 'stroke'">
-                          <color-preview :color="group.value" />
-                        </template>
-                        <template v-else-if="group.refs[0]?.type === 'typography'">
-                          <span class="value-label">
-                            {{ group.refs[0].currentValue.fontFamily }} 
-                            {{ group.refs[0].currentValue.fontWeight }} 
-                            {{ group.refs[0].currentValue.fontSize }}px
-                          </span>
-                        </template>
-                        <template v-else>
-                          <span class="value-label">{{ formatValue(group.value) }}</span>
-                        </template>
+                
+                <div class="settings-content" v-show="showSettings">
+                  <!-- Move Scan Entire Page here -->
+                  <div class="setting-item">
+                    <label class="toggle-label">
+                      <div class="toggle-label-content">
+                        <span>Scan Entire Page</span>
+                        <span v-if="scanEntirePage" class="slow-badge">slow</span>
+                        <span class="info-badge" title="Scan the entire page instead of selected frames">ⓘ</span>
                       </div>
-                      <div class="header-right">
-                        <span class="total-count">{{ group.refs.length }} instances</span>
-                        <button 
-                          class="select-button" 
-                          :class="{ 'loading': isSelecting(groupKey) }"
-                          @click.stop="selectGroup(group.refs, groupKey)"
-                          :disabled="isSelecting(groupKey)"
+                      <div class="toggle-wrapper">
+                        <input 
+                          type="checkbox" 
+                          v-model="scanEntirePage"
+                          class="toggle-input"
+                          @change="handleScanScopeChange"
                         >
-                          <span v-if="!isSelecting(groupKey)">Select All</span>
-                          <span v-else class="loading-spinner"></span>
-                        </button>
+                        <div class="toggle-slider"></div>
                       </div>
-                    </div>
+                    </label>
+                  </div>
 
-                    <!-- Expanded Content -->
-                    <div v-if="isGroupExpanded(groupKey)" class="reference-details">
-                      <div v-for="ref in group.refs" :key="ref.nodeId" class="reference-item">
-                        <!-- Special handling for typography items -->
-                        <template v-if="ref.type === 'typography'">
-                          <div class="typography-details">
-                            <div class="typography-preview">{{ ref.currentValue.content }}...</div>
-                            <div class="typography-specs">
-                              <div>Font: {{ ref.currentValue.fontFamily }}</div>
-                              <div>Weight: {{ ref.currentValue.fontWeight }}</div>
-                              <div>Size: {{ ref.currentValue.fontSize }}px</div>
-                              <div v-if="ref.currentValue.lineHeight">Line Height: {{ ref.currentValue.lineHeight }}</div>
-                              <div v-if="ref.currentValue.letterSpacing">Letter Spacing: {{ ref.currentValue.letterSpacing }}</div>
-                              <div v-if="ref.currentValue.paragraphSpacing">Paragraph Spacing: {{ ref.currentValue.paragraphSpacing }}</div>
-                              <div v-if="ref.currentValue.textCase">Text Case: {{ ref.currentValue.textCase }}</div>
-                              <div v-if="ref.currentValue.textDecoration">Text Decoration: {{ ref.currentValue.textDecoration }}</div>
-                            </div>
-                          </div>
-                        </template>
-                        <template v-else>
-                          <div class="reference-name">{{ ref.nodeName }}</div>
-                          <div class="reference-location">{{ ref.location }}</div>
-                        </template>
-                        <button 
-                          class="select-button"
-                          :class="{ 'loading': isSelecting(ref.nodeId) }"
-                          @click="selectGroup([ref], ref.nodeId)"
-                          :disabled="isSelecting(ref.nodeId)"
-                        >
-                          <span v-if="!isSelecting(ref.nodeId)">Select</span>
-                          <span v-else class="loading-spinner"></span>
-                        </button>
+                  <!-- Existing Ignore Hidden Layers setting -->
+                  <div class="setting-item">
+                    <label class="toggle-label">
+                      <div class="toggle-label-content">
+                        <span>Ignore Hidden Layers</span>
+                        <span class="info-badge" title="Hidden layers will be excluded from the scan">ⓘ</span>
                       </div>
-                    </div>
+                      <div class="toggle-wrapper">
+                        <input 
+                          type="checkbox" 
+                          v-model="ignoreHiddenLayers"
+                          class="toggle-input"
+                        >
+                        <div class="toggle-slider"></div>
+                      </div>
+                    </label>
                   </div>
                 </div>
               </div>
-            </div>
-          </template>
 
-          <!-- Version Info and Donate Button -->
-          <div class="divider"></div>
-          <div class="bottom-section">
-            <div class="bottom-info">
-              <div class="version-info">
-                <span class="version-text">Version 1.0.0</span>
+              <div class="selection-container">
+                <div v-if="!hasSelection && !scanEntirePage" class="toast warning">
+                  <div class="toast-icon">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <path fill-rule="evenodd" clip-rule="evenodd" d="M8 1.33337L14.6667 13.3334H1.33334L8 1.33337ZM8 4.00004L3.73334 12H12.2667L8 4.00004ZM7.33334 6.66671H8.66668V9.33337H7.33334V6.66671ZM7.33334 10.6667H8.66668V12H7.33334V10.6667Z" fill="currentColor"/>
+                    </svg>
+                  </div>
+                  <span class="toast-message">Select frames or sections to start scanning</span>
+                </div>
+                <div v-else-if="hasSelection && !scanEntirePage" class="toast success">
+                  <div class="toast-icon">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <path fill-rule="evenodd" clip-rule="evenodd" d="M8 1.33334C4.31811 1.33334 1.33334 4.31811 1.33334 8C1.33334 11.6819 4.31811 14.6667 8 14.6667C11.6819 14.6667 14.6667 11.6819 14.6667 8C14.6667 4.31811 11.6819 1.33334 8 1.33334ZM11.0607 6.27274L7.39401 9.93941L5.27274 7.81814L6.06069 7.03019L7.39401 8.36351L10.2727 5.48479L11.0607 6.27274Z" fill="currentColor"/>
+                    </svg>
+                  </div>
+                  <span class="toast-message">{{ selectedCount }} {{ selectedCount === 1 ? 'item' : 'items' }} selected</span>
+                </div>
               </div>
-              <button 
-                class="donate-button"
-                @click="openStripePayment"
-              >
-                <span class="cat-icon">🐱</span>
-                <span>Feed my cats</span>
-              </button>
+
+              <!-- Progress Bar -->
+              <div class="progress-container">
+                <div class="progress-bar">
+                  <div 
+                    class="progress-fill" 
+                    :style="{ 
+                      width: isScanning ? `${scanProgress}%` : scanProgress === 100 ? '100%' : '0%',
+                      opacity: isScanning ? 1 : scanProgress === 100 ? 1 : 0.3,
+                      background: scanProgress === 100 && !isScanning ? 'var(--figma-color-bg-success)' : 'var(--figma-color-bg-brand)'
+                    }"
+                  ></div>
+                  <div class="progress-text">
+                    {{ scanProgress === 100 && !isScanning && Object.keys(groupedReferences).length === 0 ? 'Scan complete - No issues found' :
+                       scanProgress === 100 && !isScanning ? 'Scan complete' :
+                       isScanning ? `${Math.round(scanProgress)}%` : '0%' }}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- Unlinked Library Tab -->
-        <div v-if="activeTab === 'libraries'" class="tab-content">
-          <div class="first-section">
+        <div class="divider"></div>
+
+        <!-- Results section -->
+        <div class="results-section">
+          <!-- Tab Navigation -->
+          <div class="tab-navigation">
+            <button 
+              class="tab-button" 
+              :class="{ active: activeTab === 'tokens' }"
+              @click="activeTab = 'tokens'"
+            >
+              Unlinked Values
+            </button>
+            <button 
+              class="tab-button tab-button-disabled"
+              disabled
+              @click.prevent
+              style="pointer-events: none;"
+            >
+              <div class="tab-button-content">
+                <span>Unlinked Tokens</span>
+                <svg class="lock-icon" width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <path d="M3.5 4V3.5C3.5 2.11929 4.61929 1 6 1C7.38071 1 8.5 2.11929 8.5 3.5V4" stroke="currentColor"/>
+                  <rect x="2.5" y="4" width="7" height="6" rx="1" stroke="currentColor"/>
+                </svg>
+              </div>
+            </button>
+          </div>
+
+          <!-- Design Tokens Tab -->
+          <div v-if="activeTab === 'tokens'" class="tab-content">
+            <!-- Scan Type Selection -->
             <div class="step-container">
               <div class="step-content">
-                <h3 class="step-title">Library Variables</h3>
-                <p class="description">
-                  Analyze and list all variables in the current document, including their library status.
-                </p>
-                <div class="library-actions">
-                  <button 
-                    @click="listVariables" 
-                    class="button primary-button"
-                    :disabled="isAnalyzing"
+                <h3 class="step-title">Choose what to scan for</h3>
+                <div class="scan-cards">
+                  <div 
+                    v-for="option in tokenScanOptions" 
+                    :key="option.value"
+                    class="scan-card"
+                    :class="{ 'selected': selectedScanType === option.value }"
+                    @click="selectedScanType = option.value"
                   >
-                    {{ isAnalyzing ? 'Analyzing...' : 'Analyze Variables' }}
+                    <div class="scan-card-icon">
+                      <component :is="option.icon"></component>
+                    </div>
+                    <div class="scan-card-content">
+                      <div class="scan-card-title">{{ option.label }}</div>
+                      <div class="scan-card-description">{{ option.description }}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Scan Controls -->
+            <div class="divider"></div>
+
+            <div class="step-container">
+              <div class="step-content">
+                <h3 class="step-title">Start scanning</h3>
+                <div class="scan-controls">
+                  <button 
+                    @click="(e) => startScan(false, e)" 
+                    :disabled="isScanning || (!hasSelection && !scanEntirePage)" 
+                    class="button primary-button"
+                  >
+                    Start Scan
                   </button>
                   <button 
-                    @click="startLibraryScan"
-                    :disabled="isScanning || (!hasSelection && !scanEntirePage)" 
+                    @click="(e) => startScan(true, e)"
+                    :disabled="!hasResults"
+                    :class="{ 
+                      'button': true,
+                      'secondary-button': true,
+                      'button-disabled': !hasResults 
+                    }"
                     class="button secondary-button"
                   >
-                    Scan for Unlinked
+                    Rescan
+                  </button>
+                  <button 
+                    v-if="isScanning" 
+                    @click="stopScan" 
+                    class="button secondary-button"
+                  >
+                    Stop
                   </button>
                 </div>
               </div>
             </div>
-          </div>
 
-          <div class="divider"></div>
-
-          <div class="content">
-            <!-- Loading State -->
-            <div v-if="isAnalyzing" class="analysis-loading">
-              <div class="loading-spinner"></div>
-              <span>Analyzing variables...</span>
-            </div>
-            
-            <!-- Variables Analysis Results -->
-            <div v-if="variableAnalysis" class="analysis-results">
-              <div class="analysis-summary">
-                <div class="summary-item">
-                  <span class="summary-label">Total Variables:</span>
-                  <span class="summary-value">{{ variableAnalysis.totalVariables }}</span>
-                </div>
-                <div class="summary-item">
-                  <span class="summary-label">Library Variables:</span>
-                  <span class="summary-value">{{ variableAnalysis.libraryVariables }}</span>
-                </div>
-                <div class="summary-item">
-                  <span class="summary-label">Local Variables:</span>
-                  <span class="summary-value">{{ variableAnalysis.localVariables }}</span>
-                </div>
-              </div>
-              
-              <!-- Libraries List -->
-              <div class="libraries-list">
-                <h4 class="section-subtitle">Libraries</h4>
-                <div v-for="lib in variableAnalysis.libraries" :key="lib.key" class="library-item">
-                  <div class="library-header">
-                    <span class="library-name">{{ lib.name }}</span>
-                    <span :class="['library-status', lib.enabled ? 'enabled' : 'disabled']">
-                      {{ lib.enabled ? 'Enabled' : 'Disabled' }}
-                    </span>
-                  </div>
-                  <div class="library-details">
-                    <span class="variable-count">{{ lib.variableCount }} variables</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Library Scan Results -->
-            <template v-if="!isScanning && Object.keys(libraryResults).length > 0">
+            <!-- Add a new section for scan results with consistent styling -->
+            <template v-if="!isScanning && Object.keys(groupedReferences).length > 0">
               <div class="divider"></div>
               
               <div class="step-container">
                 <div class="step-content">
                   <div class="results-header">
-                    <h3 class="step-title">Library scan results</h3>
+                    <h3 class="step-title">Scan results</h3>
                     <div class="results-actions">
                       <button 
                         class="button secondary-button"
-                        @click="clearLibraryResults"
+                        @click="clearResults"
                       >
                         Clear
                       </button>
                     </div>
                   </div>
                   <div class="results-container">
-                    <div v-for="(group, groupKey) in libraryResults" :key="groupKey" class="value-group">
+                    <div v-for="(group, groupKey) in groupedByValue" :key="groupKey" class="value-group">
                       <!-- Value Group Header -->
                       <div class="value-group-header" @click="toggleGroup(groupKey)">
                         <div class="header-left">
@@ -528,7 +340,194 @@
               </div>
             </template>
           </div>
+
+          <!-- Unlinked Library Tab -->
+          <div v-if="activeTab === 'libraries'" class="tab-content">
+            <div class="first-section">
+              <div class="step-container">
+                <div class="step-content">
+                  <h3 class="step-title">Library Variables</h3>
+                  <p class="description">
+                    Analyze and list all variables in the current document, including their library status.
+                  </p>
+                  <div class="library-actions">
+                    <button 
+                      @click="listVariables" 
+                      class="button primary-button"
+                      :disabled="isAnalyzing"
+                    >
+                      {{ isAnalyzing ? 'Analyzing...' : 'Analyze Variables' }}
+                    </button>
+                    <button 
+                      @click="startLibraryScan"
+                      :disabled="isScanning || (!hasSelection && !scanEntirePage)" 
+                      class="button secondary-button"
+                    >
+                      Scan for Unlinked
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="content">
+              <!-- Loading State -->
+              <div v-if="isAnalyzing" class="analysis-loading">
+                <div class="loading-spinner"></div>
+                <span>Analyzing variables...</span>
+              </div>
+              
+              <!-- Variables Analysis Results -->
+              <div v-if="variableAnalysis" class="analysis-results">
+                <div class="analysis-summary">
+                  <div class="summary-item">
+                    <span class="summary-label">Total Variables:</span>
+                    <span class="summary-value">{{ variableAnalysis.totalVariables }}</span>
+                  </div>
+                  <div class="summary-item">
+                    <span class="summary-label">Library Variables:</span>
+                    <span class="summary-value">{{ variableAnalysis.libraryVariables }}</span>
+                  </div>
+                  <div class="summary-item">
+                    <span class="summary-label">Local Variables:</span>
+                    <span class="summary-value">{{ variableAnalysis.localVariables }}</span>
+                  </div>
+                </div>
+                
+                <!-- Libraries List -->
+                <div class="libraries-list">
+                  <h4 class="section-subtitle">Libraries</h4>
+                  <div v-for="lib in variableAnalysis.libraries" :key="lib.key" class="library-item">
+                    <div class="library-header">
+                      <span class="library-name">{{ lib.name }}</span>
+                      <span :class="['library-status', lib.enabled ? 'enabled' : 'disabled']">
+                        {{ lib.enabled ? 'Enabled' : 'Disabled' }}
+                      </span>
+                    </div>
+                    <div class="library-details">
+                      <span class="variable-count">{{ lib.variableCount }} variables</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Library Scan Results -->
+              <template v-if="!isScanning && Object.keys(libraryResults).length > 0">
+                <div class="divider"></div>
+                
+                <div class="step-container">
+                  <div class="step-content">
+                    <div class="results-header">
+                      <h3 class="step-title">Library scan results</h3>
+                      <div class="results-actions">
+                        <button 
+                          class="button secondary-button"
+                          @click="clearLibraryResults"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    </div>
+                    <div class="results-container">
+                      <div v-for="(group, groupKey) in libraryResults" :key="groupKey" class="value-group">
+                        <!-- Value Group Header -->
+                        <div class="value-group-header" @click="toggleGroup(groupKey)">
+                          <div class="header-left">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" class="expand-icon">
+                              <path 
+                                :d="isGroupExpanded(groupKey) 
+                                  ? 'M4 10L8 6L12 10' 
+                                  : 'M4 6L8 10L12 6'" 
+                                stroke="currentColor" 
+                                stroke-width="1.5" 
+                                stroke-linecap="round" 
+                                stroke-linejoin="round"
+                              />
+                            </svg>
+                            <template v-if="group.refs[0]?.type === 'fill' || group.refs[0]?.type === 'stroke'">
+                              <color-preview :color="group.value" />
+                            </template>
+                            <template v-else-if="group.refs[0]?.type === 'typography'">
+                              <span class="value-label">
+                                {{ group.refs[0].currentValue.fontFamily }} 
+                                {{ group.refs[0].currentValue.fontWeight }} 
+                                {{ group.refs[0].currentValue.fontSize }}px
+                              </span>
+                            </template>
+                            <template v-else>
+                              <span class="value-label">{{ formatValue(group.value) }}</span>
+                            </template>
+                          </div>
+                          <div class="header-right">
+                            <span class="total-count">{{ group.refs.length }} instances</span>
+                            <button 
+                              class="select-button" 
+                              :class="{ 'loading': isSelecting(groupKey) }"
+                              @click.stop="selectGroup(group.refs, groupKey)"
+                              :disabled="isSelecting(groupKey)"
+                            >
+                              <span v-if="!isSelecting(groupKey)">Select All</span>
+                              <span v-else class="loading-spinner"></span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <!-- Expanded Content -->
+                        <div v-if="isGroupExpanded(groupKey)" class="reference-details">
+                          <div v-for="ref in group.refs" :key="ref.nodeId" class="reference-item">
+                            <!-- Special handling for typography items -->
+                            <template v-if="ref.type === 'typography'">
+                              <div class="typography-details">
+                                <div class="typography-preview">{{ ref.currentValue.content }}...</div>
+                                <div class="typography-specs">
+                                  <div>Font: {{ ref.currentValue.fontFamily }}</div>
+                                  <div>Weight: {{ ref.currentValue.fontWeight }}</div>
+                                  <div>Size: {{ ref.currentValue.fontSize }}px</div>
+                                  <div v-if="ref.currentValue.lineHeight">Line Height: {{ ref.currentValue.lineHeight }}</div>
+                                  <div v-if="ref.currentValue.letterSpacing">Letter Spacing: {{ ref.currentValue.letterSpacing }}</div>
+                                  <div v-if="ref.currentValue.paragraphSpacing">Paragraph Spacing: {{ ref.currentValue.paragraphSpacing }}</div>
+                                  <div v-if="ref.currentValue.textCase">Text Case: {{ ref.currentValue.textCase }}</div>
+                                  <div v-if="ref.currentValue.textDecoration">Text Decoration: {{ ref.currentValue.textDecoration }}</div>
+                                </div>
+                              </div>
+                            </template>
+                            <template v-else>
+                              <div class="reference-name">{{ ref.nodeName }}</div>
+                              <div class="reference-location">{{ ref.location }}</div>
+                            </template>
+                            <button 
+                              class="select-button"
+                              :class="{ 'loading': isSelecting(ref.nodeId) }"
+                              @click="selectGroup([ref], ref.nodeId)"
+                              :disabled="isSelecting(ref.nodeId)"
+                            >
+                              <span v-if="!isSelecting(ref.nodeId)">Select</span>
+                              <span v-else class="loading-spinner"></span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
         </div>
+      </div>
+
+      <!-- Sticky footer -->
+      <div class="sticky-footer">
+        <div class="version-info">
+          <span>v</span>
+          <span class="version-number">1.0.0</span>
+        </div>
+        <button class="donate-button" @click="openStripePayment">
+          <span class="cat-icon">🐱</span>
+          <span>Feed my cats</span>
+        </button>
       </div>
     </div>
 
@@ -556,23 +555,6 @@
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <path d="M12.6667 4.27337L11.7267 3.33337L8.00001 7.06004L4.27334 3.33337L3.33334 4.27337L7.06001 8.00004L3.33334 11.7267L4.27334 12.6667L8.00001 8.94004L12.6667 4.27337Z" fill="currentColor"/>
           </svg>
-        </button>
-      </div>
-    </div>
-
-    <!-- Version Info -->
-    <div class="bottom-section">
-      <div class="divider"></div>
-      <div class="bottom-info">
-        <div class="version-info">
-          <span class="version-text">Version 1.0.0</span>
-        </div>
-        <button 
-          class="donate-button"
-          @click="openStripePayment"
-        >
-          <span class="cat-icon">🐱</span>
-          <span>Support this plugin</span>
         </button>
       </div>
     </div>
@@ -604,20 +586,24 @@
     }
 
     .plugin-container {
-      height: 100vh;
       display: flex;
       flex-direction: column;
+      height: 100vh;
       overflow: hidden;
-      position: relative;
+    }
+
+    .content-section {
+      flex: 1;
+      overflow-y: auto;
+      padding-bottom: 32px; /* Height of sticky footer */
+    }
+
+    .scan-section {
       background: var(--figma-color-bg);
     }
 
-    .content {
-      flex: 1;
-      overflow-y: auto;
-      padding: 0;
-      padding-right: 2px;
-      background: var(--figma-color-bg);
+    .results-section {
+      padding-bottom: 16px;
     }
 
     .header {
@@ -1674,33 +1660,38 @@
       color: var(--figma-color-text-disabled);
     }
 
-    .bottom-section {
-      margin-top: auto;  /* Push to bottom */
-    }
-
-    .bottom-info {
+    .sticky-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
       display: flex;
-      align-items: center;
       justify-content: space-between;
-      padding: 8px 16px;
+      align-items: center;
+      padding: 4px 16px;
+      background: var(--figma-color-bg);
+      border-top: 1px solid var(--figma-color-border);
+      height: 32px;
+      z-index: 100;
     }
 
     .version-info {
-      padding: 8px 0;
-      text-align: center;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--figma-color-text-secondary);
+      font-size: 11px;
     }
 
-    .version-text {
-      font-size: 11px;
+    .version-number {
       color: var(--figma-color-text-tertiary);
-      opacity: 0.8;
     }
 
     .donate-button {
       display: flex;
       align-items: center;
       gap: 6px;
-      padding: 6px 10px;
+      padding: 4px 8px;
       border: none;
       border-radius: 4px;
       background: var(--figma-color-bg-secondary);
