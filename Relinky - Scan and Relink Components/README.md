@@ -6,21 +6,28 @@ A powerful Figma plugin to help you find and manage unlinked design tokens and s
 
 ### 🔍 Comprehensive Scanning
 - **Typography**: Find text layers missing text style variables
-- **Spacing**: Detect auto-layout frames with unlinked spacing
+- **Auto-layout Spacing**: 
+  - Detect unlinked vertical gaps
+  - Find frames with unlinked vertical padding
+  - Find frames with unlinked horizontal padding
 - **Corner Radius**: Identify shapes with unlinked corner radius
-- **Fill Colors**: Find layers with unlinked fill colors
-- **Stroke Colors**: Detect layers with unlinked stroke colors
+- **Colors**: 
+  - Find layers with unlinked fill colors
+  - Detect layers with unlinked stroke colors
+- **Library Variables**: Scan for inactive or missing library variables
 
 ### 🎯 Smart Selection
-- Scan entire page or selected frames/components
+- Scan entire page or selected frames/components/sections
 - Group similar unlinked values for easier management
 - Quick selection of affected layers
 - Navigate to specific instances
+- Automatic viewport adjustment to selected elements
 
 ### 👀 Live Watching
 - Watch for changes in real-time
 - Automatically scan as you work
 - Toggle watching on/off
+- Smart debouncing to prevent performance issues
 
 ### 💡 Smart Features
 - Detailed typography information display
@@ -28,6 +35,8 @@ A powerful Figma plugin to help you find and manage unlinked design tokens and s
 - Progress tracking during scans
 - Success notifications
 - Rescan and clear results options
+- Library variable analysis
+- Variable collection insights
 
 ## Usage
 
@@ -37,7 +46,7 @@ A powerful Figma plugin to help you find and manage unlinked design tokens and s
 3. Click "Install"
 
 ### Basic Usage
-1. Select the frames or components you want to scan (or leave unselected to scan entire page)
+1. Select the frames, components, or sections you want to scan (or leave unselected to scan entire page)
 2. Open the plugin from Plugins > Relinky
 3. Choose which references to scan for (typography, spacing, colors, etc.)
 4. Click "Start Scan" to begin the analysis
@@ -46,14 +55,16 @@ A powerful Figma plugin to help you find and manage unlinked design tokens and s
 - Results are grouped by type and value for easier management
 - Click on any result to select the affected layers in your design
 - Use the navigation arrows to jump between instances
-- Apply suggested styles directly from the results panel
+- Clear results and rescan as needed
 
 ### Live Watching Mode
-1. Toggle "Watch Mode" to enable real-time scanning
-2. The plugin will automatically detect unlinked values as you work
-3. Disable Watch Mode when you want to stop automatic scanning
+1. Enable "Scan Entire Page" to unlock watch mode
+2. Toggle "Watch Mode" to enable real-time scanning
+3. The plugin will automatically detect unlinked values as you work
+4. Disable Watch Mode when you want to stop automatic scanning
 
 ### Tips
 - Use the grouped results to quickly standardize similar unlinked values
 - Regular scanning helps maintain design system consistency
 - Consider scanning before sharing designs or creating documentation
+- Watch mode works best when scanning the entire page
