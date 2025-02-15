@@ -564,6 +564,11 @@ async function startWatchingDocument(scanType: ScanType, scanEntirePage: boolean
             type: 'watch-scan-started'
           });
           
+          // Clear previous results before new scan
+          figma.ui.postMessage({
+            type: 'clear-results'
+          });
+          
           // Perform a new scan
           const missingRefs = await scanForMissingReferences(
             documentState.lastScanType,
@@ -583,11 +588,6 @@ async function startWatchingDocument(scanType: ScanType, scanEntirePage: boolean
               status: 'success',
               message: 'No unlinked parameters found!'
             });
-            // Clear previous results
-            figma.ui.postMessage({
-              type: 'missing-references-result',
-              references: {}
-            });
           } else {
             figma.ui.postMessage({
               type: 'missing-references-result',
@@ -601,7 +601,7 @@ async function startWatchingDocument(scanType: ScanType, scanEntirePage: boolean
             message: 'Failed to update scan results' 
           });
         }
-      }, 500); // Debounce time for document changes
+      }, 1000); // Increase debounce time to reduce unnecessary scans
     };
 
     // Store the handler in the state
