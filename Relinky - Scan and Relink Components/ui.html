@@ -528,6 +528,7 @@
           <span class="cat-icon">🐱</span>
           <span>Feed my cats</span>
         </button>
+        <div class="resize-handle"></div>
       </div>
     </div>
 
@@ -1673,6 +1674,7 @@
       border-top: 1px solid var(--figma-color-border);
       height: 32px;
       z-index: 100;
+      position: relative; /* For resize handle positioning */
     }
 
     .version-info {
@@ -1700,6 +1702,7 @@
       cursor: pointer;
       transition: all 0.2s ease;
       font-weight: 500;
+      margin-right: 12px; /* Adjust donate button margin */
     }
 
     .donate-button:hover {
@@ -1844,6 +1847,35 @@
       padding: 4px 8px;
       font-family: var(--font-stack);
       border: none;
+    }
+
+    /* Resize handle styles */
+    .resize-handle {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      width: 12px;
+      height: 32px; /* Match footer height */
+      cursor: nwse-resize;
+      z-index: 101;
+      overflow: hidden;
+    }
+
+    .resize-handle::after {
+      content: '';
+      position: absolute;
+      right: -12px;
+      bottom: 16px;
+      width: 24px;
+      height: 1px;
+      background: var(--figma-color-text-tertiary);
+      transform: rotate(-45deg);
+      opacity: 0.3;
+      transition: opacity 0.1s ease;
+    }
+
+    .resize-handle:hover::after {
+      opacity: 1;
     }
   </style>
 
@@ -2401,6 +2433,53 @@
     }).mount('#app');
 
     document.getElementById('loading').style.display = 'none';
+
+    // Add resize functionality
+    let isResizing = false;
+    let initialWidth = 0;
+    let initialHeight = 0;
+    let initialX = 0;
+    let initialY = 0;
+
+    const MIN_WIDTH = 320;
+    const MIN_HEIGHT = 400;
+    const MAX_WIDTH = 800;
+    const MAX_HEIGHT = 900;
+
+    document.querySelector('.resize-handle').addEventListener('mousedown', (e) => {
+      isResizing = true;
+      initialWidth = window.innerWidth;
+      initialHeight = window.innerHeight;
+      initialX = e.clientX;
+      initialY = e.clientY;
+
+      window.addEventListener('mousemove', handleResize);
+      window.addEventListener('mouseup', stopResize);
+    });
+
+    function handleResize(e) {
+      if (!isResizing) return;
+
+      const deltaX = e.clientX - initialX;
+      const deltaY = e.clientY - initialY;
+
+      const newWidth = Math.min(Math.max(initialWidth + deltaX, MIN_WIDTH), MAX_WIDTH);
+      const newHeight = Math.min(Math.max(initialHeight + deltaY, MIN_HEIGHT), MAX_HEIGHT);
+
+      parent.postMessage({
+        pluginMessage: {
+          type: 'resize',
+          width: newWidth,
+          height: newHeight
+        }
+      }, '*');
+    }
+
+    function stopResize() {
+      isResizing = false;
+      window.removeEventListener('mousemove', handleResize);
+      window.removeEventListener('mouseup', stopResize);
+    }
   </script>
 </body>
 </html>

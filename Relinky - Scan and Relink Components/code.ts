@@ -11,6 +11,7 @@ figma.showUI(__html__, {
   width: 400, 
   height: 600,
   themeColors: true,
+  position: { x: 100, y: 100 },
   title: "Relinky"
 });
 
@@ -909,6 +910,13 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
 
   if (msg.type === 'list-variables') {
     await listAllVariables();
+  }
+
+  // Handle resize messages
+  if (msg.type === 'resize') {
+    if (typeof msg.width === 'number' && typeof msg.height === 'number') {
+      figma.ui.resize(msg.width, msg.height);
+    }
   }
 };
 
