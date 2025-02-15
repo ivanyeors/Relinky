@@ -35,7 +35,7 @@ interface MissingReference {
 }
 
 // Update ScanType to include new types
-type ScanType = 'vertical-gap' | 'horizontal-padding' | 'vertical-padding' | 'corner-radius' | 'fill' | 'stroke' | 'typography';
+type ScanType = 'inactive-tokens' | 'vertical-gap' | 'horizontal-padding' | 'vertical-padding' | 'corner-radius' | 'fill' | 'stroke' | 'typography';
 
 interface ScanProgress {
   type: ScanType;
@@ -45,12 +45,18 @@ interface ScanProgress {
 // Add a flag to track if scanning should be cancelled
 let isScanCancelled = false;
 
-// Add type definitions at the top of the file
-type VariableBinding = {
-  type: 'VARIABLE';
+// Add interface for variable binding types based on Figma API
+interface VariableAlias {
+  type: "VARIABLE_ALIAS";
   id: string;
-  name: string;
-};
+}
+
+interface VariableBinding {
+  type: "VARIABLE";
+  id: string;
+}
+
+type FillBinding = VariableAlias | VariableBinding | VariableAlias[];
 
 // Update the type guard function
 function hasVariableBindings(node: BaseNode): node is SceneNode & { 
@@ -444,6 +450,11 @@ async function scanForMissingReferences(
     let refs: MissingReference[] = [];
     
     switch (scanType) {
+      case 'inactive-tokens':
+        refs = await scanForInactiveTokens(progress => {
+          if (progressCallback) progressCallback(progress);
+        }, nodesToScan);
+        break;
       case 'vertical-gap':
         refs = await scanForVerticalGap(progress => {
           if (progressCallback) progressCallback(progress);
@@ -483,9 +494,11 @@ async function scanForMissingReferences(
         message: 'No unlinked parameters found!'
       });
     } else {
+      const groupedRefs = groupMissingReferences(refs);
       figma.ui.postMessage({ 
         type: 'missing-references-result', 
-        references: groupMissingReferences(refs) 
+        scanType: scanType,
+        references: groupedRefs 
       });
     }
     
@@ -678,6 +691,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
       const groupedRefs = groupMissingReferences(refs);
       figma.ui.postMessage({ 
         type: 'missing-references-result', 
+        scanType: scanType,
         references: groupedRefs 
       });
 
@@ -892,6 +906,10 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
       ids: validSelection.map(node => node.id)
     });
   }
+
+  if (msg.type === 'list-variables') {
+    await listAllVariables();
+  }
 };
 
 // At the start of the file, after the UI setup
@@ -1076,5 +1094,323 @@ async function scanForCornerRadius(
   }
   
   return missingRefs;
+}
+
+// Add interface for library based on Figma API docs
+interface TeamLibrary {
+  name: string;
+  key: string;
+  enabled: boolean;
+}
+
+// Add interfaces for better token handling
+interface TokenVariable {
+  variableId: string;
+  variableName: string;
+  variableKey: string;
+  variableType: VariableResolvedDataType;  // Use Figma's built-in type
+  isRemote: boolean;
+  libraryName?: string;
+  libraryKey?: string;
+  isEnabled?: boolean;
+}
+
+interface TokenGroup {
+  name: string;
+  variables: TokenVariable[];
+  isEnabled: boolean;
+  libraryName?: string;
+}
+
+// Update the scanning function with proper types
+async function scanForInactiveTokens(
+  progressCallback: (progress: number) => void,
+  nodesToScan?: SceneNode[]
+): Promise<MissingReference[]> {
+  const missingRefs: MissingReference[] = [];
+  const tokenGroups: Record<string, TokenGroup> = {};
+  
+  try {
+    // First, get all variables and libraries
+    const allVariables = await figma.variables.getLocalVariablesAsync();
+    const publishedLibraries = await figma.clientStorage.getAsync('libraries') as TeamLibrary[];
+
+    console.log('Found variables:', allVariables.length);
+    console.log('Found libraries:', publishedLibraries);
+
+    // Group variables by their library/collection
+    for (const variable of allVariables) {
+      if (variable.remote) {
+        const libraryKey = variable.key.split(':')[0];
+        const library = publishedLibraries.find((lib: TeamLibrary) => lib.key === libraryKey);
+        
+        const groupKey = library ? library.name : 'Unknown Library';
+        if (!tokenGroups[groupKey]) {
+          tokenGroups[groupKey] = {
+            name: groupKey,
+            variables: [],
+            isEnabled: !!library?.enabled,
+            libraryName: library?.name
+          };
+        }
+
+        tokenGroups[groupKey].variables.push({
+          variableId: variable.id,
+          variableName: variable.name,
+          variableKey: variable.key,
+          variableType: variable.resolvedType,
+          isRemote: variable.remote,
+          libraryName: library?.name,
+          libraryKey,
+          isEnabled: library?.enabled
+        });
+      }
+    }
+
+    console.log('Token groups:', tokenGroups);
+
+    // Now scan nodes for variables
+    const nodes = (nodesToScan || figma.currentPage.findAll())
+      .filter(node => hasVariableBindings(node));
+    
+    console.log('Found nodes with variables:', nodes.length);
+
+    for (const node of nodes) {
+      if (isScanCancelled) break;
+
+      try {
+        if (!node.boundVariables) continue;
+
+        for (const [key, binding] of Object.entries(node.boundVariables)) {
+          if (binding && typeof binding === 'object' && 'type' in binding && binding.type === 'VARIABLE') {
+            try {
+              const variable = await figma.variables.getVariableByIdAsync(binding.id);
+              
+              if (variable?.remote) {
+                const libraryKey = variable.key.split(':')[0];
+                const library = publishedLibraries.find((lib: TeamLibrary) => lib.key === libraryKey);
+                const groupKey = library?.name || 'Unknown Library';
+                const group = tokenGroups[groupKey];
+
+                if (!library?.enabled) {
+                  missingRefs.push({
+                    nodeId: node.id,
+                    nodeName: node.name,
+                    type: 'inactive-tokens',
+                    property: key,
+                    currentValue: {
+                      variableName: variable.name,
+                      libraryName: library?.name || 'Unknown Library',
+                      libraryKey,
+                      groupName: groupKey,
+                      totalGroupVariables: group?.variables.length || 0
+                    },
+                    location: 'Inactive Library Token',
+                    variableName: variable.name,
+                    preview: `${groupKey} (${group?.variables.length || 0} tokens)`
+                  });
+                }
+              }
+            } catch (err) {
+              // Handle inaccessible variables
+              const groupKey = 'Inaccessible Libraries';
+              if (!tokenGroups[groupKey]) {
+                tokenGroups[groupKey] = {
+                  name: groupKey,
+                  variables: [],
+                  isEnabled: false
+                };
+              }
+
+              missingRefs.push({
+                nodeId: node.id,
+                nodeName: node.name,
+                type: 'inactive-tokens',
+                property: key,
+                currentValue: {
+                  bindingId: binding.id,
+                  groupName: groupKey
+                },
+                location: 'Inaccessible Library Token',
+                variableName: 'Unknown Variable',
+                preview: `${groupKey}`
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.warn(`Error processing node ${node.name}:`, err);
+      }
+
+      progressCallback(Math.round((nodes.indexOf(node) + 1) / nodes.length * 100));
+    }
+
+    console.log('Scan complete. Groups:', tokenGroups);
+    console.log('Found missing refs:', missingRefs.length);
+  } catch (err) {
+    console.error('Error scanning for inactive tokens:', err);
+  }
+  
+  return missingRefs;
+}
+
+async function scanForFillVariables(
+  progressCallback: (progress: number) => void,
+  nodesToScan?: SceneNode[]
+): Promise<MissingReference[]> {
+  const missingRefs: MissingReference[] = [];
+  
+  try {
+    const nodes = (nodesToScan || figma.currentPage.findAll())
+      .filter(node => hasFills(node));
+    
+    console.log('Found nodes with fills:', nodes.length);
+
+    const allVariables = await figma.variables.getLocalVariablesAsync();
+    console.log('Found variables:', allVariables.length);
+
+    for (const node of nodes) {
+      try {
+        if (node.boundVariables) {
+          console.log('Node bound variables:', {
+            nodeName: node.name,
+            boundVars: node.boundVariables
+          });
+
+          const fillBindings = node.boundVariables['fills'] as FillBinding;
+          
+          if (Array.isArray(fillBindings)) {
+            // Handle array of variable bindings
+            for (const binding of fillBindings) {
+              if (binding.type === 'VARIABLE_ALIAS') {
+                const variable = await figma.variables.getVariableByIdAsync(binding.id);
+                console.log('Found variable:', variable);
+
+                missingRefs.push({
+                  nodeId: node.id,
+                  nodeName: node.name,
+                  type: 'fill-variable',
+                  property: 'fills',
+                  currentValue: {
+                    variableId: binding.id,
+                    variableName: variable?.name || 'Unknown',
+                    variableType: variable?.resolvedType || 'Unknown',
+                    isRemote: variable?.remote || false
+                  },
+                  location: 'Fill Color Variable',
+                  variableName: variable?.name || 'Unknown Variable',
+                  preview: `Variable: ${variable?.name || 'Unknown'}`
+                });
+              }
+            }
+          } else if (fillBindings?.type === 'VARIABLE_ALIAS') {
+            // Handle single variable binding
+            const variable = await figma.variables.getVariableByIdAsync(fillBindings.id);
+            console.log('Found variable:', variable);
+            
+            missingRefs.push({
+              nodeId: node.id,
+              nodeName: node.name,
+              type: 'fill-variable',
+              property: 'fills',
+              currentValue: {
+                variableId: fillBindings.id,
+                variableName: variable?.name || 'Unknown',
+                variableType: variable?.resolvedType || 'Unknown',
+                isRemote: variable?.remote || false
+              },
+              location: 'Fill Color Variable',
+              variableName: variable?.name || 'Unknown Variable',
+              preview: `Variable: ${variable?.name || 'Unknown'}`
+            });
+          }
+        }
+      } catch (err) {
+        console.warn(`Error processing node ${node.name}:`, err);
+      }
+
+      progressCallback(Math.round((nodes.indexOf(node) + 1) / nodes.length * 100));
+    }
+
+    console.log('Fill variables scan complete. Found:', missingRefs.length);
+    console.log('Details:', missingRefs);
+
+  } catch (err) {
+    console.error('Error scanning for fill variables:', err);
+  }
+  
+  return missingRefs;
+}
+
+async function listAllVariables() {
+  try {
+    // Get all local variables
+    const localVariables = await figma.variables.getLocalVariablesAsync();
+    console.log('All local variables:', localVariables);
+
+    // Get all collections
+    const collections = await figma.variables.getLocalVariableCollectionsAsync();
+    console.log('All collections:', collections);
+
+    // Get libraries using clientStorage with fallback
+    let libraries: TeamLibrary[] = [];
+    try {
+      const storedLibraries = await figma.clientStorage.getAsync('libraries');
+      libraries = Array.isArray(storedLibraries) ? storedLibraries : [];
+    } catch (err) {
+      console.warn('Failed to get libraries from storage:', err);
+    }
+    
+    // Get team libraries as fallback if clientStorage is empty
+    if (libraries.length === 0) {
+      try {
+        // Get libraries using the documented API method
+        const availableLibraries = await figma.variables.getLocalVariableCollectionsAsync();
+        libraries = availableLibraries.map(collection => ({
+          key: collection.key,
+          name: collection.name,
+          enabled: true  // Collections from getLocalVariableCollectionsAsync are always enabled
+        }));
+      } catch (err) {
+        console.warn('Failed to get team libraries:', err);
+        libraries = [];
+      }
+    }
+
+    // Prepare analysis data
+    const analysisData = {
+      totalVariables: localVariables.length,
+      libraryVariables: localVariables.filter(v => v.remote).length,
+      localVariables: localVariables.filter(v => !v.remote).length,
+      libraries: libraries.map(lib => ({
+        key: lib.key,
+        name: lib.name,
+        enabled: lib.enabled,
+        variableCount: localVariables.filter(v => v.remote && v.key.startsWith(lib.key)).length
+      }))
+    };
+
+    // Find nodes with variable bindings
+    const nodesWithVariables = figma.currentPage.findAll(node => {
+      return 'boundVariables' in node && node.boundVariables !== null;
+    });
+
+    console.log('Nodes with variables:', nodesWithVariables.length);
+    console.log('Analysis data:', analysisData);
+
+    // Send analysis data to UI
+    figma.ui.postMessage({
+      type: 'variables-analysis',
+      data: analysisData
+    });
+
+  } catch (err) {
+    console.error('Error listing variables:', err);
+    // Send error to UI
+    figma.ui.postMessage({
+      type: 'variables-analysis-error',
+      message: 'Failed to analyze variables'
+    });
+  }
 }
 

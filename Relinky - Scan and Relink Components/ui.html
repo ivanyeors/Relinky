@@ -105,149 +105,361 @@
       <div class="divider"></div>
 
       <div class="content">
-        <!-- Scan Type Selection -->
-        <div class="step-container">
-          <div class="step-content">
-            <h3 class="step-title">Choose what to scan for</h3>
-            <div class="scan-cards">
-              <div 
-                v-for="option in scanOptions" 
-                :key="option.value"
-                class="scan-card"
-                :class="{ 'selected': selectedScanType === option.value }"
-                @click="selectedScanType = option.value"
-              >
-                <div class="scan-card-icon">
-                  <component :is="option.icon"></component>
-                </div>
-                <div class="scan-card-content">
-                  <div class="scan-card-title">{{ option.label }}</div>
-                  <div class="scan-card-description">{{ option.description }}</div>
+        <!-- Tab Navigation -->
+        <div class="tab-navigation">
+          <button 
+            class="tab-button" 
+            :class="{ active: activeTab === 'tokens' }"
+            @click="activeTab = 'tokens'"
+          >
+            Unlinked Values
+          </button>
+          <button 
+            class="tab-button tab-button-disabled"
+            disabled
+            @click.prevent
+            style="pointer-events: none;"
+          >
+            <div class="tab-button-content">
+              <span>Unlinked Tokens</span>
+              <svg class="lock-icon" width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path d="M3.5 4V3.5C3.5 2.11929 4.61929 1 6 1C7.38071 1 8.5 2.11929 8.5 3.5V4" stroke="currentColor"/>
+                <rect x="2.5" y="4" width="7" height="6" rx="1" stroke="currentColor"/>
+              </svg>
+            </div>
+          </button>
+        </div>
+
+        <!-- Design Tokens Tab -->
+        <div v-if="activeTab === 'tokens'" class="tab-content">
+          <!-- Scan Type Selection -->
+          <div class="step-container">
+            <div class="step-content">
+              <h3 class="step-title">Choose what to scan for</h3>
+              <div class="scan-cards">
+                <div 
+                  v-for="option in tokenScanOptions" 
+                  :key="option.value"
+                  class="scan-card"
+                  :class="{ 'selected': selectedScanType === option.value }"
+                  @click="selectedScanType = option.value"
+                >
+                  <div class="scan-card-icon">
+                    <component :is="option.icon"></component>
+                  </div>
+                  <div class="scan-card-content">
+                    <div class="scan-card-title">{{ option.label }}</div>
+                    <div class="scan-card-description">{{ option.description }}</div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
 
-        <!-- Scan Controls -->
-        <div class="divider"></div>
+          <!-- Scan Controls -->
+          <div class="divider"></div>
 
-        <div class="step-container">
-          <div class="step-content">
-            <h3 class="step-title">Start scanning</h3>
-            <div class="scan-controls">
+          <div class="step-container">
+            <div class="step-content">
+              <h3 class="step-title">Start scanning</h3>
+              <div class="scan-controls">
+                <button 
+                  @click="(e) => startScan(false, e)" 
+                  :disabled="isScanning || (!hasSelection && !scanEntirePage)" 
+                  class="button primary-button"
+                >
+                  Start Scan
+                </button>
+                <button 
+                  @click="(e) => startScan(true, e)"
+                  :disabled="!hasResults"
+                  :class="{ 
+                    'button': true,
+                    'secondary-button': true,
+                    'button-disabled': !hasResults 
+                  }"
+                  class="button secondary-button"
+                >
+                  Rescan
+                </button>
+                <button 
+                  v-if="isScanning" 
+                  @click="stopScan" 
+                  class="button secondary-button"
+                >
+                  Stop
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Add a new section for scan results with consistent styling -->
+          <template v-if="!isScanning && Object.keys(groupedReferences).length > 0">
+            <div class="divider"></div>
+            
+            <div class="step-container">
+              <div class="step-content">
+                <div class="results-header">
+                  <h3 class="step-title">Scan results</h3>
+                  <div class="results-actions">
+                    <button 
+                      class="button secondary-button"
+                      @click="clearResults"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+                <div class="results-container">
+                  <div v-for="(group, groupKey) in groupedByValue" :key="groupKey" class="value-group">
+                    <!-- Value Group Header -->
+                    <div class="value-group-header" @click="toggleGroup(groupKey)">
+                      <div class="header-left">
+                        <span class="expand-icon">{{ isGroupExpanded(groupKey) ? '▼' : '▶' }}</span>
+                        <template v-if="group.refs[0]?.type === 'typography'">
+                          <span class="value-label">
+                            {{ group.refs[0].currentValue.fontFamily }} 
+                            {{ group.refs[0].currentValue.fontWeight }} 
+                            {{ group.refs[0].currentValue.fontSize }}px
+                          </span>
+                        </template>
+                        <template v-else>
+                          <span class="value-label">Value: {{ formatValue(group.value) }}</span>
+                        </template>
+                      </div>
+                      <div class="header-right">
+                        <span class="total-count">{{ group.refs.length }} instances</span>
+                        <button 
+                          class="select-button" 
+                          :class="{ 'loading': isSelecting(groupKey) }"
+                          @click.stop="selectGroup(group.refs, groupKey)"
+                          :disabled="isSelecting(groupKey)"
+                        >
+                          <span v-if="!isSelecting(groupKey)">Select All</span>
+                          <span v-else class="loading-spinner"></span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <!-- Expanded Content -->
+                    <div v-if="isGroupExpanded(groupKey)" class="reference-details">
+                      <div v-for="ref in group.refs" :key="ref.nodeId" class="reference-item">
+                        <!-- Special handling for typography items -->
+                        <template v-if="ref.type === 'typography'">
+                          <div class="typography-details">
+                            <div class="typography-preview">{{ ref.currentValue.content }}...</div>
+                            <div class="typography-specs">
+                              <div>Font: {{ ref.currentValue.fontFamily }}</div>
+                              <div>Weight: {{ ref.currentValue.fontWeight }}</div>
+                              <div>Size: {{ ref.currentValue.fontSize }}px</div>
+                              <div v-if="ref.currentValue.lineHeight">Line Height: {{ ref.currentValue.lineHeight }}</div>
+                              <div v-if="ref.currentValue.letterSpacing">Letter Spacing: {{ ref.currentValue.letterSpacing }}</div>
+                              <div v-if="ref.currentValue.paragraphSpacing">Paragraph Spacing: {{ ref.currentValue.paragraphSpacing }}</div>
+                              <div v-if="ref.currentValue.textCase">Text Case: {{ ref.currentValue.textCase }}</div>
+                              <div v-if="ref.currentValue.textDecoration">Text Decoration: {{ ref.currentValue.textDecoration }}</div>
+                            </div>
+                          </div>
+                        </template>
+                        <template v-else>
+                          <div class="reference-name">{{ ref.nodeName }}</div>
+                          <div class="reference-location">{{ ref.location }}</div>
+                        </template>
+                        <button 
+                          class="select-button"
+                          :class="{ 'loading': isSelecting(ref.nodeId) }"
+                          @click="selectGroup([ref], ref.nodeId)"
+                          :disabled="isSelecting(ref.nodeId)"
+                        >
+                          <span v-if="!isSelecting(ref.nodeId)">Select</span>
+                          <span v-else class="loading-spinner"></span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
+
+          <!-- Version Info and Donate Button -->
+          <div class="divider"></div>
+          <div class="bottom-section">
+            <div class="bottom-info">
+              <div class="version-info">
+                <span class="version-text">Version 1.0.0</span>
+              </div>
               <button 
-                @click="(e) => startScan(false, e)" 
-                :disabled="isScanning || (!hasSelection && !scanEntirePage)" 
-                class="button primary-button"
+                class="donate-button"
+                @click="openStripePayment"
               >
-                Start Scan
-              </button>
-              <button 
-                @click="(e) => startScan(true, e)"
-                :disabled="!hasSelection && !scanEntirePage"
-                class="button secondary-button"
-              >
-                Rescan
-              </button>
-              <button 
-                v-if="isScanning" 
-                @click="stopScan" 
-                class="button secondary-button"
-              >
-                Stop
+                <span class="cat-icon">🐱</span>
+                <span>Feed my cats</span>
               </button>
             </div>
           </div>
         </div>
 
-        <!-- Add a new section for scan results with consistent styling -->
-        <template v-if="!isScanning && Object.keys(groupedReferences).length > 0">
-          <div class="divider"></div>
-          
-          <div class="step-container">
-            <div class="step-content">
-              <div class="results-header">
-                <h3 class="step-title">Scan results</h3>
-                <div class="results-actions">
+        <!-- Unlinked Library Tab -->
+        <div v-if="activeTab === 'libraries'" class="tab-content">
+          <div class="first-section">
+            <div class="step-container">
+              <div class="step-content">
+                <h3 class="step-title">Library Variables</h3>
+                <p class="description">
+                  Analyze and list all variables in the current document, including their library status.
+                </p>
+                <div class="library-actions">
                   <button 
-                    class="button secondary-button"
-                    @click="clearResults"
+                    @click="listVariables" 
+                    class="button primary-button"
+                    :disabled="isAnalyzing"
                   >
-                    Clear
+                    {{ isAnalyzing ? 'Analyzing...' : 'Analyze Variables' }}
+                  </button>
+                  <button 
+                    @click="startLibraryScan"
+                    :disabled="isScanning || (!hasSelection && !scanEntirePage)" 
+                    class="button secondary-button"
+                  >
+                    Scan for Unlinked
                   </button>
                 </div>
               </div>
-              <div class="results-container">
-                <div v-for="(group, groupKey) in groupedByValue" :key="groupKey" class="value-group">
-                  <!-- Value Group Header -->
-                  <div class="value-group-header" @click="toggleGroup(groupKey)">
-                    <div class="header-left">
-                      <span class="expand-icon">{{ isGroupExpanded(groupKey) ? '▼' : '▶' }}</span>
-                      <template v-if="group.refs[0]?.type === 'typography'">
-                        <span class="value-label">
-                          {{ group.refs[0].currentValue.fontFamily }} 
-                          {{ group.refs[0].currentValue.fontWeight }} 
-                          {{ group.refs[0].currentValue.fontSize }}px
-                        </span>
-                      </template>
-                      <template v-else>
-                        <span class="value-label">Value: {{ formatValue(group.value) }}</span>
-                      </template>
-                    </div>
-                    <div class="header-right">
-                      <span class="total-count">{{ group.refs.length }} instances</span>
-                      <button 
-                        class="select-button" 
-                        :class="{ 'loading': isSelecting(groupKey) }"
-                        @click.stop="selectGroup(group.refs, groupKey)"
-                        :disabled="isSelecting(groupKey)"
-                      >
-                        <span v-if="!isSelecting(groupKey)">Select All</span>
-                        <span v-else class="loading-spinner"></span>
-                      </button>
-                    </div>
-                  </div>
+            </div>
+          </div>
 
-                  <!-- Expanded Content -->
-                  <div v-if="isGroupExpanded(groupKey)" class="reference-details">
-                    <div v-for="ref in group.refs" :key="ref.nodeId" class="reference-item">
-                      <!-- Special handling for typography items -->
-                      <template v-if="ref.type === 'typography'">
-                        <div class="typography-details">
-                          <div class="typography-preview">{{ ref.currentValue.content }}...</div>
-                          <div class="typography-specs">
-                            <div>Font: {{ ref.currentValue.fontFamily }}</div>
-                            <div>Weight: {{ ref.currentValue.fontWeight }}</div>
-                            <div>Size: {{ ref.currentValue.fontSize }}px</div>
-                            <div v-if="ref.currentValue.lineHeight">Line Height: {{ ref.currentValue.lineHeight }}</div>
-                            <div v-if="ref.currentValue.letterSpacing">Letter Spacing: {{ ref.currentValue.letterSpacing }}</div>
-                            <div v-if="ref.currentValue.paragraphSpacing">Paragraph Spacing: {{ ref.currentValue.paragraphSpacing }}</div>
-                            <div v-if="ref.currentValue.textCase">Text Case: {{ ref.currentValue.textCase }}</div>
-                            <div v-if="ref.currentValue.textDecoration">Text Decoration: {{ ref.currentValue.textDecoration }}</div>
-                          </div>
-                        </div>
-                      </template>
-                      <template v-else>
-                        <div class="reference-name">{{ ref.nodeName }}</div>
-                        <div class="reference-location">{{ ref.location }}</div>
-                      </template>
-                      <button 
-                        class="select-button"
-                        :class="{ 'loading': isSelecting(ref.nodeId) }"
-                        @click="selectGroup([ref], ref.nodeId)"
-                        :disabled="isSelecting(ref.nodeId)"
-                      >
-                        <span v-if="!isSelecting(ref.nodeId)">Select</span>
-                        <span v-else class="loading-spinner"></span>
-                      </button>
-                    </div>
+          <div class="divider"></div>
+
+          <div class="content">
+            <!-- Loading State -->
+            <div v-if="isAnalyzing" class="analysis-loading">
+              <div class="loading-spinner"></div>
+              <span>Analyzing variables...</span>
+            </div>
+            
+            <!-- Variables Analysis Results -->
+            <div v-if="variableAnalysis" class="analysis-results">
+              <div class="analysis-summary">
+                <div class="summary-item">
+                  <span class="summary-label">Total Variables:</span>
+                  <span class="summary-value">{{ variableAnalysis.totalVariables }}</span>
+                </div>
+                <div class="summary-item">
+                  <span class="summary-label">Library Variables:</span>
+                  <span class="summary-value">{{ variableAnalysis.libraryVariables }}</span>
+                </div>
+                <div class="summary-item">
+                  <span class="summary-label">Local Variables:</span>
+                  <span class="summary-value">{{ variableAnalysis.localVariables }}</span>
+                </div>
+              </div>
+              
+              <!-- Libraries List -->
+              <div class="libraries-list">
+                <h4 class="section-subtitle">Libraries</h4>
+                <div v-for="lib in variableAnalysis.libraries" :key="lib.key" class="library-item">
+                  <div class="library-header">
+                    <span class="library-name">{{ lib.name }}</span>
+                    <span :class="['library-status', lib.enabled ? 'enabled' : 'disabled']">
+                      {{ lib.enabled ? 'Enabled' : 'Disabled' }}
+                    </span>
+                  </div>
+                  <div class="library-details">
+                    <span class="variable-count">{{ lib.variableCount }} variables</span>
                   </div>
                 </div>
               </div>
             </div>
+
+            <!-- Library Scan Results -->
+            <template v-if="!isScanning && Object.keys(libraryResults).length > 0">
+              <div class="divider"></div>
+              
+              <div class="step-container">
+                <div class="step-content">
+                  <div class="results-header">
+                    <h3 class="step-title">Library scan results</h3>
+                    <div class="results-actions">
+                      <button 
+                        class="button secondary-button"
+                        @click="clearLibraryResults"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+                  <div class="results-container">
+                    <div v-for="(group, groupKey) in libraryResults" :key="groupKey" class="value-group">
+                      <!-- Value Group Header -->
+                      <div class="value-group-header" @click="toggleGroup(groupKey)">
+                        <div class="header-left">
+                          <span class="expand-icon">{{ isGroupExpanded(groupKey) ? '▼' : '▶' }}</span>
+                          <template v-if="group.refs[0]?.type === 'typography'">
+                            <span class="value-label">
+                              {{ group.refs[0].currentValue.fontFamily }} 
+                              {{ group.refs[0].currentValue.fontWeight }} 
+                              {{ group.refs[0].currentValue.fontSize }}px
+                            </span>
+                          </template>
+                          <template v-else>
+                            <span class="value-label">Value: {{ formatValue(group.value) }}</span>
+                          </template>
+                        </div>
+                        <div class="header-right">
+                          <span class="total-count">{{ group.refs.length }} instances</span>
+                          <button 
+                            class="select-button" 
+                            :class="{ 'loading': isSelecting(groupKey) }"
+                            @click.stop="selectGroup(group.refs, groupKey)"
+                            :disabled="isSelecting(groupKey)"
+                          >
+                            <span v-if="!isSelecting(groupKey)">Select All</span>
+                            <span v-else class="loading-spinner"></span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <!-- Expanded Content -->
+                      <div v-if="isGroupExpanded(groupKey)" class="reference-details">
+                        <div v-for="ref in group.refs" :key="ref.nodeId" class="reference-item">
+                          <!-- Special handling for typography items -->
+                          <template v-if="ref.type === 'typography'">
+                            <div class="typography-details">
+                              <div class="typography-preview">{{ ref.currentValue.content }}...</div>
+                              <div class="typography-specs">
+                                <div>Font: {{ ref.currentValue.fontFamily }}</div>
+                                <div>Weight: {{ ref.currentValue.fontWeight }}</div>
+                                <div>Size: {{ ref.currentValue.fontSize }}px</div>
+                                <div v-if="ref.currentValue.lineHeight">Line Height: {{ ref.currentValue.lineHeight }}</div>
+                                <div v-if="ref.currentValue.letterSpacing">Letter Spacing: {{ ref.currentValue.letterSpacing }}</div>
+                                <div v-if="ref.currentValue.paragraphSpacing">Paragraph Spacing: {{ ref.currentValue.paragraphSpacing }}</div>
+                                <div v-if="ref.currentValue.textCase">Text Case: {{ ref.currentValue.textCase }}</div>
+                                <div v-if="ref.currentValue.textDecoration">Text Decoration: {{ ref.currentValue.textDecoration }}</div>
+                              </div>
+                            </div>
+                          </template>
+                          <template v-else>
+                            <div class="reference-name">{{ ref.nodeName }}</div>
+                            <div class="reference-location">{{ ref.location }}</div>
+                          </template>
+                          <button 
+                            class="select-button"
+                            :class="{ 'loading': isSelecting(ref.nodeId) }"
+                            @click="selectGroup([ref], ref.nodeId)"
+                            :disabled="isSelecting(ref.nodeId)"
+                          >
+                            <span v-if="!isSelecting(ref.nodeId)">Select</span>
+                            <span v-else class="loading-spinner"></span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </template>
           </div>
-        </template>
+        </div>
       </div>
     </div>
 
@@ -273,8 +485,25 @@
         <span class="success-toast-message">{{ successMessage }}</span>
         <button class="success-toast-close" @click="dismissToast">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M12.6667 4.27337L11.7267 3.33337L8.00001 7.06004L4.27334 3.33337L3.33334 4.27337L7.06001 8.00004L3.33334 11.7267L4.27334 12.6667L8.00001 8.94004L11.7267 12.6667L12.6667 11.7267L8.94001 8.00004L12.6667 4.27337Z" fill="currentColor"/>
+            <path d="M12.6667 4.27337L11.7267 3.33337L8.00001 7.06004L4.27334 3.33337L3.33334 4.27337L7.06001 8.00004L3.33334 11.7267L4.27334 12.6667L8.00001 8.94004L12.6667 4.27337Z" fill="currentColor"/>
           </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Version Info -->
+    <div class="bottom-section">
+      <div class="divider"></div>
+      <div class="bottom-info">
+        <div class="version-info">
+          <span class="version-text">Version 1.0.0</span>
+        </div>
+        <button 
+          class="donate-button"
+          @click="openStripePayment"
+        >
+          <span class="cat-icon">🐱</span>
+          <span>Support this plugin</span>
         </button>
       </div>
     </div>
@@ -396,6 +625,10 @@
     .secondary-button {
       background: var(--figma-color-bg-secondary);
       color: var(--figma-color-text);
+    }
+
+    .secondary-button:not(.button-disabled):hover {
+      background: var(--figma-color-bg-hover);
     }
 
     .progress-container {
@@ -910,6 +1143,7 @@
 
     .first-section {
       background: var(--figma-color-bg);
+      padding: 0;
       /* Tighter vertical spacing for first section */
       & .step-content {
         gap: 4px;  /* Reduce gap between elements */
@@ -926,12 +1160,13 @@
 
     .step-container {
       padding: 16px;
+      padding-top: 8px;  /* Reduce top padding to tighten spacing with tabs */
     }
 
     .step-content {
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 8px;  /* Reduce gap for tighter vertical spacing */
     }
 
     .step-header {
@@ -1073,23 +1308,16 @@
     }
     
     .loading-spinner {
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      transform: translate(-50%, -50%);
-      width: 12px;
-      height: 12px;
-      border: 2px solid var(--figma-color-icon-onbrand);
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(0, 0, 0, 0.1);
+      border-right: 2px solid var(--figma-color-bg-brand);
       border-radius: 50%;
-      border-right-color: transparent;
-      animation: spin 0.8s linear infinite;
+      animation: spin 1s linear infinite;
     }
     
     @keyframes spin {
-      from {
-        transform: translate(-50%, -50%) rotate(0deg);
-      }
-      to {
+      to { 
         transform: translate(-50%, -50%) rotate(360deg);
       }
     }
@@ -1134,6 +1362,288 @@
         background: var(--figma-color-bg-brand-tertiary);
       }
     }
+
+    .tab-navigation {
+      display: flex;
+      margin: 16px 16px 8px 16px;  /* Add horizontal padding and reduce bottom margin */
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      padding: 4px;
+      gap: 4px;
+    }
+
+    .tab-button {
+      flex: 1;
+      padding: 8px 12px;  /* Increase vertical padding slightly */
+      background: var(--figma-color-bg);
+      border: none;
+      color: var(--figma-color-text-secondary);
+      font-size: 11px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+      border-radius: 4px;
+      font-weight: 500;
+    }
+
+    .tab-button-disabled {
+      flex: 1;
+      padding: 8px 12px;  /* Match active tab padding */
+      background: transparent;
+      border: none;
+      color: var(--figma-color-text-disabled);
+      font-size: 11px;
+      cursor: not-allowed;
+      opacity: 0.5;
+      border-radius: 4px;
+      font-weight: 500;
+    }
+
+    .tab-button.active {
+      background: var(--figma-color-bg);
+      color: var(--figma-color-text);
+      box-shadow: var(--figma-color-shadow);
+    }
+
+    .tab-button:not(.active):hover {
+      background: var(--figma-color-bg-hover);
+      color: var(--figma-color-text);
+    }
+
+    .tab-button-content {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      opacity: 0.8;
+    }
+
+    .lock-icon {
+      opacity: 0.7;
+    }
+
+    .tab-content {
+      padding: 0;
+    }
+
+    .description {
+      color: var(--figma-color-text-secondary);
+      margin: 8px 0 16px;
+    }
+
+    .library-scan-controls {
+      margin-top: 16px;
+    }
+
+    .library-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .analysis-results {
+      margin: 0;
+      padding: 16px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+    }
+
+    .analysis-summary {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .summary-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .summary-label {
+      color: var(--figma-color-text-secondary);
+      font-size: 11px;
+    }
+
+    .summary-value {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--figma-color-text);
+    }
+
+    .section-subtitle {
+      font-size: 12px;
+      font-weight: 600;
+      margin: 0 0 12px 0;
+      color: var(--figma-color-text);
+    }
+
+    .libraries-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .library-item {
+      padding: 8px;
+      background: var(--figma-color-bg);
+      border-radius: 4px;
+    }
+
+    .library-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+
+    .library-name {
+      font-weight: 500;
+    }
+
+    .library-status {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .library-status.enabled {
+      background: var(--figma-color-bg-success);
+      color: var(--figma-color-text-onbrand);
+    }
+
+    .library-status.disabled {
+      background: var(--figma-color-bg-disabled);
+      color: var(--figma-color-text-secondary);
+    }
+
+    .library-details {
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    .analysis-loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      padding: 16px;
+      margin: 0;
+      color: var(--figma-color-text-secondary);
+    }
+
+    .loading-spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(0, 0, 0, 0.1);
+      border-right: 2px solid var(--figma-color-bg-brand);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { 
+        transform: translate(-50%, -50%) rotate(360deg);
+      }
+    }
+
+    /* Add specific styles for button loading spinner */
+    .select-button .loading-spinner {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%) rotate(0deg);
+      width: 12px;
+      height: 12px;
+      border-width: 1.5px;
+      border: 1.5px solid rgba(255, 255, 255, 0.2);
+    }
+
+    /* Add specific styles for analysis loading spinner */
+    .analysis-loading .loading-spinner {
+      width: 24px;
+      height: 24px;
+      border-width: 2px;
+      border: 2px solid rgba(0, 0, 0, 0.1);
+      border-right: 2px solid var(--figma-color-bg-brand);
+      transform: rotate(0deg);
+    }
+
+    /* Separate animation for non-positioned spinners */
+    @keyframes spin-center {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    /* Apply different animations based on spinner type */
+    .select-button .loading-spinner {
+      animation: spin 1s linear infinite;
+    }
+    
+    .analysis-loading .loading-spinner {
+      animation: spin-center 1s linear infinite;
+    }
+
+    .button.button-disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      pointer-events: none;
+      background: var(--figma-color-bg-disabled);
+      color: var(--figma-color-text-disabled);
+    }
+
+    .bottom-section {
+      margin-top: auto;  /* Push to bottom */
+    }
+
+    .bottom-info {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 16px;
+    }
+
+    .version-info {
+      padding: 8px 0;
+      text-align: center;
+    }
+
+    .version-text {
+      font-size: 11px;
+      color: var(--figma-color-text-tertiary);
+      opacity: 0.8;
+    }
+
+    .donate-button {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border: none;
+      border-radius: 4px;
+      background: var(--figma-color-bg-secondary);
+      color: var(--figma-color-text-tertiary);
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-weight: 500;
+    }
+
+    .donate-button:hover {
+      background: var(--figma-color-bg-hover);
+      color: var(--figma-color-text);
+      transform: scale(1.02);
+    }
+
+    .cat-icon {
+      font-size: 12px;
+      transition: transform 0.2s ease;
+    }
+
+    .donate-button:hover .cat-icon {
+      transform: scale(1.1);
+    }
   </style>
 
   <script>
@@ -1152,7 +1662,7 @@
     const IconInfo = {
       template: `
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-          <path fill-rule="evenodd" clip-rule="evenodd" d="M6 1C3.24 1 1 3.24 1 6C1 8.76 3.24 11 6 11C8.76 11 11 8.76 11 6C11 3.24 8.76 1 6 1ZM6 10C3.79 10 2 8.21 2 6C2 3.79 3.79 2 6 2C8.21 2 10 3.79 10 6C10 8.21 8.21 10 6 10ZM5 5H7V9H5V5ZM5 3H7V4H5V3Z" fill="currentColor"/>
+          <path fill-rule="evenodd" clip-rule="evenodd" d="M6 1C3.24 1 1 3.24 1 6C1 8.76 3.24 11 6 11C8.76 11 11 8.76 11 6C11 3.24 8.76 1 6 1ZM6 10C3.79 10 2 8.21 2 6C2 3.79 3.79 2 6 2C8.21 2 10 3.79 10 6 10ZM5 5H7V9H5V5ZM5 3H7V4H5V3Z" fill="currentColor"/>
         </svg>
       `
     };
@@ -1226,6 +1736,16 @@
       `
     };
 
+    const IconInactiveLibrary = {
+      template: `
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <path d="M4 6.4C4 5.07452 5.07452 4 6.4 4H17.6C18.9255 4 20 5.07452 20 6.4V17.6C20 18.9255 18.9255 20 17.6 20H6.4C5.07452 20 4 18.9255 4 17.6V6.4Z" stroke="currentColor" stroke-width="2"/>
+          <path d="M9 12L15 12M12 9L12 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <path d="M7 7L17 17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      `
+    };
+
     // Then create the Vue app
     const { createApp } = Vue;
 
@@ -1254,10 +1774,12 @@
         IconStroke,
         IconVerticalPadding,
         IconHorizontalPadding,
+        IconInactiveLibrary,
         SuccessToast
       },
       data() {
         return {
+          activeTab: 'tokens',
           selectedScanType: 'vertical-gap',
           scanEntirePage: false,
           isScanning: false,
@@ -1267,7 +1789,7 @@
           hasSelection: false,
           selectedCount: 0,
           isWatching: false,
-          scanOptions: [
+          tokenScanOptions: [
             {
               value: 'typography',
               label: 'Typography',
@@ -1314,6 +1836,9 @@
           showSuccessToast: false,
           successMessage: '',
           selectingNodeIds: new Set(), // Track which groups are being selected
+          libraryResults: {},  // Separate results for library scan
+          variableAnalysis: null,
+          isAnalyzing: false,
         }
       },
       computed: {
@@ -1322,6 +1847,9 @@
         },
         canStartScan() {
           return this.hasSelection || this.scanEntirePage;
+        },
+        hasResults() {
+          return Object.keys(this.groupedReferences).length > 0;
         },
         groupedByValue() {
           const valueGroups = {};
@@ -1382,6 +1910,8 @@
           } else {
             this.stopWatching();
           }
+          // Store the user's preference
+          this.userPrefersScanEntirePage = this.scanEntirePage;
         },
         stopWatching() {
           this.isWatching = false;
@@ -1515,9 +2045,42 @@
         isSelecting(id) {
           return this.selectingNodeIds.has(id);
         },
+        async startLibraryScan() {
+          this.isScanning = true;
+          this.scanProgress = 0;
+          
+          const selectedFrameIds = !this.scanEntirePage  // Use the same scanEntirePage state
+            ? await this.getSelectedFrameIds()
+            : undefined;
+          
+          parent.postMessage({ 
+            pluginMessage: { 
+              type: 'scan-for-tokens',
+              scanType: 'inactive-tokens',
+              scanScope: this.scanEntirePage ? 'entire-page' : 'selected-frames',
+              selectedFrameIds
+            }
+          }, '*');
+        },
+        clearLibraryResults() {
+          this.libraryResults = {};
+        },
+        async listVariables() {
+          this.isAnalyzing = true;
+          this.variableAnalysis = null;  // Reset previous results
+          parent.postMessage({ 
+            pluginMessage: { 
+              type: 'list-variables'
+            }
+          }, '*');
+        },
+        openStripePayment() {
+          window.open('https://buy.stripe.com/8wM7wb49NeFD5UYcMM', '_blank');
+        }
       },
       mounted() {
         console.log('Vue app mounted');
+
         window.onmessage = (event) => {
           const msg = event.data.pluginMessage;
           if (!msg) return;
@@ -1526,9 +2089,6 @@
             case 'selection-updated':
               this.hasSelection = msg.hasSelection;
               this.selectedCount = msg.count;
-              if (!this.hasSelection) {
-                this.scanEntirePage = false;
-              }
               break;
             case 'watch-scan-started':
               this.isScanning = true;
@@ -1539,7 +2099,12 @@
               this.updateProgress(msg.progress);
               break;
             case 'missing-references-result':
-              this.groupedReferences = msg.references;
+              // Store results in the appropriate place based on scan type
+              if (msg.scanType === 'inactive-tokens') {
+                this.libraryResults = msg.references;
+              } else {
+                this.groupedReferences = msg.references;
+              }
               this.isScanning = false;
               this.updateProgress(100);
               break;
@@ -1574,8 +2139,21 @@
             case 'selection-complete':
               this.selectingNodeIds.clear();
               break;
+            case 'variables-analysis':
+              this.isAnalyzing = false;
+              this.variableAnalysis = msg.data;
+              break;
+            case 'variables-analysis-error':
+              this.isAnalyzing = false;
+              this.successMessage = msg.message;
+              this.showSuccessToast = true;
+              break;
           }
         };
+      },
+      created() {
+        // Ensure we stay on the tokens tab
+        this.activeTab = 'tokens';
       }
     }).mount('#app');
 
