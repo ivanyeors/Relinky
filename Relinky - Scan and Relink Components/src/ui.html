@@ -264,7 +264,17 @@
                       <div class="value-group-header" @click="toggleGroup(groupKey)">
                         <div class="header-left">
                           <span class="expand-icon">{{ isGroupExpanded(groupKey) ? '▼' : '▶' }}</span>
-                          <template v-if="group.refs[0]?.type === 'fill' || group.refs[0]?.type === 'stroke'">
+                          <!-- Special handling for typography items -->
+                          <template v-if="group.refs[0]?.type === 'typography'">
+                            <div class="typography-info">
+                              <div class="typography-tags">
+                                <span class="typography-tag font-family">{{ group.refs[0].currentValue.fontFamily }}</span>
+                                <span class="typography-tag weight">{{ group.refs[0].currentValue.fontWeight }}</span>
+                                <span class="typography-tag size">{{ group.refs[0].currentValue.fontSize }}px</span>
+                              </div>
+                            </div>
+                          </template>
+                          <template v-else-if="group.refs[0]?.type === 'fill' || group.refs[0]?.type === 'stroke'">
                             <color-preview :color="group.value" />
                           </template>
                           <template v-else-if="group.refs[0]?.type === 'gap'">
@@ -294,16 +304,15 @@
                           <!-- Special handling for typography items -->
                           <template v-if="ref.type === 'typography'">
                             <div class="typography-details">
-                              <div class="typography-preview">{{ ref.currentValue.content }}...</div>
+                              <div class="typography-preview">{{ ref.currentValue.content }}</div>
                               <div class="typography-specs">
-                                <div>Font: {{ ref.currentValue.fontFamily }}</div>
-                                <div>Weight: {{ ref.currentValue.fontWeight }}</div>
-                                <div>Size: {{ ref.currentValue.fontSize }}px</div>
-                                <div v-if="ref.currentValue.lineHeight">Line Height: {{ ref.currentValue.lineHeight }}</div>
-                                <div v-if="ref.currentValue.letterSpacing">Letter Spacing: {{ ref.currentValue.letterSpacing }}</div>
-                                <div v-if="ref.currentValue.paragraphSpacing">Paragraph Spacing: {{ ref.currentValue.paragraphSpacing }}</div>
-                                <div v-if="ref.currentValue.textCase">Text Case: {{ ref.currentValue.textCase }}</div>
-                                <div v-if="ref.currentValue.textDecoration">Text Decoration: {{ ref.currentValue.textDecoration }}</div>
+                                <div class="typography-tags">
+                                  <span class="typography-tag font-family">{{ ref.currentValue.fontFamily }}</span>
+                                  <span class="typography-tag weight">{{ ref.currentValue.fontWeight }}</span>
+                                  <span class="typography-tag size">{{ ref.currentValue.fontSize }}px</span>
+                                  <span v-if="ref.currentValue.lineHeight" class="typography-tag">LH: {{ ref.currentValue.lineHeight }}</span>
+                                  <span v-if="ref.currentValue.letterSpacing" class="typography-tag">LS: {{ ref.currentValue.letterSpacing }}</span>
+                                </div>
                               </div>
                             </div>
                           </template>
@@ -454,16 +463,15 @@
                             <!-- Special handling for typography items -->
                             <template v-if="ref.type === 'typography'">
                               <div class="typography-details">
-                                <div class="typography-preview">{{ ref.currentValue.content }}...</div>
+                                <div class="typography-preview">{{ ref.currentValue.content }}</div>
                                 <div class="typography-specs">
-                                  <div>Font: {{ ref.currentValue.fontFamily }}</div>
-                                  <div>Weight: {{ ref.currentValue.fontWeight }}</div>
-                                  <div>Size: {{ ref.currentValue.fontSize }}px</div>
-                                  <div v-if="ref.currentValue.lineHeight">Line Height: {{ ref.currentValue.lineHeight }}</div>
-                                  <div v-if="ref.currentValue.letterSpacing">Letter Spacing: {{ ref.currentValue.letterSpacing }}</div>
-                                  <div v-if="ref.currentValue.paragraphSpacing">Paragraph Spacing: {{ ref.currentValue.paragraphSpacing }}</div>
-                                  <div v-if="ref.currentValue.textCase">Text Case: {{ ref.currentValue.textCase }}</div>
-                                  <div v-if="ref.currentValue.textDecoration">Text Decoration: {{ ref.currentValue.textDecoration }}</div>
+                                  <div class="typography-tags">
+                                    <span class="typography-tag font-family">{{ ref.currentValue.fontFamily }}</span>
+                                    <span class="typography-tag weight">{{ ref.currentValue.fontWeight }}</span>
+                                    <span class="typography-tag size">{{ ref.currentValue.fontSize }}px</span>
+                                    <span v-if="ref.currentValue.lineHeight" class="typography-tag">LH: {{ ref.currentValue.lineHeight }}</span>
+                                    <span v-if="ref.currentValue.letterSpacing" class="typography-tag">LS: {{ ref.currentValue.letterSpacing }}</span>
+                                  </div>
                                 </div>
                               </div>
                             </template>
@@ -1940,6 +1948,92 @@
       font-weight: 500;
       color: var(--figma-color-text);
     }
+
+    /* Update typography styles */
+    .typography-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .typography-tags {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    .typography-tag {
+      padding: 2px 6px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 4px;
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex-shrink: 0;
+      height: 20px;
+      display: flex;
+      align-items: center;
+    }
+
+    .typography-tag.font-family {
+      background: var(--figma-color-bg-brand-tertiary);
+      color: var(--figma-color-text-brand);
+      font-weight: 600;
+    }
+
+    .typography-tag.weight {
+      background: var(--figma-color-bg-secondary);
+    }
+
+    .typography-tag.size {
+      background: var(--figma-color-bg-secondary);
+      min-width: 35px;
+      justify-content: center;
+    }
+
+    .typography-details {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex: 1;
+    }
+
+    .typography-preview {
+      font-family: var(--font-stack);
+      color: var(--figma-color-text);
+      opacity: 0.8;
+      font-size: 11px;
+      line-height: 16px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .typography-specs {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    /* Update reference item styles for typography */
+    .reference-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      margin-bottom: 4px;
+    }
+
+    .reference-item:last-child {
+      margin-bottom: 0;
+    }
   </style>
 
   <!-- Add color preview template outside of style tag -->
@@ -2502,6 +2596,30 @@
               this.selectedFrameIds = msg.selectedFrameIds;
             }
           },
+          getStyleData(key) {
+            try {
+              // Extract the JSON data from the textStyleId string
+              const styleMatch = key.match(/textStyleId:({.*?})/);
+              if (!styleMatch) return this.getDefaultStyle();
+              
+              const styleData = JSON.parse(styleMatch[1]);
+              
+              // Clean up the font family name
+              styleData.fontFamily = styleData.fontFamily.split(' ')[0];
+              
+              return styleData;
+            } catch (err) {
+              console.warn('Error parsing style data:', err);
+              return this.getDefaultStyle();
+            }
+          },
+          getDefaultStyle() {
+            return {
+              fontFamily: 'Unknown',
+              fontWeight: 'Regular',
+              fontSize: 14
+            };
+          }
         },
         mounted() {
           console.log('Vue app mounted');
