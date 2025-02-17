@@ -9,7 +9,8 @@ module.exports = (env, argv) => ({
   devtool: argv.mode === 'production' ? false : 'inline-source-map',
 
   entry: {
-    code: './src/code.ts'
+    code: path.resolve(__dirname, 'src/code.ts'),
+    ui: path.resolve(__dirname, 'src/ui.html'),
   },
 
   module: {
@@ -47,7 +48,7 @@ module.exports = (env, argv) => ({
 
   output: {
     filename: '[name].js',
-    path: path.resolve(__dirname, 'dist'), // Output to dist folder
+    path: path.resolve(__dirname, './dist'), // Output to dist folder
     clean: true, // Clean the output directory before emit
     publicPath: '',
   },
@@ -55,7 +56,7 @@ module.exports = (env, argv) => ({
   // Tells Webpack to generate "ui.html" and to inline "ui.ts" into it
   plugins: [
     new HtmlWebpackPlugin({
-      template: './src/ui.html',
+      template: path.resolve(__dirname, 'src/ui.html'),
       filename: 'ui.html',
       inject: false,
       chunks: []
