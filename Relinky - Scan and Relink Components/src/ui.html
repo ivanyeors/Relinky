@@ -132,28 +132,30 @@
 
         <!-- Results section -->
         <div class="results-section">
-          <!-- Tab Navigation -->
+          <!-- Tab Navigation without icons -->
           <div class="tab-navigation">
             <button 
               class="tab-button" 
-              :class="{ active: activeTab === 'tokens' }"
-              @click="activeTab = 'tokens'"
+              :class="{ 
+                'active': activeTab === 'tokens',
+                'inactive': activeTab !== 'tokens'
+              }"
+              @click="switchTab('tokens')"
             >
-              Unlinked Values
+              <span>Unlinked Values</span>
             </button>
             <button 
-              class="tab-button tab-button-disabled"
-              disabled
-              @click.prevent
-              style="pointer-events: none;"
+              class="tab-button" 
+              :class="{ 
+                'active': activeTab === 'library-tokens',
+                'inactive': activeTab !== 'library-tokens'
+              }"
+              @click="switchTab('library-tokens')"
             >
-              <div class="tab-button-content">
-                <span>Unlinked Tokens</span>
-                <svg class="lock-icon" width="12" height="12" viewBox="0 0 12 12" fill="none">
-                  <path d="M3.5 4V3.5C3.5 2.11929 4.61929 1 6 1C7.38071 1 8.5 2.11929 8.5 3.5V4" stroke="currentColor"/>
-                  <rect x="2.5" y="4" width="7" height="6" rx="1" stroke="currentColor"/>
-                </svg>
-              </div>
+              <span>Unlinked Tokens</span>
+              <span v-if="inactiveLibraryTokens.length" class="tab-badge">
+                {{ inactiveLibraryTokens.length }}
+              </span>
             </button>
           </div>
 
@@ -163,6 +165,7 @@
             <div class="step-container">
               <div class="step-content">
                 <h3 class="step-title">Choose what to scan for</h3>
+                <!-- Restore icons in scan cards for Unlinked Values -->
                 <div class="scan-cards">
                   <div 
                     v-for="option in tokenScanOptions" 
@@ -184,53 +187,50 @@
             <!-- Scan Controls -->
             <div class="divider"></div>
 
+            <!-- Scanning Section - Following Hierarchy -->
             <div class="step-container">
               <div class="step-content">
+                <!-- 1. Title -->
                 <h3 class="step-title">Start scanning</h3>
-                <!-- Move progress bar here, right after the title -->
+
+                <!-- Progress Bar Component -->
                 <div class="progress-container">
                   <div class="progress-bar">
+                    <!-- Background Track -->
+                    <div class="progress-track"></div>
+                    <!-- Progress Fill -->
                     <div 
                       class="progress-fill" 
                       :style="{ 
-                        width: isScanning ? `${scanProgress}%` : scanProgress === 100 ? '100%' : '0%',
-                        opacity: isScanning ? 1 : scanProgress === 100 ? 1 : 0.3,
-                        background: scanProgress === 100 && !isScanning ? 'var(--figma-color-bg-success)' : 'var(--figma-color-bg-brand)'
+                        width: getProgressWidth(),
+                        background: getProgressBarColor()
                       }"
                     ></div>
+                    <!-- Progress Text (Always Centered) -->
                     <div class="progress-text">
-                      {{ scanProgress === 100 && !isScanning && Object.keys(groupedReferences).length === 0 ? 'Scan complete - No issues found' :
-                         scanProgress === 100 && !isScanning ? 'Scan complete' :
-                         isScanning ? `${Math.round(scanProgress)}%` : '0%' }}
+                      {{ getProgressStatus() }}
                     </div>
                   </div>
                 </div>
-                <div class="scan-controls" style="margin-top: 8px;">
+
+                <!-- 3. Buttons -->
+                <div class="scan-buttons">
+                  <!-- Scan Button -->
                   <button 
-                    @click="(e) => startScan(false, e)" 
-                    :disabled="isScanning || (!hasSelection && !scanEntirePage)" 
+                    v-if="!isScanning"
+                    @click="startScan()" 
                     class="button primary-button"
+                    :disabled="!canStartScan"
+                    :title="getStartScanButtonTitle()"
                   >
                     Start Scan
                   </button>
                   <button 
-                    @click="(e) => startScan(true, e)"
-                    :disabled="!hasResults"
-                    :class="{ 
-                      'button': true,
-                      'secondary-button': true,
-                      'button-disabled': !hasResults 
-                    }"
+                    v-if="!isScanning && hasResults"
+                    @click="startScan(true)" 
                     class="button secondary-button"
                   >
                     Rescan
-                  </button>
-                  <button 
-                    v-if="isScanning" 
-                    @click="stopScan" 
-                    class="button secondary-button"
-                  >
-                    Stop
                   </button>
                 </div>
               </div>
@@ -339,162 +339,264 @@
           </div>
 
           <!-- Unlinked Library Tab -->
-          <div v-if="activeTab === 'libraries'" class="tab-content">
-            <div class="first-section">
-              <div class="step-container">
-                <div class="step-content">
-                  <h3 class="step-title">Library Variables</h3>
-                  <p class="description">
-                    Analyze and list all variables in the current document, including their library status.
-                  </p>
-                  <div class="library-actions">
-                    <button 
-                      @click="listVariables" 
-                      class="button primary-button"
-                      :disabled="isAnalyzing"
-                    >
-                      {{ isAnalyzing ? 'Analyzing...' : 'Analyze Variables' }}
-                    </button>
-                    <button 
-                      @click="startLibraryScan"
-                      :disabled="isScanning || (!hasSelection && !scanEntirePage)" 
-                      class="button secondary-button"
-                    >
-                      Scan for Unlinked
-                    </button>
+          <div v-if="activeTab === 'library-tokens'" class="tab-content">
+            <div class="step-container">
+              <div class="step-content">
+                <!-- Scan Type Selection -->
+                <h3 class="step-title">Choose what to scan for</h3>
+                <!-- Restore icons in scan cards for Unlinked Tokens -->
+                <div class="scan-cards">
+                  <div 
+                    v-for="option in libraryTokenScanOptions" 
+                    :key="option.value"
+                    class="scan-card"
+                    :class="{ 'selected': selectedLibraryTokenScanType === option.value }"
+                    @click="selectedLibraryTokenScanType = option.value"
+                  >
+                    <div class="scan-card-icon" v-html="icons[option.icon]"></div>
+                    <div class="scan-card-content">
+                      <div class="scan-card-title">{{ option.label }}</div>
+                      <div class="scan-card-description">{{ option.description }}</div>
+                    </div>
                   </div>
+                </div>
+
+                <div class="divider"></div>
+
+                <!-- Scan Controls Section with improved UI -->
+                <div class="scan-section">
+                  <!-- Progress Bar - Always Visible -->
+                  <div class="progress-container">
+                    <div class="progress-bar">
+                      <!-- Background Track -->
+                      <div class="progress-track"></div>
+                      <!-- Progress Fill -->
+                      <div 
+                        class="progress-fill" 
+                        :style="{ 
+                          width: getProgressWidth(),
+                          background: getProgressBarColor()
+                        }"
+                      ></div>
+                      <!-- Progress Text Inside Bar -->
+                      <div class="progress-text">
+                        {{ getProgressStatus() }}
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Scan Buttons with improved layout -->
+                  <div class="scan-buttons-wrapper">
+                    <!-- Primary Action Buttons -->
+                    <div class="primary-actions" v-if="!isLibraryScanning">
+                      <button 
+                        v-if="!isScanning"
+                        @click="scanLibraryTokens" 
+                        class="button primary-button"
+                        :disabled="!canStartScan"
+                        :title="getStartScanButtonTitle()"
+                      >
+                        Start Scan
+                      </button>
+                      <button 
+                        v-if="hasLibraryResults"
+                        @click="scanLibraryTokens" 
+                        class="button secondary-button"
+                      >
+                        Rescan
+                      </button>
+                    </div>
+
+                    <!-- Control Buttons -->
+                    <div class="control-buttons" v-else>
+                      <button 
+                        v-if="!isPaused"
+                        @click="pauseLibraryScan" 
+                        class="button secondary-button"
+                      >
+                        <span class="button-icon">⏸</span>
+                        Pause
+                      </button>
+                      <button 
+                        v-else
+                        @click="resumeLibraryScan" 
+                        class="button primary-button"
+                      >
+                        <span class="button-icon">▶️</span>
+                        Resume
+                      </button>
+                      <button 
+                        @click="stopLibraryScan" 
+                        class="button warning-button"
+                      >
+                        <span class="button-icon">⏹</span>
+                        Stop
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Add scan results summary -->
+                <div v-if="scanSummary" class="scan-summary">
+                  <div class="summary-header">
+                    <h4>Scan Summary</h4>
+                    <span class="timestamp">{{ scanSummary.timestamp }}</span>
+                  </div>
+                  <div class="summary-stats">
+                    <div class="stat-item">
+                      <span class="stat-label">Nodes Scanned</span>
+                      <span class="stat-value">{{ scanSummary.totalNodes }}</span>
+                    </div>
+                    <div class="stat-item">
+                      <span class="stat-label">Variables Found</span>
+                      <span class="stat-value">{{ scanSummary.totalTokens }}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Results Section -->
+                <div v-if="hasLibraryResults" class="library-results">
+                  <!-- Summary -->
+                  <div class="results-summary">
+                    <div class="summary-item">
+                      <span class="summary-label">Total Variables</span>
+                      <span class="summary-value">{{ activeLibraryTokens.length + inactiveLibraryTokens.length }}</span>
+                    </div>
+                    <div class="summary-item warning" v-if="inactiveLibraryTokens.length">
+                      <span class="summary-label">Inactive Libraries</span>
+                      <span class="summary-value">{{ getUniqueLibraries(inactiveLibraryTokens).length }}</span>
+                    </div>
+                  </div>
+
+                  <!-- Inactive Libraries Section -->
+                  <div v-if="inactiveLibraryTokens.length > 0" class="token-section">
+                    <div class="section-header warning">
+                      <div class="header-content">
+                        <h4 class="section-title">Inactive Library Tokens</h4>
+                        <span class="token-count">{{ inactiveLibraryTokens.length }}</span>
+                      </div>
+                    </div>
+                    
+                    <!-- Group by Library -->
+                    <div v-for="library in getUniqueLibraries(inactiveLibraryTokens)" 
+                         :key="library"
+                         class="library-group">
+                      <div class="library-header">
+                        <span class="library-name">{{ library }}</span>
+                        <button class="button secondary-button"
+                                @click="activateLibrary(library)">
+                          Activate Library
+                        </button>
+                      </div>
+                      
+                      <div class="token-list">
+                        <div v-for="token in getTokensByLibrary(inactiveLibraryTokens, library)" 
+                             :key="token.id" 
+                             class="token-item inactive">
+                          <div class="token-info">
+                            <span class="token-name">{{ token.name }}</span>
+                            <div class="token-details">
+                              <span class="token-type">{{ formatTokenType(token.type) }}</span>
+                              <span class="token-usage">Used in {{ token.usages.length }} {{ token.usages.length === 1 ? 'place' : 'places' }}</span>
+                            </div>
+                          </div>
+                          <button 
+                            class="button text-button"
+                            @click="showTokenUsages(token)"
+                            :title="'Show where this token is used'"
+                          >
+                            <span class="button-icon">👁</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- No Results State -->
+                <div v-else-if="!isLibraryScanning" class="no-results">
+                  <div class="no-results-icon">
+                    <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                      <path d="M16 5.33334C22.6667 5.33334 28.3333 9.33334 30.6667 14.6667C28.3333 20 22.6667 24 16 24C9.33334 24 3.66668 20 1.33334 14.6667C3.66668 9.33334 9.33334 5.33334 16 5.33334Z" fill="currentColor" fill-opacity="0.3"/>
+                    </svg>
+                  </div>
+                  <span class="no-results-text">No tokens found</span>
                 </div>
               </div>
             </div>
 
-            <div class="divider"></div>
+            <!-- Inside library-tokens tab content -->
+            <div v-if="activeTab === 'library-tokens'" class="tab-content">
+              <!-- ... existing scan controls ... -->
 
-            <div class="content">
-              <!-- Loading State -->
-              <div v-if="isAnalyzing" class="analysis-loading">
-                <div class="loading-spinner"></div>
-                <span>Analyzing variables...</span>
-              </div>
-              
-              <!-- Variables Analysis Results -->
-              <div v-if="variableAnalysis" class="analysis-results">
-                <div class="analysis-summary">
-                  <div class="summary-item">
-                    <span class="summary-label">Total Variables:</span>
-                    <span class="summary-value">{{ variableAnalysis.totalVariables }}</span>
-                  </div>
-                  <div class="summary-item">
-                    <span class="summary-label">Library Variables:</span>
-                    <span class="summary-value">{{ variableAnalysis.libraryVariables }}</span>
-                  </div>
-                  <div class="summary-item">
-                    <span class="summary-label">Local Variables:</span>
-                    <span class="summary-value">{{ variableAnalysis.localVariables }}</span>
-                  </div>
-                </div>
-                
-                <!-- Libraries List -->
-                <div class="libraries-list">
-                  <h4 class="section-subtitle">Libraries</h4>
-                  <div v-for="lib in variableAnalysis.libraries" :key="lib.key" class="library-item">
-                    <div class="library-header">
-                      <span class="library-name">{{ lib.name }}</span>
-                      <span :class="['library-status', lib.enabled ? 'enabled' : 'disabled']">
-                        {{ lib.enabled ? 'Enabled' : 'Disabled' }}
-                      </span>
-                    </div>
-                    <div class="library-details">
-                      <span class="variable-count">{{ lib.variableCount }} variables</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Library Scan Results -->
-              <template v-if="!isScanning && Object.keys(libraryResults).length > 0">
-                <div class="divider"></div>
-                
-                <div class="step-container">
-                  <div class="step-content">
-                    <div class="results-header">
-                      <h3 class="step-title">Library scan results</h3>
-                      <div class="results-actions">
-                        <button 
-                          class="button secondary-button"
-                          @click="clearLibraryResults"
-                        >
-                          Clear
-                        </button>
-                      </div>
-                    </div>
-                    <div class="results-container">
-                      <div v-for="(group, groupKey) in libraryResults" :key="groupKey" class="value-group">
-                        <!-- Value Group Header -->
-                        <div class="value-group-header" @click="toggleGroup(groupKey)">
-                          <div class="header-left">
-                            <span class="expand-icon">{{ isGroupExpanded(groupKey) ? '▼' : '▶' }}</span>
-                            <template v-if="group.refs[0]?.type === 'fill' || group.refs[0]?.type === 'stroke'">
-                              <color-preview :color="group.value" />
-                            </template>
-                            <template v-else-if="group.refs[0]?.type === 'gap'">
-                              <span class="value-label">{{ formatGapValue(group.value, group.refs[0]) }}</span>
-                            </template>
-                            <template v-else>
-                              <span class="value-label">{{ formatValue(group.value) }}</span>
-                            </template>
-                          </div>
-                          <div class="header-right">
-                            <span class="total-count">{{ group.refs.length }} instances</span>
-                            <button 
-                              class="select-button" 
-                              :class="{ 'loading': isSelecting(groupKey) }"
-                              @click.stop="selectGroup(group.refs, groupKey)"
-                              :disabled="isSelecting(groupKey)"
-                            >
-                              <span v-if="!isSelecting(groupKey)">Select All</span>
-                              <span v-else class="loading-spinner"></span>
-                            </button>
-                          </div>
+              <!-- Variables Analysis Section -->
+              <div v-if="hasLibraryResults" class="library-analysis">
+                <!-- Collections Overview -->
+                <div class="analysis-section">
+                  <h3 class="section-title">Variable Collections</h3>
+                  <div class="collections-list">
+                    <div v-for="collection in variableCollections" 
+                         :key="collection.id" 
+                         class="collection-item"
+                         :class="{ 'inactive': !collection.isActive }">
+                      <div class="collection-header">
+                        <div class="collection-info">
+                          <span class="collection-name">{{ collection.name }}</span>
+                          <span class="collection-status" :class="{ 'warning': !collection.isActive }">
+                            {{ collection.isActive ? 'Active' : 'Inactive' }}
+                          </span>
                         </div>
-
-                        <!-- Expanded Content -->
-                        <div v-if="isGroupExpanded(groupKey)" class="reference-details">
-                          <div v-for="ref in group.refs" :key="ref.nodeId" class="reference-item">
-                            <!-- Special handling for typography items -->
-                            <template v-if="ref.type === 'typography'">
-                              <div class="typography-details">
-                                <div class="typography-preview">{{ ref.currentValue.content }}</div>
-                                <div class="typography-specs">
-                                  <div class="typography-tags">
-                                    <span class="typography-tag font-family">{{ ref.currentValue.fontFamily }}</span>
-                                    <span class="typography-tag weight">{{ ref.currentValue.fontWeight }}</span>
-                                    <span class="typography-tag size">{{ ref.currentValue.fontSize }}px</span>
-                                    <span v-if="ref.currentValue.lineHeight" class="typography-tag">LH: {{ ref.currentValue.lineHeight }}</span>
-                                    <span v-if="ref.currentValue.letterSpacing" class="typography-tag">LS: {{ ref.currentValue.letterSpacing }}</span>
-                                  </div>
+                        <span class="variable-count">
+                          {{ collection.variablesCount }} variables
+                        </span>
+                      </div>
+                      
+                      <!-- Variables in Collection -->
+                      <div class="variables-list">
+                        <div v-for="variable in collection.variables" 
+                             :key="variable.id" 
+                             class="variable-item">
+                          <div class="variable-header">
+                            <span class="variable-name">{{ variable.name }}</span>
+                            <span class="variable-type">{{ formatTokenType(variable.type) }}</span>
+                          </div>
+                          
+                          <!-- Mode Information -->
+                          <div class="mode-info">
+                            <span class="mode-label">Current Mode:</span>
+                            <span class="mode-value">{{ variable.currentMode }}</span>
+                          </div>
+                          
+                          <!-- Usage Information -->
+                          <div class="usage-info">
+                            <div class="usage-header" @click="toggleUsageDetails(variable.id)">
+                              <span>Used in {{ variable.usages.length }} {{ variable.usages.length === 1 ? 'place' : 'places' }}</span>
+                              <span class="expand-icon">{{ isUsageExpanded(variable.id) ? '▼' : '▶' }}</span>
+                            </div>
+                            
+                            <!-- Usage Details (Expandable) -->
+                            <div v-if="isUsageExpanded(variable.id)" class="usage-details">
+                              <div v-for="usage in variable.usages" 
+                                   :key="`${usage.nodeId}-${usage.property}`" 
+                                   class="usage-item">
+                                <div class="usage-node-info">
+                                  <span class="node-name">{{ usage.nodeName }}</span>
+                                  <span class="property-name">{{ usage.property }}</span>
                                 </div>
+                                <button class="button text-button"
+                                        @click="selectNode(usage.nodeId)"
+                                        title="Select this instance">
+                                  <span class="button-icon">👁</span>
+                                </button>
                               </div>
-                            </template>
-                            <template v-else>
-                              <div class="reference-name">{{ ref.nodeName }}</div>
-                              <div class="reference-location">{{ ref.location }}</div>
-                            </template>
-                            <button 
-                              class="select-button"
-                              :class="{ 'loading': isSelecting(ref.nodeId) }"
-                              @click="selectGroup([ref], ref.nodeId)"
-                              :disabled="isSelecting(ref.nodeId)"
-                            >
-                              <span v-if="!isSelecting(ref.nodeId)">Select</span>
-                              <span v-else class="loading-spinner"></span>
-                            </button>
+                            </div>
                           </div>
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </template>
+              </div>
             </div>
           </div>
         </div>
@@ -647,34 +749,33 @@
     }
 
     .scan-controls {
+      margin: 16px;
+    }
+
+    .scan-buttons {
       display: flex;
-      gap: 8px;
+      gap: var(--spacing-xs);
+      padding: var(--spacing-xxs);
     }
 
     .button {
-      padding: 5px 12px;
       height: 32px;
+      padding: 0 var(--spacing-md);
       border-radius: 6px;
+      font-size: 11px;
+      font-weight: 500;
       border: none;
       cursor: pointer;
-      font-family: var(--font-stack);
-      font-size: 11px;
-      line-height: 16px;
-      font-weight: 500;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      min-width: 90px;
+      min-width: unset;
+      width: auto;
     }
 
     .primary-button {
       background: var(--figma-color-bg-brand);
-      color: var(--figma-color-text-onbrand);
-    }
-
-    .primary-button:disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
+      color: white;
     }
 
     .secondary-button {
@@ -682,84 +783,60 @@
       color: var(--figma-color-text);
     }
 
-    .secondary-button:not(.button-disabled):hover {
-      background: var(--figma-color-bg-hover);
+    .button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
     }
 
+    /* Progress Bar Styles */
     .progress-container {
-      position: relative;
-      min-height: 20px;
+      padding: var(--spacing-xxs);
     }
-    
+
     .progress-bar {
-      height: 20px;
-      background: var(--figma-color-bg-secondary);
+      position: relative;
+      width: 100%;
+      height: 24px;
       border-radius: 6px;
       overflow: hidden;
-      position: relative;
-      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);  /* Add subtle inner shadow */
     }
-    
-    .progress-fill {
+
+    .progress-track {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
       height: 100%;
-      transition: all 0.2s ease;
-      animation: pulse 2s infinite;
-      border-radius: 6px;
-      background-size: 30px 30px;
-      background-image: linear-gradient(
-        45deg,
-        rgba(255, 255, 255, 0.15) 25%,
-        transparent 25%,
-        transparent 50%,
-        rgba(255, 255, 255, 0.15) 50%,
-        rgba(255, 255, 255, 0.15) 75%,
-        transparent 75%,
-        transparent
-      );
-      animation: 
-        pulse 2s infinite,
-        progress-bar-stripes 1s linear infinite;
+      background: var(--figma-color-bg-secondary);
     }
 
-    @keyframes progress-bar-stripes {
-      from { background-position: 30px 0; }
-      to { background-position: 0 0; }
-    }
-
-    .progress-fill:not(.complete) {
-      background: linear-gradient(
-        90deg,
-        var(--figma-color-bg-brand) 0%,
-        var(--figma-color-bg-brand-hover) 100%
-      );
+    .progress-fill {
+      position: absolute;
+      left: 0;
+      top: 0;
+      height: 100%;
+      min-width: 0;
+      transition: width 0.2s ease;
     }
 
     .progress-text {
       position: absolute;
-      right: 8px;
-      top: 50%;
-      transform: translateY(-50%);
-      margin: 0;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
       font-size: 11px;
       font-weight: 500;
-      color: var(--figma-color-text-onbrand);
       z-index: 1;
       text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-      padding: 0 4px;
-      min-width: 40px;
-      text-align: right;
     }
 
-    @keyframes pulse {
-      0% {
-        opacity: 1;
-      }
-      50% {
-        opacity: 0.9;
-      }
-      100% {
-        opacity: 1;
-      }
+    .scan-details {
+      color: var(--figma-color-text-secondary);
     }
 
     .references-container {
@@ -885,6 +962,12 @@
       padding: 8px 12px;
       cursor: pointer;
       min-height: 40px;
+      border-radius: 6px;
+      transition: background-color 0.2s ease;
+    }
+
+    .value-group-header:hover {
+      background: var(--figma-color-bg-hover);
     }
 
     .header-left {
@@ -908,10 +991,16 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 8px;
-      background: var(--figma-color-bg-tertiary);
-      border-radius: 4px;
-      margin-top: 4px;
+      padding: 8px 12px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      margin-bottom: 4px;
+      transition: all 0.2s ease;
+    }
+
+    .reference-item:hover {
+      background: var(--figma-color-bg-hover);
+      transform: translateX(4px);
     }
 
     .select-button {
@@ -922,10 +1011,13 @@
       border-radius: 4px;
       cursor: pointer;
       font-size: 11px;
+      transition: all 0.2s ease;
+      opacity: 0.9;
     }
 
     .select-button:hover {
-      background: var(--figma-color-bg-brand-hover);
+      opacity: 1;
+      transform: scale(1.05);
     }
 
     .scan-scope-selector {
@@ -1085,6 +1177,12 @@
       padding: 8px;
       background: var(--figma-color-bg-secondary);
       border-radius: 4px;
+      transition: all 0.2s ease;
+    }
+
+    .typography-details:hover {
+      background: var(--figma-color-bg-hover);
+      transform: translateX(4px);
     }
 
     .typography-preview {
@@ -1242,14 +1340,13 @@
     }
 
     .step-container {
-      padding: 16px;
-      padding-top: 8px;  /* Reduce top padding to tighten spacing with tabs */
+      padding: var(--spacing-xxs);
     }
 
     .step-content {
       display: flex;
       flex-direction: column;
-      gap: 8px;  /* Reduce gap for tighter vertical spacing */
+      gap: var(--spacing-xs);
     }
 
     .step-header {
@@ -1259,9 +1356,10 @@
     }
 
     .step-title {
-      margin: 0;
       font-size: 13px;
       font-weight: 600;
+      margin: 0;
+      padding: var(--spacing-xxs);
     }
 
     .watch-toggle {
@@ -1464,56 +1562,61 @@
 
     .tab-navigation {
       display: flex;
-      margin: 16px 16px 8px 16px;  /* Add horizontal padding and reduce bottom margin */
+      gap: 2px;
+      padding: 2px;
       background: var(--figma-color-bg-secondary);
       border-radius: 6px;
-      padding: 4px;
-      gap: 4px;
+      margin-bottom: 16px;
     }
 
     .tab-button {
       flex: 1;
-      padding: 8px 12px;  /* Increase vertical padding slightly */
-      background: var(--figma-color-bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: 4px;
       border: none;
+      background: none;
       color: var(--figma-color-text-secondary);
-      font-size: 11px;
+      font-size: 13px;
       cursor: pointer;
-      transition: background-color 0.2s;
-      border-radius: 4px;
-      font-weight: 500;
-    }
-
-    .tab-button-disabled {
-      flex: 1;
-      padding: 8px 12px;  /* Match active tab padding */
-      background: transparent;
-      border: none;
-      color: var(--figma-color-text-disabled);
-      font-size: 11px;
-      cursor: not-allowed;
-      opacity: 0.5;
-      border-radius: 4px;
-      font-weight: 500;
+      transition: all 0.2s ease;
     }
 
     .tab-button.active {
       background: var(--figma-color-bg);
       color: var(--figma-color-text);
-      box-shadow: var(--figma-color-shadow);
+      font-weight: 500;
     }
 
-    .tab-button:not(.active):hover {
+    .tab-button.inactive:hover {
       background: var(--figma-color-bg-hover);
       color: var(--figma-color-text);
     }
 
-    .tab-button-content {
+    .tab-icon {
+      width: 16px;
+      height: 16px;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 6px;
       opacity: 0.8;
+    }
+
+    .tab-button.active .tab-icon {
+      opacity: 1;
+      color: var(--figma-color-text-brand);
+    }
+
+    .tab-badge {
+      background: var(--figma-color-bg-danger);
+      color: white;
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 10px;
+      margin-left: 4px;
     }
 
     .lock-icon {
@@ -1827,6 +1930,12 @@
       border-radius: 2px;
       max-width: fit-content;
       border: 1px solid var(--figma-color-border);
+      transition: all 0.2s ease;
+    }
+
+    .color-preview:hover {
+      border-color: var(--figma-color-border-brand);
+      transform: scale(1.02);
     }
 
     .color-swatch-container {
@@ -1978,6 +2087,7 @@
       height: 20px;
       display: flex;
       align-items: center;
+      transition: all 0.2s ease;
     }
 
     .typography-tag.font-family {
@@ -2033,6 +2143,1166 @@
 
     .reference-item:last-child {
       margin-bottom: 0;
+    }
+
+    .token-section {
+      margin-top: 16px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px;
+      background: var(--figma-color-bg);
+    }
+
+    .section-header.warning {
+      background: var(--figma-color-bg-warning);
+      color: white;
+    }
+
+    .token-count {
+      background: var(--figma-color-bg-tertiary);
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .token-list {
+      padding: 8px;
+    }
+
+    .token-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      background: var(--figma-color-bg);
+      border-radius: 4px;
+      margin-bottom: 4px;
+      transition: all 0.2s ease;
+    }
+
+    .token-item:hover {
+      background: var(--figma-color-bg-hover);
+      transform: translateX(4px);
+    }
+
+    .token-item.inactive {
+      border: 1px solid var(--figma-color-border-warning);
+    }
+
+    .token-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .token-name {
+      font-weight: 500;
+    }
+
+    .library-name {
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    /* Library Results Styles */
+    .library-results {
+      margin-top: 24px;
+    }
+
+    .results-summary {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 16px;
+      padding: 12px;
+      background: var(--figma-color-bg);
+      border-radius: 6px;
+    }
+
+    .summary-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .summary-item.warning .summary-value {
+      color: var(--figma-color-text-danger);
+    }
+
+    .summary-label {
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    .summary-value {
+      font-size: 16px;
+      font-weight: 500;
+    }
+
+    .library-group {
+      margin-bottom: 16px;
+    }
+
+    .library-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px 6px 0 0;
+      transition: background-color 0.2s ease;
+    }
+
+    .library-header:hover {
+      background: var(--figma-color-bg-hover);
+    }
+
+    .library-name {
+      font-weight: 500;
+    }
+
+    .token-list {
+      background: var(--figma-color-bg);
+      border-radius: 0 0 6px 6px;
+      overflow: hidden;
+    }
+
+    .token-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--figma-color-border);
+    }
+
+    .token-item:last-child {
+      border-bottom: none;
+    }
+
+    .token-info {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .token-name {
+      font-weight: 500;
+    }
+
+    .token-details {
+      display: flex;
+      gap: 8px;
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    .token-type {
+      padding: 2px 6px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 4px;
+    }
+
+    .scan-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .progress-bar {
+      height: 4px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 2px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: var(--figma-color-bg-brand);
+      transition: width 0.3s ease;
+    }
+
+    .progress-text {
+      position: absolute;
+      right: 0;
+      top: -20px;
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    .scan-buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    .button-icon {
+      margin-right: 4px;
+    }
+
+    .text-button {
+      padding: 4px 8px;
+      color: var(--figma-color-text-secondary);
+      background: none;
+    }
+
+    .text-button:hover {
+      background: var(--figma-color-bg-hover);
+    }
+
+    /* Progress Bar Styles */
+    .progress-container {
+      background: var(--figma-color-bg);
+      padding: 12px;
+      border-radius: 6px;
+    }
+
+    .progress-bar {
+      height: 4px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: var(--figma-color-bg-brand);
+      transition: width 0.3s ease;
+    }
+
+    .progress-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+    }
+
+    .progress-text {
+      font-weight: 500;
+    }
+
+    .scan-details {
+      color: var(--figma-color-text-secondary);
+    }
+
+    /* Button Styles */
+    .scan-buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    .warning-button {
+      background-color: var(--figma-color-bg-danger);
+      color: white;
+    }
+
+    /* Summary Styles */
+    .scan-summary {
+      margin-top: 16px;
+      padding: 12px;
+      background: var(--figma-color-bg);
+      border-radius: 6px;
+    }
+
+    .summary-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .timestamp {
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    .summary-stats {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    .stat-value {
+      font-size: 16px;
+      font-weight: 500;
+    }
+
+    /* Collection Styles */
+    .library-analysis {
+      margin-top: 24px;
+    }
+
+    .analysis-section {
+      background: var(--figma-color-bg);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .collections-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .collection-item {
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .collection-item.inactive {
+      border: 1px solid var(--figma-color-border-warning);
+    }
+
+    .collection-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px;
+      background: var(--figma-color-bg);
+    }
+
+    .collection-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .collection-name {
+      font-weight: 500;
+    }
+
+    .collection-status {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 12px;
+      background: var(--figma-color-bg-success);
+    }
+
+    .collection-status.warning {
+      background: var(--figma-color-bg-warning);
+      color: white;
+    }
+
+    /* Variable Styles */
+    .variables-list {
+      padding: 8px;
+    }
+
+    .variable-item {
+      background: var(--figma-color-bg);
+      border-radius: 4px;
+      margin-bottom: 8px;
+      padding: 12px;
+    }
+
+    .variable-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .variable-name {
+      font-weight: 500;
+    }
+
+    .variable-type {
+      font-size: 11px;
+      padding: 2px 6px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 4px;
+    }
+
+    /* Mode Styles */
+    .mode-info {
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+      margin-bottom: 8px;
+    }
+
+    /* Usage Styles */
+    .usage-info {
+      border-top: 1px solid var(--figma-color-border);
+      padding-top: 8px;
+    }
+
+    .usage-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      padding: 4px 0;
+      color: var(--figma-color-text-secondary);
+      font-size: 11px;
+    }
+
+    .usage-details {
+      margin-top: 8px;
+    }
+
+    .usage-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 4px;
+      margin-bottom: 4px;
+    }
+
+    .usage-item:hover {
+      background: var(--figma-color-bg-hover);
+      transform: translateX(4px);
+    }
+
+    .usage-node-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .node-name {
+      font-size: 12px;
+    }
+
+    .property-name {
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    /* Update Scan Controls Styles */
+    .scan-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .scan-buttons {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .button {
+      flex: none; /* Prevent buttons from stretching */
+      min-width: 80px; /* Ensure minimum button width */
+    }
+
+    .progress-container {
+      background: var(--figma-color-bg);
+      padding: 12px;
+      border-radius: 6px;
+    }
+
+    .progress-bar {
+      height: 4px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: var(--figma-color-bg-brand);
+      transition: width 0.3s ease;
+    }
+
+    .progress-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+    }
+
+    .progress-text {
+      font-weight: 500;
+    }
+
+    .scan-details {
+      color: var(--figma-color-text-secondary);
+    }
+
+    /* Update Progress Bar Styles */
+    .scan-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .progress-container {
+      background: var(--figma-color-bg);
+      border-radius: 6px;
+      padding: 12px;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 4px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: var(--figma-color-bg-brand);
+      transition: width 0.3s ease;
+    }
+
+    .progress-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    .progress-text {
+      font-weight: 500;
+      color: var(--figma-color-text);
+    }
+
+    .scan-buttons {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .button {
+      flex: none;
+      min-width: 80px;
+      height: 32px;
+      padding: 0 12px;
+    }
+
+    /* Update spacing for results section */
+    .scan-summary {
+      margin-top: 16px;
+    }
+
+    .library-results {
+      margin-top: 24px;
+    }
+
+    /* Updated Progress Bar Styles */
+    .scan-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .progress-container {
+      background: var(--figma-color-bg);
+      border-radius: 6px;
+      padding: 16px;
+    }
+
+    .progress-bar {
+      position: relative;
+      width: 100%;
+      height: 32px; /* Increased height for better text visibility */
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      position: absolute;
+      left: 0;
+      top: 0;
+      height: 100%;
+      background: linear-gradient(
+        90deg, 
+        var(--figma-color-bg-brand) 0%,
+        var(--figma-color-bg-brand-hover) 100%
+      );
+      transition: width 0.3s ease;
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      min-width: 60px; /* Ensure text is always visible */
+    }
+
+    .progress-text {
+      color: white;
+      font-size: 12px;
+      font-weight: 500;
+      z-index: 1;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    }
+
+    .scan-details {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    /* Update button styles to match */
+    .scan-buttons {
+      display: flex;
+      gap: 8px;
+      padding: 0 16px;
+    }
+
+    .button {
+      flex: none;
+      min-width: 80px;
+      height: 32px;
+      padding: 0 12px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    /* Scan Section Styles */
+    .scan-section {
+      margin: 24px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* Progress Bar Styles */
+    .progress-container {
+      background: var(--figma-color-bg);
+      border-radius: 6px;
+      padding: 16px;
+    }
+
+    .progress-bar {
+      position: relative;
+      width: 100%;
+      height: 32px; /* Increased height for better text visibility */
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      position: absolute;
+      left: 0;
+      top: 0;
+      height: 100%;
+      background: linear-gradient(
+        90deg, 
+        var(--figma-color-bg-brand) 0%,
+        var(--figma-color-bg-brand-hover) 100%
+      );
+      transition: width 0.3s ease;
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      min-width: 48px; /* Ensure text is always visible */
+    }
+
+    .progress-text {
+      color: white;
+      font-size: 12px;
+      font-weight: 500;
+      z-index: 1;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    }
+
+    .scan-details {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    /* Button Container Styles */
+    .scan-buttons-container {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 0 16px;
+    }
+
+    .primary-buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    .control-buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    /* Button Styles */
+    .button {
+      flex: 1;
+      height: 32px;
+      padding: 0 16px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-width: 90px;
+      transition: all 0.2s ease;
+    }
+
+    .button-icon {
+      font-size: 14px;
+    }
+
+    .primary-button {
+      background: var(--figma-color-bg-brand);
+      color: white;
+    }
+
+    .secondary-button {
+      background: var(--figma-color-bg-secondary);
+      color: var(--figma-color-text);
+    }
+
+    .warning-button {
+      background: var(--figma-color-bg-danger);
+      color: white;
+    }
+
+    /* Updated Scan Section Styles */
+    .scan-section {
+      margin: 16px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* Improved Progress Bar Styles */
+    .progress-container {
+      background: var(--figma-color-bg);
+      border-radius: 6px;
+      padding: 16px;
+    }
+
+    .progress-bar {
+      position: relative;
+      width: 100%;
+      height: 32px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      position: absolute;
+      left: 0;
+      top: 0;
+      height: 100%;
+      background: linear-gradient(
+        90deg, 
+        var(--figma-color-bg-brand) 0%,
+        var(--figma-color-bg-brand-hover) 100%
+      );
+      transition: width 0.3s ease;
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      min-width: 60px;
+    }
+
+    .progress-text {
+      color: white;
+      font-size: 12px;
+      font-weight: 500;
+      z-index: 1;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    }
+
+    .scan-details {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    /* Improved Button Layout Styles */
+    .scan-buttons-wrapper {
+      padding: 0 16px;
+    }
+
+    .primary-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-start;
+    }
+
+    .control-buttons {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-start;
+    }
+
+    /* Updated Button Styles */
+    .button {
+      height: 32px;
+      padding: 0 16px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-width: 90px;
+      transition: all 0.2s ease;
+    }
+
+    .primary-button {
+      background: var(--figma-color-bg-brand);
+      color: white;
+    }
+
+    .secondary-button {
+      background: var(--figma-color-bg-secondary);
+      color: var(--figma-color-text);
+    }
+
+    .warning-button {
+      background: var(--figma-color-bg-danger);
+      color: white;
+    }
+
+    .button-icon {
+      font-size: 14px;
+    }
+
+    /* Progress Bar Styles */
+    .progress-container {
+      background: var(--figma-color-bg);
+      border-radius: 6px;
+      padding: 12px;
+      margin-bottom: 16px;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 4px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: var(--figma-color-bg-brand);
+      transition: all 0.3s ease;
+      position: relative;
+    }
+
+    .progress-text {
+      position: absolute;
+      right: 8px;
+      top: -14px;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--figma-color-text);
+    }
+
+    .progress-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+    }
+
+    .progress-status {
+      color: var(--figma-color-text-secondary);
+    }
+
+    /* Common spacing variables */
+    :root {
+      --spacing-xs: 4px;
+      --spacing-sm: 8px;
+      --spacing-md: 12px;
+      --spacing-lg: 16px;
+      --spacing-xl: 24px;
+    }
+
+    /* Common section styles */
+    .step-container {
+      padding: var(--spacing-lg);
+    }
+
+    .step-content {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-lg);
+    }
+
+    /* Scan Controls */
+    .scan-controls {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-md);
+    }
+
+    /* Progress Bar Container */
+    .progress-container {
+      background: var(--figma-color-bg);
+      border-radius: 6px;
+      padding: var(--spacing-md);
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 4px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-bottom: var(--spacing-sm);
+    }
+
+    /* Button Container */
+    .scan-buttons {
+      display: flex;
+      gap: var(--spacing-sm);
+      padding: 0;
+    }
+
+    /* Button Styles */
+    .button {
+      height: 32px;
+      padding: 0 var(--spacing-md);
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 500;
+      border: none;
+      cursor: pointer;
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: unset;
+      width: auto;
+    }
+
+    /* Divider */
+    .divider {
+      height: 1px;
+      background: var(--figma-color-border);
+      margin: var(--spacing-lg) 0;
+    }
+
+    /* Results Section */
+    .results-section {
+      padding: var(--spacing-lg);
+    }
+
+    /* Library Results */
+    .library-results {
+      margin-top: var(--spacing-xl);
+    }
+
+    .results-summary {
+      padding: var(--spacing-md);
+      margin-bottom: var(--spacing-lg);
+    }
+
+    /* Token Section */
+    .token-section {
+      margin-top: var(--spacing-lg);
+    }
+
+    .section-header {
+      padding: var(--spacing-md);
+    }
+
+    .token-list {
+      padding: var(--spacing-sm);
+    }
+
+    .token-item {
+      padding: var(--spacing-sm) var(--spacing-md);
+      margin-bottom: var(--spacing-xs);
+    }
+
+    /* Library Group */
+    .library-group {
+      margin-bottom: var(--spacing-lg);
+    }
+
+    .library-header {
+      padding: var(--spacing-sm) var(--spacing-md);
+    }
+
+    /* Common Progress Bar Styles */
+    .progress-container {
+      background: var(--figma-color-bg);
+      border-radius: 6px;
+      padding: var(--spacing-md);
+      margin-bottom: var(--spacing-md);
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 4px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-bottom: var(--spacing-sm);
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: var(--figma-color-bg-brand);
+      transition: all 0.3s ease;
+      position: relative;
+    }
+
+    .progress-text {
+      position: absolute;
+      right: 8px;
+      top: -14px;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--figma-color-text);
+    }
+
+    .progress-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+    }
+
+    .progress-status {
+      color: var(--figma-color-text-secondary);
+    }
+
+    /* Smaller spacing variables */
+    :root {
+      --spacing-xxs: 2px;
+      --spacing-xs: 4px;
+      --spacing-sm: 8px;
+      --spacing-md: 12px;
+    }
+
+    /* Common section styles */
+    .step-container {
+      padding: var(--spacing-sm);
+    }
+
+    .step-content {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-sm);
+    }
+
+    /* Progress Bar Container */
+    .progress-container {
+      background: var(--figma-color-bg);
+      border-radius: 4px;
+      padding: var(--spacing-xs);
+      margin-bottom: var(--spacing-xs);
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 4px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-bottom: var(--spacing-xxs);
+    }
+
+    /* Button Container */
+    .scan-buttons {
+      display: flex;
+      gap: var(--spacing-xs);
+      padding: var(--spacing-xs);
+    }
+
+    /* Results Section */
+    .results-section {
+      padding: var(--spacing-sm);
+    }
+
+    /* Library Results */
+    .library-results {
+      margin-top: var(--spacing-sm);
+    }
+
+    .results-summary {
+      padding: var(--spacing-xs);
+      margin-bottom: var(--spacing-sm);
+    }
+
+    /* Token Section */
+    .token-section {
+      margin-top: var(--spacing-sm);
+    }
+
+    .section-header {
+      padding: var(--spacing-xs);
+    }
+
+    .token-list {
+      padding: var(--spacing-xs);
+    }
+
+    .token-item {
+      padding: var(--spacing-xs);
+      margin-bottom: var(--spacing-xxs);
+    }
+
+    /* Divider */
+    .divider {
+      height: 1px;
+      background: var(--figma-color-border);
+      margin: var(--spacing-sm) 0;
+    }
+
+    /* Library Group */
+    .library-group {
+      margin-bottom: var(--spacing-sm);
+    }
+
+    .library-header {
+      padding: var(--spacing-xs);
+    }
+
+    /* Common spacing variables */
+    :root {
+      --spacing-xxs: 2px;  /* Section padding */
+      --spacing-xs: 4px;   /* Component spacing */
+      --spacing-sm: 8px;   /* Larger gaps */
+      --spacing-md: 12px;  /* Button padding */
     }
   </style>
 
@@ -2119,7 +3389,7 @@
         data() {
           return {
             activeTab: 'tokens',
-            selectedScanType: 'gap',
+            selectedScanType: 'vertical-gap', // Default to 'vertical-gap' instead of empty
             scanEntirePage: false,
             isScanning: false,
             scanProgress: 0,
@@ -2136,10 +3406,10 @@
                 icon: 'typography'
               },
               {
-                value: 'vertical-padding',
-                label: 'Vertical Padding',
-                description: 'Find frames with unlinked vertical padding',
-                icon: 'vertical-padding'
+                value: 'vertical-gap',
+                label: 'Vertical Gap',
+                description: 'Find frames with unlinked vertical gap',
+                icon: 'spacing'
               },
               {
                 value: 'horizontal-padding',
@@ -2148,10 +3418,10 @@
                 icon: 'horizontal-padding'
               },
               {
-                value: 'gap',
-                label: 'Auto-layout Gaps',
-                description: 'Find frames with unlinked vertical or horizontal gaps',
-                icon: 'spacing'
+                value: 'vertical-padding',
+                label: 'Vertical Padding',
+                description: 'Find frames with unlinked vertical padding',
+                icon: 'vertical-padding'
               },
               {
                 value: 'corner-radius',
@@ -2229,6 +3499,18 @@
                   <rect x="3.78979" y="3.78979" width="16.4204" height="16.4204" rx="2.5" stroke="currentColor" stroke-linecap="round"/>
                   <rect x="5.51733" y="5.51733" width="12.9653" height="12.9653" rx="1" fill="currentColor"/>
                 </g>
+              </svg>`,
+              'library': `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <g id="library">
+                  <path d="M17.1266 17.1267L6.87317 6.87329" stroke="currentColor" stroke-linecap="round"/>
+                  <rect x="3.84668" y="3.84668" width="16.3066" height="16.3066" rx="2.5" stroke="currentColor" stroke-linecap="round"/>
+                </g>
+              </svg>`,
+              'variable': `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <g id="variable">
+                  <path d="M17.1266 17.1267L6.87317 6.87329" stroke="currentColor" stroke-linecap="round"/>
+                  <rect x="3.84668" y="3.84668" width="16.3066" height="16.3066" rx="2.5" stroke="currentColor" stroke-linecap="round"/>
+                </g>
               </svg>`
             },
             windowSize: {
@@ -2237,6 +3519,176 @@
             },
             isResizing: false,
             selectedFrameIds: [],
+            inactiveLibraryTokens: [],
+            activeLibraryTokens: [],
+            selectedTokenScanType: 'all',
+            libraryTokenScanOptions: [
+              {
+                value: 'all',
+                label: 'All Library Tokens',
+                description: 'Find all tokens from inactive libraries',
+                icon: 'tokens'
+              },
+              {
+                value: 'colors',
+                label: 'Color Tokens',
+                description: 'Find color tokens from inactive libraries',
+                icon: 'fill'
+              },
+              {
+                value: 'typography',
+                label: 'Typography Tokens',
+                description: 'Find typography tokens from inactive libraries',
+                icon: 'typography'
+              },
+              {
+                value: 'spacing',
+                label: 'Spacing Tokens',
+                description: 'Find spacing tokens from inactive libraries',
+                icon: 'spacing'
+              }
+            ],
+            selectedLibraryTokenScanType: 'all', // Default to 'all' instead of empty
+            isLibraryScanning: false,
+            libraryScanProgress: 0,
+            hasLibraryResults: false,
+            isPaused: false,
+            currentScanNode: null,
+            scanSummary: null,
+            variableCollections: [
+              {
+                id: 1,
+                name: 'Colors',
+                isActive: true,
+                variablesCount: 5,
+                variables: [
+                  {
+                    id: 1,
+                    name: 'Primary Color',
+                    type: 'color',
+                    currentMode: 'Light Mode',
+                    usages: [
+                      { nodeId: 'node1', property: 'background-color' },
+                      { nodeId: 'node2', property: 'border-color' },
+                      { nodeId: 'node3', property: 'text-color' }
+                    ]
+                  },
+                  {
+                    id: 2,
+                    name: 'Secondary Color',
+                    type: 'color',
+                    currentMode: 'Dark Mode',
+                    usages: [
+                      { nodeId: 'node4', property: 'background-color' },
+                      { nodeId: 'node5', property: 'border-color' },
+                      { nodeId: 'node6', property: 'text-color' }
+                    ]
+                  },
+                  {
+                    id: 3,
+                    name: 'Tertiary Color',
+                    type: 'color',
+                    currentMode: 'Light Mode',
+                    usages: [
+                      { nodeId: 'node7', property: 'background-color' },
+                      { nodeId: 'node8', property: 'border-color' },
+                      { nodeId: 'node9', property: 'text-color' }
+                    ]
+                  },
+                  {
+                    id: 4,
+                    name: 'Quaternary Color',
+                    type: 'color',
+                    currentMode: 'Dark Mode',
+                    usages: [
+                      { nodeId: 'node10', property: 'background-color' },
+                      { nodeId: 'node11', property: 'border-color' },
+                      { nodeId: 'node12', property: 'text-color' }
+                    ]
+                  },
+                  {
+                    id: 5,
+                    name: 'Neutral Color',
+                    type: 'color',
+                    currentMode: 'Light Mode',
+                    usages: [
+                      { nodeId: 'node13', property: 'background-color' },
+                      { nodeId: 'node14', property: 'border-color' },
+                      { nodeId: 'node15', property: 'text-color' }
+                    ]
+                  }
+                ]
+              },
+              {
+                id: 2,
+                name: 'Typography',
+                isActive: true,
+                variablesCount: 3,
+                variables: [
+                  {
+                    id: 6,
+                    name: 'Body Font',
+                    type: 'typography',
+                    currentMode: 'Light Mode',
+                    usages: [
+                      { nodeId: 'node16', property: 'font-family' },
+                      { nodeId: 'node17', property: 'font-size' },
+                      { nodeId: 'node18', property: 'line-height' }
+                    ]
+                  },
+                  {
+                    id: 7,
+                    name: 'Heading Font',
+                    type: 'typography',
+                    currentMode: 'Dark Mode',
+                    usages: [
+                      { nodeId: 'node19', property: 'font-family' },
+                      { nodeId: 'node20', property: 'font-size' },
+                      { nodeId: 'node21', property: 'line-height' }
+                    ]
+                  },
+                  {
+                    id: 8,
+                    name: 'Button Font',
+                    type: 'typography',
+                    currentMode: 'Light Mode',
+                    usages: [
+                      { nodeId: 'node22', property: 'font-family' },
+                      { nodeId: 'node23', property: 'font-size' },
+                      { nodeId: 'node24', property: 'line-height' }
+                    ]
+                  }
+                ]
+              },
+              {
+                id: 3,
+                name: 'Spacing',
+                isActive: true,
+                variablesCount: 2,
+                variables: [
+                  {
+                    id: 9,
+                    name: 'Padding',
+                    type: 'spacing',
+                    currentMode: 'Light Mode',
+                    usages: [
+                      { nodeId: 'node25', property: 'padding' },
+                      { nodeId: 'node26', property: 'padding' }
+                    ]
+                  },
+                  {
+                    id: 10,
+                    name: 'Margin',
+                    type: 'spacing',
+                    currentMode: 'Dark Mode',
+                    usages: [
+                      { nodeId: 'node27', property: 'margin' },
+                      { nodeId: 'node28', property: 'margin' }
+                    ]
+                  }
+                ]
+              }
+            ]
           }
         },
         computed: {
@@ -2244,7 +3696,16 @@
             return this.scanEntirePage ? 'entire-page' : 'selected-frames';
           },
           canStartScan() {
-            return this.hasSelection || this.scanEntirePage;
+            // Check if we have a valid scan scope (either selection or entire page)
+            const hasScanScope = this.hasSelection || this.scanEntirePage;
+            
+            // For library tokens tab
+            if (this.activeTab === 'library-tokens') {
+              return hasScanScope;  // Always has a default selection
+            }
+
+            // For unlinked values tab
+            return hasScanScope;  // Always has a default selection
           },
           hasResults() {
             return Object.keys(this.groupedReferences).length > 0;
@@ -2293,6 +3754,12 @@
           },
           canWatch() {
             return this.scanEntirePage;
+          },
+          activeLibraryTokens() {
+            return this.activeLibraryTokens;
+          },
+          inactiveLibraryTokens() {
+            return this.inactiveLibraryTokens;
           }
         },
         methods: {
@@ -2319,11 +3786,7 @@
               }
             }, '*');
           },
-          async startScan(isRescan = false, event) {
-            if (event) {
-              event.preventDefault();
-            }
-            
+          async startScan(isRescan = false) {  // Remove event parameter
             this.isScanning = true;
             this.scanProgress = 0;
             
@@ -2457,8 +3920,11 @@
             return this.selectingNodeIds.has(id);
           },
           async startLibraryScan() {
-            this.isScanning = true;
-            this.scanProgress = 0;
+            this.isLibraryScanning = true;
+            this.libraryScanProgress = 0;
+            this.currentScanNode = null;
+            this.scanSummary = null;
+            this.isPaused = false;
             
             const selectedFrameIds = !this.scanEntirePage  // Use the same scanEntirePage state
               ? await this.getSelectedFrameIds()
@@ -2587,6 +4053,37 @@
                 this.selectedCount = msg.count;
                 this.hasSelection = msg.ids.length > 0;
                 break;
+              case 'library-tokens-result':
+                this.inactiveLibraryTokens = msg.inactiveTokens;
+                this.activeLibraryTokens = msg.activeTokens;
+                break;
+              case 'library-scan-progress':
+                this.libraryScanProgress = msg.progress;
+                this.currentScanNode = msg.currentNode;
+                break;
+              case 'library-scan-complete':
+                this.isLibraryScanning = false;
+                this.libraryScanProgress = 100;
+                this.scanSummary = {
+                  ...msg.summary,
+                  timestamp: new Date().toLocaleTimeString()
+                };
+                break;
+              case 'library-scan-paused':
+                console.log('Scan paused');
+                this.isPaused = true;
+                break;
+              case 'library-scan-resumed':
+                console.log('Scan resumed');
+                this.isPaused = false;
+                break;
+              case 'library-scan-stopped':
+                console.log('Scan stopped');
+                this.isLibraryScanning = false;
+                this.isPaused = false;
+                this.libraryScanProgress = 0;
+                this.currentScanNode = null;
+                break;
             }
           },
           updateSelection(msg) {
@@ -2619,6 +4116,141 @@
               fontWeight: 'Regular',
               fontSize: 14
             };
+          },
+          async scanLibraryTokens() {
+            this.isLibraryScanning = true;
+            this.libraryScanProgress = 0;
+            this.currentScanNode = null;
+            this.scanSummary = null;
+            this.isPaused = false;
+            this.inactiveLibraryTokens = [];
+            this.activeLibraryTokens = [];
+            parent.postMessage({ 
+              pluginMessage: { 
+                type: 'scan-library-tokens',
+                scanType: this.selectedLibraryTokenScanType
+              }
+            }, '*');
+          },
+          async activateLibrary(libraryName) {
+            parent.postMessage({ 
+              pluginMessage: { 
+                type: 'activate-library',
+                libraryName 
+              }
+            }, '*');
+          },
+          stopLibraryScan() {
+            console.log('Requesting scan stop...');
+            parent.postMessage({ 
+              pluginMessage: { type: 'stop-library-scan' }
+            }, '*');
+          },
+          formatTokenType(type) {
+            switch (type.toLowerCase()) {
+              case 'color':
+                return 'Color';
+              case 'float':
+                return 'Number';
+              case 'string':
+                return 'Text';
+              default:
+                return type;
+            }
+          },
+          pauseLibraryScan() {
+            console.log('Requesting scan pause...');
+            this.isPaused = true;
+            parent.postMessage({ 
+              pluginMessage: { type: 'pause-library-scan' }
+            }, '*');
+          },
+          resumeLibraryScan() {
+            console.log('Requesting scan resume...');
+            this.isPaused = false;
+            parent.postMessage({ 
+              pluginMessage: { type: 'resume-library-scan' }
+            }, '*');
+          },
+          getUniqueLibraries(tokens) {
+            return [...new Set(tokens.map(token => token.libraryName))];
+          },
+          getTokensByLibrary(tokens, libraryName) {
+            return tokens.filter(token => token.libraryName === libraryName);
+          },
+          showTokenUsages(token) {
+            const nodeIds = token.usages.map(usage => usage.nodeId);
+            parent.postMessage({ 
+              pluginMessage: { 
+                type: 'select-nodes',
+                nodeIds
+              }
+            }, '*');
+          },
+          toggleUsageDetails(variableId) {
+            this.isUsageExpanded = { ...this.isUsageExpanded, [variableId]: !this.isUsageExpanded[variableId] };
+          },
+          isUsageExpanded(variableId) {
+            return this.isUsageExpanded[variableId] || false;
+          },
+          selectNode(nodeId) {
+            parent.postMessage({ 
+              pluginMessage: { 
+                type: 'select-node',
+                nodeId
+              }
+            }, '*');
+          },
+          switchTab(tab) {
+            this.activeTab = tab;
+          },
+          getProgressBarColor() {
+            if (this.scanError) {
+              return 'var(--figma-color-bg-danger)';
+            }
+            if (this.scanProgress === 100) {
+              return 'var(--figma-color-bg-success)';
+            }
+            if (this.isScanning) {
+              return 'var(--figma-color-bg-brand)';
+            }
+            return 'var(--figma-color-bg-secondary)';
+          },
+
+          getProgressStatus() {
+            if (this.scanError) {
+              return 'Scan error';
+            }
+            if (this.scanProgress === 100) {
+              return this.hasResults ? 'Scan complete' : 'Scan complete, no issues found';
+            }
+            if (this.isScanning) {
+              return `Scanning... ${Math.round(this.scanProgress)}%`;
+            }
+            return 'Ready to scan';
+          },
+
+          // Add new method to handle progress width
+          getProgressWidth() {
+            // Always return a percentage, even if 0
+            return `${Math.max(0, Math.min(100, this.scanProgress))}%`;
+          },
+          getStartScanButtonTitle() {
+            if (!this.hasSelection && !this.scanEntirePage) {
+              return 'Select frames/components/sections or enable "Scan Entire Page"';
+            }
+            if (!this.selectedScanType) {
+              return 'Select what to scan for';
+            }
+            return 'Start scanning';
+          }
+        },
+        watch: {
+          activeLibraryTokens(newVal) {
+            this.hasLibraryResults = newVal.length > 0 || this.inactiveLibraryTokens.length > 0;
+          },
+          inactiveLibraryTokens(newVal) {
+            this.hasLibraryResults = newVal.length > 0 || this.activeLibraryTokens.length > 0;
           }
         },
         mounted() {
