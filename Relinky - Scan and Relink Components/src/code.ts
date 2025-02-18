@@ -299,7 +299,10 @@ async function scanForColorTokens(
           const fills = node.fills;
           if (Array.isArray(fills)) {
             fills.forEach((fill: Paint, index) => {
-              if (fill.type === 'SOLID' && !node.boundVariables?.fills?.[index]) {
+              // Only add if there's no variable binding for this fill
+              if (fill.type === 'SOLID' && 
+                  (!node.boundVariables?.fills?.[index] || 
+                   !node.boundVariables?.fills?.[index]?.type)) {
                 missingRefs.push({
                   nodeId: node.id,
                   nodeName: node.name || 'Unnamed Node',
@@ -318,7 +321,10 @@ async function scanForColorTokens(
           const strokes = node.strokes;
           if (Array.isArray(strokes)) {
             strokes.forEach((stroke: Paint, index) => {
-              if (stroke.type === 'SOLID' && !node.boundVariables?.strokes?.[index]) {
+              // Only add if there's no variable binding for this stroke
+              if (stroke.type === 'SOLID' && 
+                  (!node.boundVariables?.strokes?.[index] || 
+                   !node.boundVariables?.strokes?.[index]?.type)) {
                 missingRefs.push({
                   nodeId: node.id,
                   nodeName: node.name || 'Unnamed Node',
@@ -1008,10 +1014,13 @@ async function scanForVerticalGap(
   try {
     // Filter nodes with vertical auto-layout from the provided nodes
     const nodes = nodesToScan.filter(node => 
-      hasAutoLayout(node) && node.layoutMode === 'VERTICAL'
+      hasAutoLayout(node) && 
+      node.layoutMode === 'VERTICAL' &&
+      node.itemSpacing > 0 && 
+      !node.boundVariables?.itemSpacing // Only include if no variable binding
     );
     
-    console.log(`Found ${nodes.length} nodes with vertical auto-layout`);
+    console.log(`Found ${nodes.length} nodes with unlinked vertical auto-layout`);
 
     // Process nodes with progress updates
     for (let i = 0; i < nodes.length; i++) {
@@ -1019,17 +1028,14 @@ async function scanForVerticalGap(
       
       const node = nodes[i] as FrameNode;
       
-      // Check if itemSpacing is not bound to a variable and is greater than 0
-      if (node.itemSpacing > 0 && !node.boundVariables?.itemSpacing) {
-        missingRefs.push({
-          nodeId: node.id,
-          nodeName: node.name,
-          type: 'vertical-gap',
-          property: 'itemSpacing',
-          currentValue: node.itemSpacing,
-          location: 'Vertical Gap'
-        });
-      }
+      missingRefs.push({
+        nodeId: node.id,
+        nodeName: node.name,
+        type: 'vertical-gap',
+        property: 'itemSpacing',
+        currentValue: node.itemSpacing,
+        location: 'Vertical Gap'
+      });
 
       // Calculate and report progress
       const progress = ((i + 1) / nodes.length) * 100;
