@@ -91,6 +91,7 @@
                     <label class="toggle-label">
                       <div class="toggle-label-content">
                         <span>Ignore Hidden Layers</span>
+                        <span class="beta-badge">Beta</span>
                         <span class="info-badge" title="Hidden layers will be excluded from the scan">ⓘ</span>
                       </div>
                       <div class="toggle-wrapper">
@@ -107,7 +108,17 @@
               </div>
 
               <div class="selection-container">
-                <div v-if="!hasSelection && !scanEntirePage" class="toast warning">
+                <!-- Warning for instances -->
+                <div v-if="hasInstances" class="toast warning">
+                  <div class="toast-icon">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <path fill-rule="evenodd" clip-rule="evenodd" d="M8 1.33337L14.6667 13.3334H1.33334L8 1.33337ZM8 4.00004L3.73334 12H12.2667L8 4.00004ZM7.33334 6.66671H8.66668V9.33337H7.33334V6.66671ZM7.33334 10.6667H8.66668V12H7.33334V10.6667Z" fill="currentColor"/>
+                    </svg>
+                  </div>
+                  <span class="toast-message">Instances cannot be scanned. Please select frames, components, or sections instead.</span>
+                </div>
+                <!-- Existing selection messages -->
+                <div v-else-if="!hasSelection && !scanEntirePage" class="toast warning">
                   <div class="toast-icon">
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                       <path fill-rule="evenodd" clip-rule="evenodd" d="M8 1.33337L14.6667 13.3334H1.33334L8 1.33337ZM8 4.00004L3.73334 12H12.2667L8 4.00004ZM7.33334 6.66671H8.66668V9.33337H7.33334V6.66671ZM7.33334 10.6667H8.66668V12H7.33334V10.6667Z" fill="currentColor"/>
@@ -152,7 +163,10 @@
               }"
               @click="switchTab('library-tokens')"
             >
-              <span>Unlinked Tokens</span>
+              <div class="tab-label">
+                <span>Unlinked Tokens</span>
+                <span class="beta-badge">Beta</span>
+              </div>
               <span v-if="inactiveLibraryTokens.length" class="tab-badge">
                 {{ inactiveLibraryTokens.length }}
               </span>
@@ -3304,6 +3318,34 @@
       --spacing-sm: 8px;   /* Larger gaps */
       --spacing-md: 12px;  /* Button padding */
     }
+
+    /* Add these styles for the beta badge */
+    .beta-badge {
+      font-size: 9px;
+      padding: 1px 4px;
+      background: var(--figma-color-bg-brand-tertiary);
+      color: var(--figma-color-text-brand);
+      border-radius: 3px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-left: 4px;
+      vertical-align: middle;
+    }
+
+    /* Add styles for tab label with beta badge */
+    .tab-label {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    /* Adjust beta badge in tab */
+    .tab-button .beta-badge {
+      font-size: 8px;
+      padding: 0px 3px;
+      margin-left: 2px;
+    }
   </style>
 
   <!-- Add color preview template outside of style tag -->
@@ -3389,7 +3431,7 @@
         data() {
           return {
             activeTab: 'tokens',
-            selectedScanType: 'vertical-gap', // Default to 'vertical-gap' instead of empty
+            selectedScanType: 'vertical-gap',
             scanEntirePage: false,
             isScanning: false,
             scanProgress: 0,
@@ -3397,6 +3439,7 @@
             expandedGroups: new Set(),
             hasSelection: false,
             selectedCount: 0,
+            hasInstances: false,
             isWatching: false,
             tokenScanOptions: [
               {
@@ -4271,6 +4314,28 @@
               type: 'get-selected-frame-ids' 
             }
           }, '*');
+
+          window.onmessage = (event) => {
+            const msg = event.data.pluginMessage;
+            if (!msg) return;
+            
+            if (msg.type === 'selection-updated') {
+              this.hasSelection = msg.hasSelection;
+              this.selectedCount = msg.count || 0;
+              this.hasInstances = msg.hasInstances || false;
+              this.selectedFrameIds = msg.selectedFrameIds || [];
+            }
+            // Handle other message types
+            if (msg.type === 'variables-analysis') {
+              this.handleVariablesAnalysis(msg.data);
+            } else if (msg.type === 'scan-progress') {
+              this.handleScanProgress(msg);
+            } else if (msg.type === 'scan-complete') {
+              this.handleScanComplete(msg);
+            } else if (msg.type === 'scan-error') {
+              this.handleScanError(msg);
+            }
+          };
         },
         created() {
           // Ensure we stay on the tokens tab
