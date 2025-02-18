@@ -390,7 +390,12 @@ interface PluginMessage {
   progress?: number;
   references?: Record<string, MissingReference[]>;
   scanEntirePage?: boolean;
+  isRescan?: boolean;
 }
+
+// Add these at the top with other state variables
+let lastSelectedFrameIds: string[] = [];
+let initialScanSelection: string[] = []; // Store initial selection when first scan is clicked
 
 // Update the selection change handler
 figma.on('selectionchange', async () => {
@@ -401,6 +406,11 @@ figma.on('selectionchange', async () => {
     node.type === 'COMPONENT_SET' || 
     node.type === 'SECTION'
   );
+  
+  // Only update lastSelectedFrameIds if we have a valid selection
+  if (validSelection.length > 0) {
+    lastSelectedFrameIds = validSelection.map(node => node.id);
+  }
   
   // Send more detailed selection info to UI
   figma.ui.postMessage({ 
@@ -683,47 +693,93 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
     try {
       isScanCancelled = false;
       const scanType = msg.scanType as ScanType;
+      const isRescan = msg.isRescan || false;
 
       console.log('Starting scan with progress tracking');
       console.log('Scan scope:', msg.scanScope);
       console.log('Selected frame IDs:', msg.selectedFrameIds);
       console.log('Scan entire page:', msg.scanEntirePage);
+      console.log('Is rescan:', isRescan);
 
       figma.ui.postMessage({ 
         type: 'scan-status', 
         message: `Scanning for ${scanType}...`
       });
 
-      const refs = await scanForMissingReferences(
-        scanType,
-        !msg.scanEntirePage && Array.isArray(msg.selectedFrameIds) && msg.selectedFrameIds.length > 0 
-          ? msg.selectedFrameIds 
-          : undefined,
-        (progress) => {
-          // Check if scan was cancelled
-          if (isScanCancelled) {
-            return;
-          }
-          console.log(`Sending progress update: ${progress}%`);
-          figma.ui.postMessage({ 
-            type: 'scan-progress', 
-            progress
-          });
+      // If it's not scanning entire page, handle selection
+      if (!msg.scanEntirePage) {
+        let frameIdsToUse: string[];
+        
+        if (isRescan) {
+          // Use initial selection for rescan
+          frameIdsToUse = initialScanSelection;
+          
+          // Reselect the initial frames
+          const framesToSelect = await Promise.all(
+            frameIdsToUse.map(id => figma.getNodeByIdAsync(id))
+          );
+          
+          // Filter out any null values and ensure they're valid frame types
+          const validFrames = framesToSelect.filter((node): node is FrameNode | ComponentNode | ComponentSetNode | SectionNode => 
+            node !== null && 
+            (node.type === 'FRAME' || node.type === 'COMPONENT' || node.type === 'COMPONENT_SET' || node.type === 'SECTION')
+          );
+          
+          // Update the selection
+          figma.currentPage.selection = validFrames;
+        } else {
+          // This is the initial scan - store the selection
+          frameIdsToUse = Array.isArray(msg.selectedFrameIds) ? msg.selectedFrameIds : [];
+          initialScanSelection = frameIdsToUse; // Store initial selection
         }
-      );
 
-      // Check if scan was cancelled before sending results
-      if (isScanCancelled) {
-        figma.ui.postMessage({ type: 'scan-cancelled' });
-        return;
+        // Perform the scan with the appropriate frame IDs
+        const refs = await scanForMissingReferences(
+          scanType,
+          frameIdsToUse,
+          (progress) => {
+            if (isScanCancelled) return;
+            console.log(`Sending progress update: ${progress}%`);
+            figma.ui.postMessage({ 
+              type: 'scan-progress', 
+              progress
+            });
+          }
+        );
+
+        // Check if scan was cancelled before sending results
+        if (isScanCancelled) {
+          figma.ui.postMessage({ type: 'scan-cancelled' });
+          return;
+        }
+
+        const groupedRefs = groupMissingReferences(refs);
+        figma.ui.postMessage({ 
+          type: 'missing-references-result', 
+          scanType: scanType,
+          references: groupedRefs 
+        });
+      } else {
+        // Reset stored selections when scanning entire page
+        lastSelectedFrameIds = [];
+        initialScanSelection = [];
+        
+        // Perform scan for entire page as before
+        const refs = await scanForMissingReferences(
+          scanType,
+          undefined,
+          (progress) => {
+            if (isScanCancelled) return;
+            console.log(`Sending progress update: ${progress}%`);
+            figma.ui.postMessage({ 
+              type: 'scan-progress', 
+              progress
+            });
+          }
+        );
+
+        // Rest of the existing code...
       }
-
-      const groupedRefs = groupMissingReferences(refs);
-      figma.ui.postMessage({ 
-        type: 'missing-references-result', 
-        scanType: scanType,
-        references: groupedRefs 
-      });
     } catch (err) {
       console.error('Scan failed:', err);
       figma.ui.postMessage({ 
