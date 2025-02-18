@@ -941,6 +941,43 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
       figma.ui.resize(msg.width, msg.height);
     }
   }
+
+  if (msg.type === 'scan-library-tokens') {
+    try {
+      const results = await scanForLibraryTokens(msg.scanType);
+      figma.ui.postMessage({
+        type: 'library-tokens-result',
+        activeTokens: results.activeLibraryTokens,
+        inactiveTokens: results.inactiveLibraryTokens,
+        scanType: msg.scanType
+      });
+    } catch (err) {
+      console.error('Error in scan-library-tokens:', err);
+      figma.ui.postMessage({
+        type: 'error',
+        message: 'Failed to scan library tokens'
+      });
+    }
+  }
+
+  if (msg.type === 'pause-library-scan') {
+    console.log('Pausing scan...');
+    isScanPaused = true;
+    figma.ui.postMessage({ type: 'library-scan-paused' });
+  }
+
+  if (msg.type === 'resume-library-scan') {
+    console.log('Resuming scan...');
+    isScanPaused = false;
+    figma.ui.postMessage({ type: 'library-scan-resumed' });
+  }
+
+  if (msg.type === 'stop-library-scan') {
+    console.log('Stopping scan...');
+    isScanStopped = true;
+    isScanPaused = false;
+    figma.ui.postMessage({ type: 'library-scan-stopped' });
+  }
 };
 
 // At the start of the file, after the UI setup
@@ -1127,11 +1164,12 @@ async function scanForCornerRadius(
   return missingRefs;
 }
 
-// Add interface for library based on Figma API docs
-interface TeamLibrary {
-  name: string;
+// Single interface for libraries that matches Figma's API
+interface Library {
   key: string;
+  name: string;
   enabled: boolean;
+  type: 'REMOTE' | 'LOCAL';
 }
 
 // Add interfaces for better token handling
@@ -1162,18 +1200,24 @@ async function scanForInactiveTokens(
   const tokenGroups: Record<string, TokenGroup> = {};
   
   try {
-    // First, get all variables and libraries
     const allVariables = await figma.variables.getLocalVariablesAsync();
-    const publishedLibraries = await figma.clientStorage.getAsync('libraries') as TeamLibrary[];
+    const collections = await figma.variables.getLocalVariableCollectionsAsync();
+    
+    // Map collections with proper Library type
+    const libraryMap = new Map(
+      collections.map(collection => [collection.key, {
+        key: collection.key,
+        name: collection.name,
+        enabled: collection.remote,
+        type: collection.remote ? 'REMOTE' : 'LOCAL'
+      } as Library])
+    );
 
-    console.log('Found variables:', allVariables.length);
-    console.log('Found libraries:', publishedLibraries);
-
-    // Group variables by their library/collection
+    // Process variables
     for (const variable of allVariables) {
       if (variable.remote) {
         const libraryKey = variable.key.split(':')[0];
-        const library = publishedLibraries.find((lib: TeamLibrary) => lib.key === libraryKey);
+        const library = libraryMap.get(libraryKey);
         
         const groupKey = library ? library.name : 'Unknown Library';
         if (!tokenGroups[groupKey]) {
@@ -1198,8 +1242,6 @@ async function scanForInactiveTokens(
       }
     }
 
-    console.log('Token groups:', tokenGroups);
-
     // Now scan nodes for variables
     const nodes = (nodesToScan || figma.currentPage.findAll())
       .filter(node => hasVariableBindings(node));
@@ -1219,7 +1261,7 @@ async function scanForInactiveTokens(
               
               if (variable?.remote) {
                 const libraryKey = variable.key.split(':')[0];
-                const library = publishedLibraries.find((lib: TeamLibrary) => lib.key === libraryKey);
+                const library = libraryMap.get(libraryKey);
                 const groupKey = library?.name || 'Unknown Library';
                 const group = tokenGroups[groupKey];
 
@@ -1314,7 +1356,9 @@ async function scanForFillVariables(
             // Handle array of variable bindings
             for (const binding of fillBindings) {
               if (binding.type === 'VARIABLE_ALIAS') {
-                const variable = await figma.variables.getVariableByIdAsync(binding.id);
+                // Cast binding to VariableAlias type and access id
+                const variableBinding = binding as VariableAlias;
+                const variable = await figma.variables.getVariableByIdAsync(variableBinding.id);
                 console.log('Found variable:', variable);
 
                 missingRefs.push({
@@ -1323,7 +1367,7 @@ async function scanForFillVariables(
                   type: 'fill-variable',
                   property: 'fills',
                   currentValue: {
-                    variableId: binding.id,
+                    variableId: variableBinding.id,
                     variableName: variable?.name || 'Unknown',
                     variableType: variable?.resolvedType || 'Unknown',
                     isRemote: variable?.remote || false
@@ -1375,38 +1419,16 @@ async function scanForFillVariables(
 
 async function listAllVariables() {
   try {
-    // Get all local variables
     const localVariables = await figma.variables.getLocalVariablesAsync();
-    console.log('All local variables:', localVariables);
-
-    // Get all collections
     const collections = await figma.variables.getLocalVariableCollectionsAsync();
-    console.log('All collections:', collections);
-
-    // Get libraries using clientStorage with fallback
-    let libraries: TeamLibrary[] = [];
-    try {
-      const storedLibraries = await figma.clientStorage.getAsync('libraries');
-      libraries = Array.isArray(storedLibraries) ? storedLibraries : [];
-    } catch (err) {
-      console.warn('Failed to get libraries from storage:', err);
-    }
     
-    // Get team libraries as fallback if clientStorage is empty
-    if (libraries.length === 0) {
-      try {
-        // Get libraries using the documented API method
-        const availableLibraries = await figma.variables.getLocalVariableCollectionsAsync();
-        libraries = availableLibraries.map(collection => ({
-          key: collection.key,
-          name: collection.name,
-          enabled: true  // Collections from getLocalVariableCollectionsAsync are always enabled
-        }));
-      } catch (err) {
-        console.warn('Failed to get team libraries:', err);
-        libraries = [];
-      }
-    }
+    // Convert collections to Library type with all required properties
+    const libraries: Library[] = collections.map(collection => ({
+      key: collection.key,
+      name: collection.name,
+      enabled: collection.remote,
+      type: collection.remote ? 'REMOTE' : 'LOCAL' // Add required type property
+    }));
 
     // Prepare analysis data
     const analysisData = {
@@ -1417,6 +1439,7 @@ async function listAllVariables() {
         key: lib.key,
         name: lib.name,
         enabled: lib.enabled,
+        type: lib.type,
         variableCount: localVariables.filter(v => v.remote && v.key.startsWith(lib.key)).length
       }))
     };
@@ -1437,11 +1460,292 @@ async function listAllVariables() {
 
   } catch (err) {
     console.error('Error listing variables:', err);
-    // Send error to UI
     figma.ui.postMessage({
       type: 'variables-analysis-error',
       message: 'Failed to analyze variables'
     });
   }
+}
+
+// Add new interfaces
+interface LibraryToken {
+  id: string;
+  name: string;
+  key: string;
+  type: VariableResolvedDataType;
+  libraryName: string;
+  isActive: boolean;
+  value?: any;
+  collection?: {
+    name: string;
+    id: string;
+  };
+  sourceType: 'REMOTE' | 'LOCAL';
+  subscribedID: string;
+  usages: Array<{
+    nodeId: string;
+    nodeName: string;
+    property: string;
+    mode: string;
+  }>;
+}
+
+interface TokenScanResult {
+  activeLibraryTokens: LibraryToken[];
+  inactiveLibraryTokens: LibraryToken[];
+}
+
+// Add separate interface for library token scan options
+interface LibraryTokenScanOption {
+  value: string;
+  label: string;
+  description: string;
+  icon: string;
+}
+
+// Add library token scan options (for "Unlinked Tokens" page)
+const LIBRARY_TOKEN_SCAN_OPTIONS: LibraryTokenScanOption[] = [
+  {
+    value: 'all',
+    label: 'All Library Tokens',
+    description: 'Find all tokens from inactive libraries',
+    icon: 'tokens'
+  },
+  {
+    value: 'colors',
+    label: 'Color Tokens',
+    description: 'Find color tokens from inactive libraries',
+    icon: 'fill'
+  },
+  {
+    value: 'typography',
+    label: 'Typography Tokens',
+    description: 'Find typography tokens from inactive libraries',
+    icon: 'typography'
+  },
+  {
+    value: 'spacing',
+    label: 'Spacing Tokens',
+    description: 'Find spacing tokens from inactive libraries',
+    icon: 'spacing'
+  }
+];
+
+interface PublishedVariable {
+  id: string;
+  subscribedId: string;
+  name: string;
+  key: string;
+  resolvedType: VariableResolvedDataType;
+  description?: string;
+  remote: boolean;
+  libraryName: string;
+  isPublished: boolean;
+}
+
+// Add scan control state
+let isScanPaused = false;
+let isScanStopped = false;
+
+async function scanForLibraryTokens(scanType: string = 'all'): Promise<TokenScanResult> {
+  // Reset control flags at start
+  isScanPaused = false;
+  isScanStopped = false;
+
+  const result: TokenScanResult = {
+    activeLibraryTokens: [],
+    inactiveLibraryTokens: []
+  };
+
+  try {
+    const variables = await figma.variables.getLocalVariablesAsync();
+    const collections = await figma.variables.getLocalVariableCollectionsAsync();
+
+    // Find nodes using variables
+    const nodesWithVariables = figma.currentPage.findAll(node => {
+      return ('boundVariables' in node && node.boundVariables !== null) ||
+             ('resolvedVariableModes' in node && node.resolvedVariableModes !== null);
+    });
+
+    // Track processed variables
+    const processedVariables = new Map<string, PublishedVariable>();
+
+    console.log('Initial scan:', {
+      variables: variables.length,
+      collections: collections.length,
+      nodesWithVariables: nodesWithVariables.length
+    });
+
+    // Process nodes
+    for (const node of nodesWithVariables) {
+      // Check for stop
+      if (isScanStopped) {
+        figma.ui.postMessage({ type: 'library-scan-stopped' });
+        return result;
+      }
+
+      // Check for pause
+      while (isScanPaused && !isScanStopped) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      try {
+        // Check resolved modes first (includes inherited modes)
+        if ('resolvedVariableModes' in node && node.resolvedVariableModes) {
+          const resolvedModes = node.resolvedVariableModes;
+          
+          // Process each variable reference
+          for (const [variableRef, modeInfo] of Object.entries(resolvedModes)) {
+            // Parse the variable reference
+            const matches = variableRef.match(/VariableCollectionId:([^/]+)\/(\d+):(\d+)/);
+            if (matches) {
+              const [_, collectionId, variableId, variableSubId] = matches;
+              const [modeId, aliasId] = modeInfo.split(':');
+
+              console.log('Variable Usage:', {
+                collectionId,
+                variableId: `${variableId}:${variableSubId}`,
+                modeId,
+                aliasId,
+                nodeName: node.name,
+                nodeType: node.type
+              });
+            }
+          }
+        }
+
+        // Then check explicit bindings
+        if (node.boundVariables) {
+          for (const [property, binding] of Object.entries(node.boundVariables)) {
+            if (!binding || typeof binding !== 'object' || !('type' in binding)) continue;
+
+            if (binding.type === 'VARIABLE_ALIAS') {
+              const variableBinding = binding as VariableAlias;
+              const variable = await figma.variables.getVariableByIdAsync(variableBinding.id);
+              if (!variable) continue;
+
+              const collection = collections.find(c => c.id === variable.variableCollectionId);
+              if (!collection) continue;
+
+              // Check if variable is from a published library
+              const isPublished = variable.remote && variable.key.includes(':');
+              const [libraryKey] = variable.key.split(':');
+
+              // Check if library is active
+              let isActive = false;
+              try {
+                await figma.variables.importVariableByKeyAsync(variable.key);
+                isActive = true;
+              } catch {
+                isActive = false;
+              }
+
+              // Get current mode value
+              const modeId = Object.keys(variable.valuesByMode)[0];
+              const currentValue = variable.valuesByMode[modeId];
+
+              const token: LibraryToken = {
+                id: variable.id,
+                name: variable.name,
+                key: variable.key,
+                type: variable.resolvedType,
+                libraryName: collection.name,
+                isActive,
+                value: currentValue,
+                collection: {
+                  name: collection.name,
+                  id: collection.id
+                },
+                sourceType: 'REMOTE',
+                subscribedID: libraryKey,
+                usages: [{
+                  nodeId: node.id,
+                  nodeName: node.name,
+                  property,
+                  mode: modeId
+                }]
+              };
+
+              if (isActive) {
+                result.activeLibraryTokens.push(token);
+              } else {
+                result.inactiveLibraryTokens.push(token);
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Error processing node:', err);
+      }
+
+      // Update progress
+      figma.ui.postMessage({
+        type: 'library-scan-progress',
+        progress: Math.round((nodesWithVariables.indexOf(node) + 1) / nodesWithVariables.length * 100),
+        currentNode: {
+          name: node.name,
+          type: node.type,
+          processedCount: nodesWithVariables.indexOf(node) + 1,
+          totalCount: nodesWithVariables.length
+        }
+      });
+    }
+
+    console.log('Scan Results:', {
+      processedVariables: processedVariables.size,
+      publishedVariables: Array.from(processedVariables.values()).filter(v => v.isPublished).length,
+      activeTokens: result.activeLibraryTokens.length,
+      inactiveTokens: result.inactiveLibraryTokens.length,
+      activeLibraries: new Set(result.activeLibraryTokens.map(t => t.subscribedID)).size,
+      inactiveLibraries: new Set(result.inactiveLibraryTokens.map(t => t.subscribedID)).size
+    });
+
+    // Only send completion if not stopped
+    if (!isScanStopped) {
+      figma.ui.postMessage({
+        type: 'library-scan-complete',
+        summary: {
+          totalNodes: nodesWithVariables.length,
+          totalTokens: result.activeLibraryTokens.length + result.inactiveLibraryTokens.length
+        }
+      });
+    }
+
+  } catch (err) {
+    console.error('Error scanning library tokens:', err);
+    figma.ui.postMessage({
+      type: 'error',
+      message: 'Failed to scan library tokens'
+    });
+  }
+
+  return result;
+}
+
+// Update progress handling
+function updateProgress(progress: number) {
+  figma.ui.postMessage({
+    type: 'scan-progress',
+    progress: Math.max(0, Math.min(100, progress)),
+    isScanning: true
+  });
+}
+
+// Reset progress
+function resetProgress() {
+  figma.ui.postMessage({
+    type: 'scan-progress',
+    progress: 0,
+    isScanning: false
+  });
+}
+
+// Complete progress
+function completeProgress() {
+  figma.ui.postMessage({
+    type: 'scan-progress',
+    progress: 100,
+    isScanning: false
+  });
 }
 
