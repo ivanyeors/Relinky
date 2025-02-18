@@ -153,17 +153,74 @@ function formatTypographyValue(value: any): string {
   return `${fontFamily} ${fontWeight} ${fontSize}px`;
 }
 
-// Update the scanForTextTokens function with better progress reporting
+// Update helper function to properly check if a node is truly visible
+function isNodeVisible(node: BaseNode): boolean {
+  try {
+    // Check if the node itself has a visible property
+    if ('visible' in node && !(node as SceneNode).visible) {
+      return false;
+    }
+
+    // Check if node is inside a collapsed group
+    // A node in a collapsed group is effectively hidden
+    let current: BaseNode | null = node;
+    while (current && current.parent) {
+      if (current.parent.type === 'GROUP') {
+        const parentGroup = current.parent as GroupNode;
+        // If any parent group is collapsed, the node is not visible
+        if (!parentGroup.expanded) {
+          return false;
+        }
+      }
+      
+      // Check parent visibility
+      if ('visible' in current.parent && !(current.parent as SceneNode).visible) {
+        return false;
+      }
+      
+      current = current.parent;
+    }
+
+    return true;
+  } catch (err) {
+    console.warn('Error checking node visibility:', err);
+    // Default to visible if there's an error
+    return true;
+  }
+}
+
+// Add helper to check if a node should be included in scan
+function shouldIncludeNode(node: BaseNode, ignoreHiddenLayers: boolean): boolean {
+  // If we're not ignoring hidden layers, include all nodes
+  if (!ignoreHiddenLayers) {
+    return true;
+  }
+
+  // Check visibility status
+  return isNodeVisible(node);
+}
+
+// Update scanForTextTokens to respect hidden layers setting
 async function scanForTextTokens(
   progressCallback: (progress: number) => void,
-  nodesToScan?: SceneNode[]
+  nodesToScan?: SceneNode[],
+  ignoreHiddenLayers: boolean = false // Add parameter
 ): Promise<MissingReference[]> {
   const missingRefs: MissingReference[] = [];
   
   try {
     // Use type guard to ensure we only get TextNodes
     const textNodes = (nodesToScan || figma.currentPage.findAll())
-      .filter(node => node.type === 'TEXT') as TextNode[];
+      .filter(node => {
+        if (node.type !== 'TEXT') return false;
+        
+        // Check visibility if ignoreHiddenLayers is true
+        if (ignoreHiddenLayers && !isNodeVisible(node)) {
+          return false;
+        }
+        
+        return true;
+      }) as TextNode[];
     const totalNodes = textNodes.length;
     let processedNodes = 0;
     
@@ -233,16 +290,23 @@ async function scanForTextTokens(
   return missingRefs;
 }
 
-// Function to scan for missing color variables
+// Update scanForColorTokens to respect hidden layers setting
 async function scanForColorTokens(
   progressCallback: (progress: number) => void,
-  nodesToScan?: SceneNode[]
+  nodesToScan?: SceneNode[],
+  ignoreHiddenLayers: boolean = false // Add parameter
 ): Promise<MissingReference[]> {
   const missingRefs: MissingReference[] = [];
   
   try {
     const nodes = (nodesToScan || figma.currentPage.findAll()).filter(node => {
       if (!node || node.removed) return false;
+      
+      // Check visibility if ignoreHiddenLayers is true
+      if (ignoreHiddenLayers && !isNodeVisible(node)) {
+        return false;
+      }
+      
       return 'fills' in node || 'strokes' in node || 'backgroundColor' in node;
     });
 
@@ -391,6 +455,7 @@ interface PluginMessage {
   references?: Record<string, MissingReference[]>;
   scanEntirePage?: boolean;
   isRescan?: boolean;
+  ignoreHiddenLayers?: boolean;
 }
 
 // Add these at the top with other state variables
@@ -400,6 +465,10 @@ let initialScanSelection: string[] = []; // Store initial selection when first s
 // Update the selection change handler
 figma.on('selectionchange', async () => {
   const selection = figma.currentPage.selection;
+  
+  // Check for instances in selection
+  const hasInstances = selection.some(node => node.type === 'INSTANCE');
+  
   const validSelection = selection.filter(node => 
     node.type === 'FRAME' || 
     node.type === 'COMPONENT' || 
@@ -417,15 +486,17 @@ figma.on('selectionchange', async () => {
     type: 'selection-updated',
     hasSelection: validSelection.length > 0,
     count: validSelection.length,
-    selectedFrameIds: validSelection.map(node => node.id)
+    selectedFrameIds: validSelection.map(node => node.id),
+    hasInstances // Add this flag
   });
 });
 
-// Update scanForMissingReferences to use async node fetching
+// Update scanForMissingReferences to pass the ignoreHiddenLayers setting
 async function scanForMissingReferences(
   scanType: ScanType,
   selectedFrameIds?: string[],
-  progressCallback?: (progress: number) => void
+  progressCallback?: (progress: number) => void,
+  ignoreHiddenLayers: boolean = false // Add parameter
 ): Promise<MissingReference[]> {
   let nodesToScan: SceneNode[] = [];
   
@@ -442,7 +513,8 @@ async function scanForMissingReferences(
       // Filter out null values and include SECTION type
       const validFrames = selectedFrames.filter((node): node is FrameNode | ComponentNode | ComponentSetNode | SectionNode => 
         node !== null && 
-        (node.type === 'FRAME' || node.type === 'COMPONENT' || node.type === 'COMPONENT_SET' || node.type === 'SECTION')
+        (node.type === 'FRAME' || node.type === 'COMPONENT' || node.type === 'COMPONENT_SET' || node.type === 'SECTION') &&
+        shouldIncludeNode(node, ignoreHiddenLayers)
       );
       
       // Get all children of selected frames and sections
@@ -451,21 +523,29 @@ async function scanForMissingReferences(
         if (frame.type === 'SECTION') {
           const sectionChildren = frame.children.reduce<SceneNode[]>((children, child) => {
             if (child.type === 'FRAME' || child.type === 'COMPONENT' || child.type === 'COMPONENT_SET') {
-              return [...children, child, ...child.findAll()];
+              if (shouldIncludeNode(child, ignoreHiddenLayers)) {
+                // Only include visible children if ignoreHiddenLayers is true
+                const visibleDescendants = child.findAll(n => shouldIncludeNode(n, ignoreHiddenLayers));
+                return [...children, child, ...visibleDescendants];
+              }
             }
             return children;
           }, []);
           return [...acc, ...sectionChildren];
         }
-        // Include the frame itself and all its descendants
-        return [...acc, frame, ...frame.findAll()];
+        // Include the frame itself and all its visible descendants
+        if (shouldIncludeNode(frame, ignoreHiddenLayers)) {
+          const visibleDescendants = frame.findAll(n => shouldIncludeNode(n, ignoreHiddenLayers));
+          return [...acc, frame, ...visibleDescendants];
+        }
+        return acc;
       }, []);
     } else {
       console.log('Scanning entire page');
-      nodesToScan = figma.currentPage.findAll();
+      nodesToScan = figma.currentPage.findAll(n => shouldIncludeNode(n, ignoreHiddenLayers));
     }
 
-    console.log(`Found ${nodesToScan.length} nodes to scan`);
+    console.log(`Found ${nodesToScan.length} nodes to scan (ignoreHiddenLayers: ${ignoreHiddenLayers})`);
     let refs: MissingReference[] = [];
     
     switch (scanType) {
@@ -475,9 +555,11 @@ async function scanForMissingReferences(
         }, nodesToScan);
         break;
       case 'vertical-gap':
-        refs = await scanForVerticalGap(progress => {
-          if (progressCallback) progressCallback(progress);
-        }, nodesToScan);
+        refs = await scanForVerticalGap(
+          progress => progressCallback?.(progress),
+          nodesToScan,
+          ignoreHiddenLayers
+        );
         break;
       case 'horizontal-padding':
       case 'vertical-padding':
@@ -492,14 +574,18 @@ async function scanForMissingReferences(
         break;
       case 'fill':
       case 'stroke':
-        refs = await scanForColorTokens(progress => {
-          if (progressCallback) progressCallback(progress);
-        }, nodesToScan);
+        refs = await scanForColorTokens(
+          progress => progressCallback?.(progress),
+          nodesToScan,
+          ignoreHiddenLayers
+        );
         break;
       case 'typography':
-        refs = await scanForTextTokens(progress => {
-          if (progressCallback) progressCallback(progress);
-        }, nodesToScan);
+        refs = await scanForTextTokens(
+          progress => progressCallback?.(progress),
+          nodesToScan,
+          ignoreHiddenLayers
+        );
         break;
     }
 
@@ -744,7 +830,8 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
               type: 'scan-progress', 
               progress
             });
-          }
+          },
+          msg.ignoreHiddenLayers || false
         );
 
         // Check if scan was cancelled before sending results
@@ -775,7 +862,8 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
               type: 'scan-progress', 
               progress
             });
-          }
+          },
+          msg.ignoreHiddenLayers || false
         );
 
         // Rest of the existing code...
@@ -1063,18 +1151,24 @@ let currentWindowSize = {
 
 async function scanForVerticalGap(
   progressCallback: (progress: number) => void,
-  nodesToScan: SceneNode[]
+  nodesToScan: SceneNode[],
+  ignoreHiddenLayers: boolean = false // Add parameter
 ): Promise<MissingReference[]> {
   const missingRefs: MissingReference[] = [];
   
   try {
-    // Filter nodes with vertical auto-layout from the provided nodes
-    const nodes = nodesToScan.filter(node => 
-      hasAutoLayout(node) && 
-      node.layoutMode === 'VERTICAL' &&
-      node.itemSpacing > 0 && 
-      !node.boundVariables?.itemSpacing // Only include if no variable binding
-    );
+    const nodes = nodesToScan.filter(node => {
+      if (!hasAutoLayout(node) || node.layoutMode !== 'VERTICAL') {
+        return false;
+      }
+      
+      // Check visibility if ignoreHiddenLayers is true
+      if (ignoreHiddenLayers && !isNodeVisible(node)) {
+        return false;
+      }
+      
+      return node.itemSpacing > 0 && !node.boundVariables?.itemSpacing;
+    });
     
     console.log(`Found ${nodes.length} nodes with unlinked vertical auto-layout`);
 
