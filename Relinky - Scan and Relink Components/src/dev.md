@@ -16,6 +16,8 @@ Style consistency guide
 - Follow the same spacing inbetween all components (4px)
 - Use the same border radius for all components (6px)
 
+**Unlinked Values page**
+
 UI, Component Style and Hierarchy guide
 *Scan Settings section*
 - Title & Watch Changes button → Scan Settings dropdown → Selection status
@@ -102,5 +104,99 @@ Interaction State Guide
     - Spinner style should always be consistent
 
 
+**Unlinked Variables Feature**
 
+UI, Component Style and Hierarchy guide
+*Scan Settings section*
+- Title & Watch Changes button → Scan Settings dropdown → Selection status
+- Follow the same styling as Unlinked Values page
 
+*Scan Criteria section*
+- Title → Variable Types Selection cards
+*Variable Type Selection cards*
+- Icons should be on the left
+- Text Title should be on the right
+- Each card represents a variable type (Color, Typography, Spacing, etc.)
+- Cards should show selection state (selected/unselected)
+- Multiple selection should be allowed
+
+*Scanning section*
+Title → Progress Bar → Buttons
+*Progress Bar*
+- Follows the same style as Unlinked Values page
+- Progress bar states:
+    - Scanning: Blue 
+    - Ready to scan: Gray
+    - Scan complete: Green
+    - Scan error: Red
+- Scanning status text:
+    - Scanning: "Scanning for unlinked variables..."
+    - Ready to scan: "Ready to scan"
+    - Scan complete: "Scan complete"
+    - Scan complete no results: "No unlinked variables found"
+    - Scan error: "Scan error"
+
+*Variables Scan Result*
+- Grouped by library name
+- Each library group shows:
+    - Library name
+    - Total variables count
+    - Activation status (Active/Inactive)
+    - Activate library button (if inactive)
+
+- Each variable in the group shows:
+    - Variable name
+    - Variable type (Color, Typography, Number, etc)
+    - Usage count
+    - Preview (based on variable type):
+        - Color: Color swatch
+        - Typography: Font preview
+        - Number: Value with unit
+
+- Each variable has:
+    - Dropdown to show usage details
+    - Select all instances button
+
+- Usage details show:
+    - Node name
+    - Property name (e.g., "fill", "text", "spacing")
+    - Select instance button
+
+- Group actions:
+    - Select all variables in library
+    - Activate library (if inactive)
+
+Interaction State Guide
+*Follow the same interaction states as Unlinked Values page*
+- Active state: Blue
+- Hover state: Light Blue
+- Focus state: Blue outline
+- Disabled state: Gray
+- Error state: Red
+- Success state: Green
+- Loading state: Loading spinner with dark blue color
+
+Additional Features
+- Real-time library status monitoring
+- Batch selection of variables by type
+- Quick preview of variable values
+- Direct library activation from results
+- Filter variables by type or usage
+- Sort by name, usage count, or type
+- Export results to CSV/JSON
+
+Error Handling
+- Show clear error messages for:
+    - Failed library activation
+    - Network connectivity issues
+    - API limitations
+    - Permission issues
+- Provide retry options where applicable
+- Cache results to prevent data loss
+
+Performance Considerations
+- Implement pagination for large result sets
+- Lazy load variable previews
+- Cache library status checks
+- Batch process selections
+- Progressive loading of usage details
