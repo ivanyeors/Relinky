@@ -18,6 +18,7 @@
         <div class="scan-section">
           <div class="step-container">
             <div class="step-content">
+              <!-- 1. Title and Watch button -->
               <div class="step-header">
                 <h3 class="step-title">Select frames or components</h3>
                 <button 
@@ -43,7 +44,7 @@
                 </button>
               </div>
 
-              <!-- After the scan-scope-selector div -->
+              <!-- 2. Scan Settings dropdown (move this before selection status) -->
               <div class="scan-settings">
                 <div class="settings-header">
                   <h4 class="settings-title">Scan Settings</h4>
@@ -107,6 +108,7 @@
                 </div>
               </div>
 
+              <!-- 3. Selection status -->
               <div class="selection-container">
                 <!-- Warning for instances -->
                 <div v-if="hasInstances" class="toast warning">
@@ -178,20 +180,32 @@
             <!-- Scan Type Selection -->
             <div class="step-container">
               <div class="step-content">
+                <!-- 1. Title -->
                 <h3 class="step-title">Choose what to scan for</h3>
-                <!-- Restore icons in scan cards for Unlinked Values -->
+
+                <!-- 2. Scan Selection cards -->
                 <div class="scan-cards">
-                  <div 
-                    v-for="option in tokenScanOptions" 
-                    :key="option.value"
-                    class="scan-card"
-                    :class="{ 'selected': selectedScanType === option.value }"
-                    @click="selectedScanType = option.value"
+                  <div v-for="option in tokenScanOptions"
+                       :key="option.value"
+                       class="scan-card"
+                       :class="{ 
+                         'selected': selectedScanType === option.value,
+                         'interactive': true
+                       }"
+                       role="option"
+                       :aria-selected="selectedScanType === option.value"
+                       tabindex="0"
+                       @click="selectScanType(option.value)"
                   >
-                    <div class="scan-card-icon" v-html="icons[option.icon]"></div>
+                    <div class="scan-card-icon">
+                      <div class="icon" v-html="icons[option.icon]"></div>
+                    </div>
+                    
                     <div class="scan-card-content">
-                      <div class="scan-card-title">{{ option.label }}</div>
-                      <div class="scan-card-description">{{ option.description }}</div>
+                      <div class="scan-card-text">
+                        <div class="scan-card-title">{{ option.label }}</div>
+                        <div class="scan-card-description">{{ option.description }}</div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -207,61 +221,59 @@
                 <!-- 1. Title -->
                 <h3 class="step-title">Start scanning</h3>
 
-                <!-- Progress Bar Component -->
+                <!-- 2. Progress Bar -->
                 <div class="progress-container">
                   <div class="progress-bar">
-                    <!-- Background Track -->
                     <div class="progress-track"></div>
-                    <!-- Progress Fill -->
-                    <div 
-                      class="progress-fill" 
-                      :style="{ 
-                        width: getProgressWidth(),
-                        background: getProgressBarColor()
-                      }"
-                    ></div>
-                    <!-- Progress Text (Always Centered) -->
-                    <div class="progress-text">
-                      {{ getProgressStatus() }}
+                    <div class="progress-fill" 
+                         :style="{ 
+                           width: `${scanProgress}%`,
+                           background: getProgressBarColor()
+                         }"
+                    >
+                      <span class="progress-text">{{ getProgressStatus() }}</span>
                     </div>
                   </div>
                 </div>
 
                 <!-- 3. Buttons -->
                 <div class="scan-buttons">
-                  <!-- Scan Button -->
+                  <!-- Start/Rescan button -->
                   <button 
                     v-if="!isScanning"
-                    @click="startScan()" 
+                    @click="startScan(hasResults)" 
                     class="button primary-button"
                     :disabled="!canStartScan"
                     :title="getStartScanButtonTitle()"
                   >
-                    Start Scan
+                    <span class="button-icon">{{ hasResults ? '🔄' : '⚡' }}</span>
+                    {{ hasResults ? 'Rescan' : 'Start Scan' }}
                   </button>
+                  
+                  <!-- Stop button - only show when actively scanning -->
                   <button 
-                    v-if="!isScanning && hasResults"
-                    @click="startScan(true)" 
-                    class="button secondary-button"
+                    v-if="showStopButton"
+                    @click="stopScan()" 
+                    class="button warning-button"
                   >
-                    Rescan
+                    <span class="button-icon">⏹</span>
+                    Stop
                   </button>
                 </div>
               </div>
             </div>
 
             <!-- Add a new section for scan results with consistent styling -->
-            <template v-if="!isScanning && Object.keys(groupedReferences).length > 0">
+            <template v-if="showScanResults">
               <div class="divider"></div>
               
               <div class="step-container">
                 <div class="step-content">
+                  <!-- Results Header -->
                   <div class="results-header">
                     <div class="step-title-with-badge">
                       <h3 class="step-title">Scan results</h3>
-                      <span class="results-badge">
-                        {{ Object.values(groupedByValue).reduce((sum, group) => sum + group.refs.length, 0) }}
-                      </span>
+                      <span class="results-badge">{{ getTotalResultsCount() }}</span>
                     </div>
                     <div class="results-actions">
                       <button 
@@ -272,76 +284,64 @@
                       </button>
                     </div>
                   </div>
+
+                  <!-- Results Container -->
                   <div class="results-container">
-                    <div v-for="(group, groupKey) in groupedByValue" :key="groupKey" class="value-group">
-                      <!-- Value Group Header -->
-                      <div class="value-group-header" @click="toggleGroup(groupKey)">
-                        <div class="header-left">
-                          <span class="expand-icon">{{ isGroupExpanded(groupKey) ? '▼' : '▶' }}</span>
-                          <!-- Special handling for typography items -->
+                    <div v-for="(group, groupKey) in groupedByValue" 
+                         :key="groupKey" 
+                         class="value-group"
+                    >
+                      <!-- Group Header -->
+                      <div class="value-group-header" 
+                           @click="toggleGroup(groupKey)"
+                           :class="{ 'expanded': isGroupExpanded(groupKey) }"
+                      >
+                        <div class="group-info">
+                          <span class="expand-icon">
+                            {{ isGroupExpanded(groupKey) ? '▼' : '▶' }}
+                          </span>
+                          <!-- Show appropriate preview based on type -->
                           <template v-if="group.refs[0]?.type === 'typography'">
-                            <div class="typography-info">
-                              <div class="typography-tags">
-                                <span class="typography-tag font-family">{{ group.refs[0].currentValue.fontFamily }}</span>
-                                <span class="typography-tag weight">{{ group.refs[0].currentValue.fontWeight }}</span>
-                                <span class="typography-tag size">{{ group.refs[0].currentValue.fontSize }}px</span>
-                              </div>
+                            <div class="typography-preview">
+                              {{ formatTypographyValue(group.value) }}
                             </div>
                           </template>
                           <template v-else-if="group.refs[0]?.type === 'fill' || group.refs[0]?.type === 'stroke'">
                             <color-preview :color="group.value" />
                           </template>
-                          <template v-else-if="group.refs[0]?.type === 'gap'">
-                            <span class="value-label">{{ formatGapValue(group.value, group.refs[0]) }}</span>
-                          </template>
                           <template v-else>
                             <span class="value-label">{{ formatValue(group.value) }}</span>
                           </template>
                         </div>
-                        <div class="header-right">
-                          <span class="total-count">{{ group.refs.length }} instances</span>
+                        <div class="group-actions">
+                          <span class="instance-count">{{ group.refs.length }} instances</span>
                           <button 
-                            class="select-button" 
-                            :class="{ 'loading': isSelecting(groupKey) }"
-                            @click.stop="selectGroup(group.refs, groupKey)"
-                            :disabled="isSelecting(groupKey)"
+                            class="button secondary-button"
+                            @click.stop="selectGroup(group.refs, $event)"
                           >
-                            <span v-if="!isSelecting(groupKey)">Select All</span>
-                            <span v-else class="loading-spinner"></span>
+                            Select All
                           </button>
                         </div>
                       </div>
 
-                      <!-- Expanded Content -->
-                      <div v-if="isGroupExpanded(groupKey)" class="reference-details">
-                        <div v-for="ref in group.refs" :key="ref.nodeId" class="reference-item">
-                          <!-- Special handling for typography items -->
-                          <template v-if="ref.type === 'typography'">
-                            <div class="typography-details">
-                              <div class="typography-preview">{{ ref.currentValue.content }}</div>
-                              <div class="typography-specs">
-                                <div class="typography-tags">
-                                  <span class="typography-tag font-family">{{ ref.currentValue.fontFamily }}</span>
-                                  <span class="typography-tag weight">{{ ref.currentValue.fontWeight }}</span>
-                                  <span class="typography-tag size">{{ ref.currentValue.fontSize }}px</span>
-                                  <span v-if="ref.currentValue.lineHeight" class="typography-tag">LH: {{ ref.currentValue.lineHeight }}</span>
-                                  <span v-if="ref.currentValue.letterSpacing" class="typography-tag">LS: {{ ref.currentValue.letterSpacing }}</span>
-                                </div>
-                              </div>
-                            </div>
-                          </template>
-                          <template v-else>
+                      <!-- Group Details -->
+                      <div v-if="isGroupExpanded(groupKey)" 
+                           class="value-group-details"
+                           @click.stop
+                      >
+                        <div v-for="ref in group.refs" 
+                             :key="ref.nodeId" 
+                             class="reference-item"
+                        >
+                          <div class="reference-info">
                             <div class="reference-name">{{ ref.nodeName }}</div>
                             <div class="reference-location">{{ ref.location }}</div>
-                          </template>
+                          </div>
                           <button 
-                            class="select-button"
-                            :class="{ 'loading': isSelecting(ref.nodeId) }"
-                            @click="selectGroup([ref], ref.nodeId)"
-                            :disabled="isSelecting(ref.nodeId)"
+                            class="button secondary-button small"
+                            @click="selectNode(ref.nodeId, $event)"
                           >
-                            <span v-if="!isSelecting(ref.nodeId)">Select</span>
-                            <span v-else class="loading-spinner"></span>
+                            Select
                           </button>
                         </div>
                       </div>
@@ -359,18 +359,26 @@
                 <!-- Scan Type Selection -->
                 <h3 class="step-title">Choose what to scan for</h3>
                 <!-- Restore icons in scan cards for Unlinked Tokens -->
-                <div class="scan-cards">
-                  <div 
-                    v-for="option in libraryTokenScanOptions" 
-                    :key="option.value"
-                    class="scan-card"
-                    :class="{ 'selected': selectedLibraryTokenScanType === option.value }"
-                    @click="selectedLibraryTokenScanType = option.value"
+                <div class="scan-cards library-scan-cards" 
+                     role="listbox" 
+                     tabindex="0"
+                     @keydown="handleLibraryScanCardKeydown"
+                >
+                  <div v-for="(option, index) in libraryTokenScanOptions"
+                       :key="option.value"
+                       class="scan-card"
+                       role="option"
+                       :aria-selected="selectedLibraryTokenScanType === option.value"
+                       :tabindex="selectedLibraryTokenScanType === option.value ? 0 : -1"
+                       @click="selectLibraryScanType(option.value)"
                   >
                     <div class="scan-card-icon" v-html="icons[option.icon]"></div>
                     <div class="scan-card-content">
-                      <div class="scan-card-title">{{ option.label }}</div>
-                      <div class="scan-card-description">{{ option.description }}</div>
+                      <span v-if="isLoadingOption === option.value" class="loading-spinner"></span>
+                      <template v-else>
+                        <div class="scan-card-title">{{ option.label }}</div>
+                        <div class="scan-card-description">{{ option.description }}</div>
+                      </template>
                     </div>
                   </div>
                 </div>
@@ -382,20 +390,9 @@
                   <!-- Progress Bar - Always Visible -->
                   <div class="progress-container">
                     <div class="progress-bar">
-                      <!-- Background Track -->
                       <div class="progress-track"></div>
-                      <!-- Progress Fill -->
-                      <div 
-                        class="progress-fill" 
-                        :style="{ 
-                          width: getProgressWidth(),
-                          background: getProgressBarColor()
-                        }"
-                      ></div>
-                      <!-- Progress Text Inside Bar -->
-                      <div class="progress-text">
-                        {{ getProgressStatus() }}
-                      </div>
+                      <div class="progress-fill" :style="{ width: getProgressWidth() }"></div>
+                      <div class="progress-text">{{ getProgressStatus() }}</div>
                     </div>
                   </div>
 
@@ -647,10 +644,27 @@
           </svg>
           <svg v-else width="16" height="16" viewBox="0 0 16 16" fill="none">
             <path fill-rule="evenodd" clip-rule="evenodd" d="M8 1L14.6667 13H1.33334L8 1ZM8 3.66667L3.73334 11.6667H12.2667L8 3.66667ZM7.33334 6H8.66668V8.66667H7.33334V6ZM7.33334 10H8.66668V11.3333H7.33334V10Z" fill="currentColor"/>
-          </svg>
+        </svg>
         </div>
         <span class="success-toast-message">{{ successMessage }}</span>
         <button class="success-toast-close" @click="dismissToast">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M12.6667 4.27337L11.7267 3.33337L8.00001 7.06004L4.27334 3.33337L3.33334 4.27337L7.06001 8.00004L3.33334 11.7267L4.27334 12.6667L8.00001 8.94004L12.6667 4.27337Z" fill="currentColor"/>
+        </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Add error toast component -->
+    <div class="error-toast" v-if="showErrorToast">
+      <div class="error-toast-content">
+        <div class="error-toast-icon">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path fill-rule="evenodd" clip-rule="evenodd" d="M8 1.33337L14.6667 13.3334H1.33334L8 1.33337ZM7.33334 6.66671H8.66668V9.33337H7.33334V6.66671ZM7.33334 10.6667H8.66668V12H7.33334V10.6667Z" fill="currentColor"/>
+          </svg>
+        </div>
+        <span class="error-toast-message">{{ errorMessage }}</span>
+        <button class="error-toast-close" @click="dismissErrorToast">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <path d="M12.6667 4.27337L11.7267 3.33337L8.00001 7.06004L4.27334 3.33337L3.33334 4.27337L7.06001 8.00004L3.33334 11.7267L4.27334 12.6667L8.00001 8.94004L12.6667 4.27337Z" fill="currentColor"/>
           </svg>
@@ -1222,6 +1236,7 @@
       color: var(--figma-color-text);
     }
 
+    /* Update scan card styles */
     .scan-cards {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
@@ -1238,15 +1253,32 @@
       cursor: pointer;
       border: 1px solid transparent;
       transition: all 0.2s ease;
+      user-select: none;
     }
 
-    .scan-card:hover {
+    /* Combine hover and active states */
+    .scan-card:hover:not(.selected),
+    .scan-card:active:not(.selected) {
       background: var(--figma-color-bg-hover);
+      border-color: var(--figma-color-border);
     }
 
+    /* Selected state (includes active state) */
     .scan-card.selected {
-      background: var(--figma-color-bg-brand-tertiary);
+      background: var(--figma-color-bg-brand);
       border-color: var(--figma-color-border-brand);
+    }
+
+    .scan-card.selected .scan-card-icon,
+    .scan-card.selected .scan-card-title,
+    .scan-card.selected .scan-card-description {
+      color: white;
+    }
+
+    /* Focus state */
+    .scan-card:focus {
+      outline: none;
+      box-shadow: 0 0 0 2px var(--figma-color-border-brand);
     }
 
     .scan-card-icon {
@@ -1257,27 +1289,32 @@
       justify-content: center;
       color: var(--figma-color-text);
       flex-shrink: 0;
-    }
-
-    .scan-card.selected .scan-card-icon {
-      color: var(--figma-color-text-brand);
+      pointer-events: none;
     }
 
     .scan-card-content {
       flex: 1;
-      min-width: 0; /* Prevent content from pushing card wider */
+      min-width: 0;
+      pointer-events: none;
+    }
+
+    .scan-card-text {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
     }
 
     .scan-card-title {
-      font-weight: 500;
-      margin-bottom: 4px;
+      font-weight: 600;
+      font-size: 13px;
       color: var(--figma-color-text);
+      transition: color 0.2s ease;
     }
 
     .scan-card-description {
       font-size: 11px;
       color: var(--figma-color-text-secondary);
-      line-height: 14px;
+      transition: color 0.2s ease;
     }
 
     .scan-card.selected .scan-card-icon {
@@ -1285,6 +1322,10 @@
     }
 
     .scan-card.selected .scan-card-title {
+      color: var(--figma-color-text-brand);
+    }
+
+    .scan-card.selected .scan-card-description {
       color: var(--figma-color-text-brand);
     }
 
@@ -3346,6 +3387,670 @@
       padding: 0px 3px;
       margin-left: 2px;
     }
+
+    .progress-bar {
+      position: relative;
+      height: 32px; /* Increase height to fit text */
+      border-radius: 6px;
+    }
+
+    .progress-text {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 500;
+      z-index: 1;
+    }
+
+    /* Consistent loading spinner style */
+    .loading-spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid var(--figma-color-bg-brand);
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+
+    /* Use the same loading style for all buttons */
+    .button.loading {
+      position: relative;
+      color: transparent !important;
+    }
+
+    .button.loading .loading-spinner {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Active state */
+    .button.active {
+      background: var(--figma-color-bg-brand);
+      color: white;
+    }
+
+    /* Hover state */
+    .button:hover:not(:disabled) {
+      background: var(--figma-color-bg-hover);
+    }
+
+    /* Focus state */
+    .button:focus {
+      outline: 2px solid var(--figma-color-bg-brand);
+      outline-offset: 2px;
+    }
+
+    /* Disabled state */
+    .button:disabled {
+      background: var(--figma-color-bg-disabled);
+      color: var(--figma-color-text-disabled);
+      cursor: not-allowed;
+    }
+
+    /* Error state */
+    .button.error {
+      background: var(--figma-color-bg-danger);
+      color: white;
+    }
+
+    /* Success state */
+    .button.success {
+      background: var(--figma-color-bg-success);
+      color: white;
+    }
+
+    :root {
+      --spacing-xxs: 2px;  /* Section padding */
+      --spacing-xs: 4px;   /* Component spacing */
+      --spacing-sm: 8px;   /* Larger gaps */
+      --spacing-md: 12px;  /* Button padding */
+    }
+
+    /* Apply consistent spacing */
+    .step-container {
+      padding: var(--spacing-xxs);
+    }
+
+    .step-content > * {
+      margin-bottom: var(--spacing-xs);
+    }
+
+    .button {
+      padding: 0 var(--spacing-md);
+    }
+
+    /* Update progress bar styles */
+    .progress-fill {
+      transition: all 0.3s ease;
+      background: var(--progress-color);
+    }
+
+    /* Add progress bar state colors */
+    .progress-bar {
+      --progress-color: var(--figma-color-bg-disabled); /* Default state */
+    }
+
+    .progress-bar.scanning {
+      --progress-color: var(--figma-color-bg-brand); /* Scanning state */
+    }
+
+    .progress-bar.complete {
+      --progress-color: var(--figma-color-bg-success); /* Complete state */
+    }
+
+    .progress-bar.error {
+      --progress-color: var(--figma-color-bg-danger); /* Error state */
+    }
+
+    /* Add loading state styles for scan cards */
+    .scan-card.loading {
+      pointer-events: none;
+      opacity: 0.7;
+    }
+
+    .scan-card.loading .scan-card-content {
+      position: relative;
+    }
+
+    .scan-card.loading .loading-spinner {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    .error-toast {
+      position: fixed;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--figma-color-bg-danger);
+      color: white;
+      padding: 8px 12px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      z-index: 1000;
+    }
+
+    /* Add tooltip styles */
+    [data-tooltip] {
+      position: relative;
+    }
+
+    [data-tooltip]:before {
+      content: attr(data-tooltip);
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 4px 8px;
+      background: var(--figma-color-bg);
+      color: var(--figma-color-text);
+      border-radius: 4px;
+      font-size: 11px;
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+
+    [data-tooltip]:hover:before {
+      opacity: 1;
+    }
+
+    /* Add focus styles for keyboard navigation */
+    .scan-cards:focus {
+      outline: none;
+      box-shadow: 0 0 0 2px var(--figma-color-border-brand);
+      border-radius: 6px;
+    }
+
+    .scan-card:focus {
+      outline: none;
+      box-shadow: 0 0 0 2px var(--figma-color-border-brand);
+      border-radius: 6px;
+    }
+
+    /* Improve keyboard focus visibility */
+    .scan-card[aria-selected="true"] {
+      background: var(--figma-color-bg-brand-tertiary);
+      border-color: var(--figma-color-border-brand);
+    }
+
+    .scan-card[aria-selected="true"]:focus {
+      box-shadow: 0 0 0 2px var(--figma-color-border-brand),
+                  0 0 0 4px rgba(var(--figma-color-bg-brand-rgb), 0.2);
+    }
+
+    /* Update Progress Bar styles to match guide */
+    .progress-bar {
+      position: relative;
+      height: 32px;
+      border-radius: 6px;
+      overflow: hidden;
+      background: var(--figma-color-bg-disabled);
+    }
+
+    .progress-bar.scanning {
+      background: var(--figma-color-bg-brand);
+    }
+
+    .progress-bar.complete {
+      background: var(--figma-color-bg-success);
+    }
+
+    .progress-bar.error {
+      background: var(--figma-color-bg-danger);
+    }
+
+    .progress-text {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 500;
+      font-size: 12px;
+      z-index: 1;
+    }
+
+    /* Update consistent spacing variables */
+    :root {
+      --spacing-xxs: 2px;   /* Section padding */
+      --spacing-xs: 4px;    /* Component spacing */
+      --spacing-sm: 8px;    /* Medium gaps */
+      --spacing-md: 12px;   /* Large gaps */
+      --spacing-lg: 16px;   /* Section gaps */
+    }
+
+    /* Apply consistent padding */
+    .step-container {
+      padding: var(--spacing-xxs);
+    }
+
+    .step-content {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-xs);
+    }
+
+    .scan-card {
+      padding: var(--spacing-md);
+    }
+
+    .progress-container {
+      padding: var(--spacing-xxs);
+    }
+
+    .scan-buttons {
+      padding: var(--spacing-xxs);
+      gap: var(--spacing-xs);
+    }
+
+    .button {
+      padding: 0 var(--spacing-md);
+    }
+
+    /* Add consistent margins */
+    .step-title {
+      margin: var(--spacing-xxs) 0;
+    }
+
+    .divider {
+      margin: var(--spacing-sm) 0;
+    }
+
+    /* Update section spacing */
+    .scan-section {
+      margin: var(--spacing-lg) 0;
+    }
+
+    .results-section {
+      margin-top: var(--spacing-lg);
+    }
+
+    /* Update Progress Bar styles */
+    .progress-bar {
+      position: relative;
+      height: 32px;
+      border-radius: 6px;
+      overflow: hidden;
+      background: var(--figma-color-bg-disabled);
+      transition: background-color 0.3s ease;
+    }
+
+    .progress-fill {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      background: var(--figma-color-bg-brand);
+      transition: width 0.3s ease;
+    }
+
+    .progress-text {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 500;
+      font-size: 12px;
+      z-index: 1;
+    }
+
+    /* Progress bar states */
+    .progress-bar.scanning .progress-fill {
+      background: var(--figma-color-bg-brand);
+    }
+
+    .progress-bar.complete .progress-fill {
+      background: var(--figma-color-bg-success);
+    }
+
+    .progress-bar.error .progress-fill {
+      background: var(--figma-color-bg-danger);
+    }
+
+    /* Results section styles */
+    .results-container {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      /* Remove max-height limit */
+      height: auto;
+      overflow: visible;
+      padding: 8px;
+    }
+
+    .results-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .step-title-with-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .results-badge {
+      background: var(--figma-color-bg-brand);
+      color: white;
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .value-group {
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid var(--figma-color-border);
+    }
+
+    .value-group-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.2s ease;
+    }
+
+    .value-group-header:hover {
+      background: var(--figma-color-bg-hover);
+    }
+
+    .group-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .expand-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 16px;
+      height: 16px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    .group-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .instance-count {
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    .value-group-details {
+      border-top: 1px solid var(--figma-color-border);
+      padding: 8px;
+      background: var(--figma-color-bg);
+      /* Ensure details are scrollable if needed */
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .reference-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px;
+      border-radius: 4px;
+      margin-bottom: 4px;
+      background: var(--figma-color-bg-secondary);
+    }
+
+    .reference-item:hover {
+      background: var(--figma-color-bg-hover);
+    }
+
+    .reference-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .reference-name {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--figma-color-text);
+    }
+
+    .reference-location {
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    .button.small {
+      padding: 4px 8px;
+      font-size: 11px;
+    }
+
+    /* Update results container styles */
+    .results-container {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      /* Remove max-height limit */
+      height: auto;
+      overflow: visible;
+      padding: 8px;
+    }
+
+    /* Add debug outline if needed */
+    .step-container {
+      position: relative;
+    }
+
+    .value-group {
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      overflow: hidden;
+      margin-bottom: 8px;
+      border: 1px solid var(--figma-color-border);
+    }
+
+    .results-container {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      /* Remove max-height limit */
+      height: auto;
+      overflow: visible;
+      padding: 8px;
+      border: 1px solid var(--figma-color-border);
+      border-radius: 6px;
+      background: var(--figma-color-bg);
+      margin-top: 8px;
+    }
+
+    /* Add empty state */
+    .results-container:empty::after {
+      content: 'No results found';
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100px;
+      color: var(--figma-color-text-secondary);
+      font-size: 12px;
+    }
+
+    /* Update results container styles */
+    .results-container {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      /* Remove max-height limit */
+      height: auto;
+      overflow: visible;
+      padding: 8px;
+      border: 1px solid var(--figma-color-border);
+      border-radius: 6px;
+      background: var(--figma-color-bg);
+      margin-top: 8px;
+      /* Ensure container is visible */
+      min-height: 100px;
+    }
+
+    /* Add debug styles */
+    .debug-info {
+      padding: 8px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 11px;
+      white-space: pre-wrap;
+      color: var(--figma-color-text);
+    }
+
+    /* Ensure value groups are visible */
+    .value-group {
+      background: var(--figma-color-bg-secondary);
+      border: 1px solid var(--figma-color-border);
+      border-radius: 6px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+
+    /* Make sure the step container is visible */
+    .step-container {
+      position: relative;
+      z-index: 1;
+      background: var(--figma-color-bg);
+    }
+
+    /* Update button styles in results section */
+    .button.secondary-button {
+      /* Base styles */
+      background: var(--figma-color-bg);
+      border: 1px solid var(--figma-color-border);
+      color: var(--figma-color-text);
+      padding: 5px 12px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.1s ease;
+      
+      /* Ensure button stays above other elements */
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Hover state */
+    .button.secondary-button:hover {
+      background: var(--figma-color-bg-hover);
+      border-color: var(--figma-color-border-strong);
+    }
+
+    /* Active/Pressed state */
+    .button.secondary-button:active {
+      background: var(--figma-color-bg-pressed);
+      border-color: var(--figma-color-border-strong);
+      color: var(--figma-color-text);
+    }
+
+    /* Focus state */
+    .button.secondary-button:focus {
+      outline: none;
+      box-shadow: 0 0 0 2px var(--figma-color-border-brand-strong);
+    }
+
+    /* Small variant for reference items */
+    .button.secondary-button.small {
+      padding: 4px 8px;
+      font-size: 11px;
+      min-height: 24px;
+    }
+
+    /* Disabled state */
+    .button.secondary-button:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    /* Update group actions container */
+    .group-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: auto; /* Push to right */
+    }
+
+    /* Update reference item button container */
+    .reference-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px;
+      border-radius: 4px;
+      margin-bottom: 4px;
+      background: var(--figma-color-bg-secondary);
+      transition: background 0.1s ease;
+    }
+
+    .reference-item:hover {
+      background: var(--figma-color-bg-hover);
+    }
+
+    /* Add loading state for buttons */
+    .button.secondary-button.loading {
+      position: relative;
+      color: transparent;
+    }
+
+    .button.secondary-button.loading::after {
+      content: '';
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 12px;
+      height: 12px;
+      margin: -6px 0 0 -6px;
+      border: 2px solid var(--figma-color-icon);
+      border-right-color: transparent;
+      border-radius: 50%;
+      animation: button-spin 0.8s linear infinite;
+    }
+
+    @keyframes button-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
   </style>
 
   <!-- Add color preview template outside of style tag -->
@@ -3431,10 +4136,12 @@
         data() {
           return {
             activeTab: 'tokens',
-            selectedScanType: 'vertical-gap',
+            selectedScanType: null, // Remove default 'vertical-gap' value
             scanEntirePage: false,
             isScanning: false,
             scanProgress: 0,
+            scanError: false,
+            scanComplete: false,
             groupedReferences: {},
             expandedGroups: new Set(),
             hasSelection: false,
@@ -3739,19 +4446,16 @@
             return this.scanEntirePage ? 'entire-page' : 'selected-frames';
           },
           canStartScan() {
-            // Check if we have a valid scan scope (either selection or entire page)
-            const hasScanScope = this.hasSelection || this.scanEntirePage;
-            
-            // For library tokens tab
-            if (this.activeTab === 'library-tokens') {
-              return hasScanScope;  // Always has a default selection
-            }
-
-            // For unlinked values tab
-            return hasScanScope;  // Always has a default selection
+            return (this.hasSelection || this.scanEntirePage) && this.selectedScanType !== null;
           },
           hasResults() {
-            return Object.keys(this.groupedReferences).length > 0;
+            const hasRefs = Object.keys(this.groupedReferences).length > 0;
+            console.log('Has results?', {
+              groupedReferences: this.groupedReferences,
+              count: Object.keys(this.groupedReferences).length,
+              hasRefs
+            });
+            return hasRefs;
           },
           groupedByValue() {
             const valueGroups = {};
@@ -3803,6 +4507,19 @@
           },
           inactiveLibraryTokens() {
             return this.inactiveLibraryTokens;
+          },
+          showScanResults() {
+            const shouldShow = !this.isScanning && this.hasResults && this.scanComplete;
+            console.log('Show scan results?', {
+              isScanning: this.isScanning,
+              hasResults: this.hasResults,
+              scanComplete: this.scanComplete,
+              shouldShow
+            });
+            return shouldShow;
+          },
+          showStopButton() {
+            return this.isScanning && !this.scanComplete;
           }
         },
         methods: {
@@ -3829,14 +4546,24 @@
               }
             }, '*');
           },
-          async startScan(isRescan = false) {  // Remove event parameter
+          startScan(isRescan = false) {
+            if (this.isScanning) return;
+            
+            // Reset states
             this.isScanning = true;
             this.scanProgress = 0;
+            this.scanError = false;
+            this.scanComplete = false;
             
-            // Get the current selection if we're not scanning the entire page
+            if (!isRescan) {
+              this.clearResults();
+            }
+            
+            // Get current selection
             const selectedFrameIds = !this.scanEntirePage ? [...this.selectedFrameIds] : [];
             
-            console.log('Starting scan with:', {
+            console.log('Starting scan:', {
+              scanType: this.selectedScanType,
               scanEntirePage: this.scanEntirePage,
               selectedFrameIds,
               hasSelection: this.hasSelection
@@ -3847,10 +4574,118 @@
                 type: 'scan-for-tokens',
                 scanType: this.selectedScanType,
                 scanEntirePage: this.scanEntirePage,
-                selectedFrameIds: selectedFrameIds,
-                isRescan
+                selectedFrameIds
               }
             }, '*');
+          },
+          stopScan() {
+            // Log stop request
+            console.log('Stopping scan...');
+            
+            this.isScanning = false;
+            this.scanComplete = true;
+            
+            parent.postMessage({
+              pluginMessage: {
+                type: 'stop-scan'
+              } 
+            }, '*');
+          },
+          handleScanComplete(msg) {
+            // Log scan completion
+            console.log('Scan complete:', msg);
+            
+            // Update states
+            this.isScanning = false;
+            this.scanComplete = true;
+          },
+          handleScanError(error) {
+            this.isScanning = false;
+            this.scanComplete = true;
+            this.scanError = true;
+            
+            console.error('Scan error:', error);
+            this.showError('Scan failed. Please try again.');
+          },
+          
+          showError(message) {
+            // Add error toast or notification
+            console.error(message);
+            // You can implement a toast notification here
+          },
+
+          switchTab(tab) {
+            // Clean up previous tab state
+            this.isScanning = false;
+            this.scanProgress = 0;
+            this.scanError = false;
+            this.scanComplete = false;
+            this.groupedReferences = {};
+            
+            this.activeTab = tab;
+          },
+
+          getProgressStatus() {
+            if (this.scanError) {
+              return 'Scan error';
+            }
+            if (!this.isScanning && this.scanProgress === 100) {
+              return this.hasResults ? 'Scan complete' : 'Scan complete, no issues found';
+            }
+            if (this.isScanning) {
+              return `Scanning... ${Math.round(this.scanProgress)}%`;
+            }
+            return 'Ready to scan';
+          },
+          
+          getProgressBarColor() {
+            if (this.scanError) {
+              return 'var(--figma-color-bg-danger)';
+            }
+            if (!this.isScanning && this.scanProgress === 100) {
+              return 'var(--figma-color-bg-success)';
+            }
+            if (this.isScanning) {
+              return 'var(--figma-color-bg-brand)';
+            }
+            return 'var(--figma-color-bg-disabled)';
+          },
+          handlePluginMessage(msg) {
+            if (!msg) return;
+            
+            console.log('Received message:', msg.type, msg);
+            
+            switch (msg.type) {
+              case 'missing-references-result':
+                this.isScanning = false;
+                this.scanComplete = true;
+                this.scanProgress = 100;
+                if (msg.references) {
+                  this.groupedReferences = msg.references;
+                  console.log('Scan complete with results:', {
+                    references: msg.references,
+                    groupCount: Object.keys(msg.references).length
+                  });
+                }
+                break;
+                
+              case 'scan-progress':
+                this.scanProgress = msg.progress;
+                this.isScanning = msg.isScanning ?? true;
+                break;
+                
+              case 'selection-updated':
+                this.updateSelection(msg);
+                break;
+                
+              case 'init-icons':
+                this.icons = msg.icons;
+                break;
+                
+              // Remove duplicate handlers
+              default:
+                console.log('Unhandled message type:', msg.type);
+            }
           },
           async getSelectedFrameIds() {
             return new Promise((resolve) => {
@@ -3868,19 +4703,6 @@
               window.addEventListener('message', handler);
             });
           },
-          stopScan() {
-            console.log('Stopping scan...');
-            // Send stop message to plugin
-            parent.postMessage({ 
-              pluginMessage: { 
-                type: 'stop-scan'
-              } 
-            }, '*');
-            
-            // Update UI state immediately
-            this.isScanning = false;
-            this.scanProgress = 0;
-          },
           async selectGroup(refs, groupId) {
             this.selectingNodeIds.add(groupId);
             const nodeIds = refs.map(ref => ref.nodeId);
@@ -3896,11 +4718,7 @@
             }, 500);
           },
           formatValue(value) {
-            if (!value) return 'None';
             if (typeof value === 'object') {
-              if ('r' in value && 'g' in value && 'b' in value) {
-                return `RGB(${Math.round(value.r * 255)}, ${Math.round(value.g * 255)}, ${Math.round(value.b * 255)})`;
-              }
               return JSON.stringify(value);
             }
             return String(value);
@@ -3912,15 +4730,15 @@
             }
             return formatValue(value);
           },
-          toggleGroup(key) {
-            if (this.expandedGroups.has(key)) {
-              this.expandedGroups.delete(key);
+          toggleGroup(groupKey) {
+            if (this.expandedGroups.has(groupKey)) {
+              this.expandedGroups.delete(groupKey);
             } else {
-              this.expandedGroups.add(key);
+              this.expandedGroups.add(groupKey);
             }
           },
-          isGroupExpanded(key) {
-            return this.expandedGroups.has(key);
+          isGroupExpanded(groupKey) {
+            return this.expandedGroups.has(groupKey);
           },
           getPropertyName(key) {
             return key.split(':')[0];
@@ -3940,6 +4758,7 @@
           },
           clearResults() {
             this.groupedReferences = {};
+            this.expandedGroups.clear();
           },
           dismissToast() {
             this.showSuccessToast = false;
@@ -4035,99 +4854,6 @@
             
             document.addEventListener('mousemove', onMouseMove);
             document.addEventListener('mouseup', onMouseUp);
-          },
-          handlePluginMessage(msg) {
-            console.log('Received message:', msg);
-            
-            switch (msg.type) {
-              case 'scan-progress':
-                this.scanProgress = msg.progress;
-                this.isScanning = msg.isScanning ?? true;
-                console.log('Progress updated:', this.scanProgress);
-                break;
-                
-              case 'scan-status':
-                this.isScanning = msg.isScanning ?? true;
-                this.scanProgress = 0;
-                break;
-                
-              case 'scan-cancelled':
-                this.isScanning = false;
-                this.scanProgress = 0;
-                console.log('Scan was cancelled');
-                break;
-                
-              case 'missing-references-result':
-                this.isScanning = false;
-                this.scanProgress = 100;
-                this.groupedReferences = msg.references;
-                break;
-                
-              case 'watch-status':
-                this.isWatching = msg.isWatching && this.scanEntirePage;
-                if (!msg.isWatching) {
-                  this.isScanning = false;
-                  this.scanProgress = 0;
-                }
-                break;
-                
-              case 'error':
-                this.isScanning = false;
-                this.scanProgress = 0;
-                console.error('Scan error:', msg.message);
-                break;
-                
-              case 'window-size':
-                this.windowSize = {
-                  width: msg.width,
-                  height: msg.height
-                };
-                break;
-                
-              case 'init-icons':
-                this.icons = msg.icons;
-                console.log('Received icons:', this.icons);
-                break;
-              case 'selection-updated':
-                this.updateSelection(msg);
-                break;
-              case 'selected-frame-ids':
-                this.selectedFrameIds = msg.ids;
-                this.selectedCount = msg.count;
-                this.hasSelection = msg.ids.length > 0;
-                break;
-              case 'library-tokens-result':
-                this.inactiveLibraryTokens = msg.inactiveTokens;
-                this.activeLibraryTokens = msg.activeTokens;
-                break;
-              case 'library-scan-progress':
-                this.libraryScanProgress = msg.progress;
-                this.currentScanNode = msg.currentNode;
-                break;
-              case 'library-scan-complete':
-                this.isLibraryScanning = false;
-                this.libraryScanProgress = 100;
-                this.scanSummary = {
-                  ...msg.summary,
-                  timestamp: new Date().toLocaleTimeString()
-                };
-                break;
-              case 'library-scan-paused':
-                console.log('Scan paused');
-                this.isPaused = true;
-                break;
-              case 'library-scan-resumed':
-                console.log('Scan resumed');
-                this.isPaused = false;
-                break;
-              case 'library-scan-stopped':
-                console.log('Scan stopped');
-                this.isLibraryScanning = false;
-                this.isPaused = false;
-                this.libraryScanProgress = 0;
-                this.currentScanNode = null;
-                break;
-            }
           },
           updateSelection(msg) {
             this.hasSelection = msg.hasSelection;
@@ -4251,20 +4977,20 @@
             if (this.scanError) {
               return 'var(--figma-color-bg-danger)';
             }
-            if (this.scanProgress === 100) {
+            if (!this.isScanning && this.scanProgress === 100) {
               return 'var(--figma-color-bg-success)';
             }
             if (this.isScanning) {
               return 'var(--figma-color-bg-brand)';
             }
-            return 'var(--figma-color-bg-secondary)';
+            return 'var(--figma-color-bg-disabled)';
           },
 
           getProgressStatus() {
             if (this.scanError) {
               return 'Scan error';
             }
-            if (this.scanProgress === 100) {
+            if (!this.isScanning && this.scanProgress === 100) {
               return this.hasResults ? 'Scan complete' : 'Scan complete, no issues found';
             }
             if (this.isScanning) {
@@ -4286,6 +5012,81 @@
               return 'Select what to scan for';
             }
             return 'Start scanning';
+          },
+          handleScanCardKeydown(e) {
+            if (e.key === 'ArrowRight') {
+              this.selectNextCard();
+            } else if (e.key === 'ArrowLeft') {
+              this.selectPreviousCard();
+            } else if (e.key === 'Enter') {
+              this.selectCurrentCard();
+            }
+          },
+          selectNextCard() {
+            const currentIndex = this.tokenScanOptions.findIndex(option => option.value === this.selectedScanType);
+            const nextIndex = (currentIndex + 1) % this.tokenScanOptions.length;
+            this.selectedScanType = this.tokenScanOptions[nextIndex].value;
+          },
+          selectPreviousCard() {
+            const currentIndex = this.tokenScanOptions.findIndex(option => option.value === this.selectedScanType);
+            const prevIndex = (currentIndex - 1 + this.tokenScanOptions.length) % this.tokenScanOptions.length;
+            this.selectedScanType = this.tokenScanOptions[prevIndex].value;
+          },
+          selectCurrentCard() {
+            this.selectedScanType = this.selectedScanType;
+          },
+          handleLibraryScanCardKeydown(e) {
+            if (e.key === 'ArrowRight') {
+              this.selectNextLibraryCard();
+            } else if (e.key === 'ArrowLeft') {
+              this.selectPreviousLibraryCard();
+            } else if (e.key === 'Enter') {
+              this.selectCurrentLibraryCard();
+            }
+          },
+          selectNextLibraryCard() {
+            const currentIndex = this.libraryTokenScanOptions.findIndex(option => option.value === this.selectedLibraryTokenScanType);
+            const nextIndex = (currentIndex + 1) % this.libraryTokenScanOptions.length;
+            this.selectedLibraryTokenScanType = this.libraryTokenScanOptions[nextIndex].value;
+          },
+          selectPreviousLibraryCard() {
+            const currentIndex = this.libraryTokenScanOptions.findIndex(option => option.value === this.selectedLibraryTokenScanType);
+            const prevIndex = (currentIndex - 1 + this.libraryTokenScanOptions.length) % this.libraryTokenScanOptions.length;
+            this.selectedLibraryTokenScanType = this.libraryTokenScanOptions[prevIndex].value;
+          },
+          selectCurrentLibraryCard() {
+            this.selectedLibraryTokenScanType = this.selectedLibraryTokenScanType;
+          },
+          handleScanProgress(msg) {
+            if (msg && typeof msg.progress === 'number') {
+              this.scanProgress = Math.min(100, Math.max(0, msg.progress));
+              this.isScanning = msg.isScanning !== false;
+            }
+          },
+          selectScanType(value) {
+            // Toggle selection if clicking the same card
+            if (this.selectedScanType === value) {
+              this.selectedScanType = null;
+            } else {
+              this.selectedScanType = value;
+            }
+          },
+          getTotalResultsCount() {
+            return Object.values(this.groupedByValue).reduce((sum, group) => sum + group.refs.length, 0);
+          },
+          formatTypographyValue(value) {
+            if (typeof value === 'object') {
+              return `${value.fontFamily} ${value.fontWeight} ${value.fontSize}px`;
+            }
+            return String(value);
+          },
+          debugResults() {
+            console.log('Current state:', {
+              isScanning: this.isScanning,
+              hasResults: this.hasResults,
+              groupedReferences: this.groupedReferences,
+              groupedByValue: this.groupedByValue
+            });
           }
         },
         watch: {
@@ -4298,9 +5099,11 @@
         },
         mounted() {
           console.log('Vue app mounted');
-          console.log('Available icons:', Object.keys(this.icons));
+          
+          // Remove any default selection
+          this.selectedScanType = null;
 
-          // Listen for icons from the main plugin code
+          // Single message handler
           window.onmessage = (event) => {
             const msg = event.data.pluginMessage;
             if (msg) {
@@ -4314,28 +5117,6 @@
               type: 'get-selected-frame-ids' 
             }
           }, '*');
-
-          window.onmessage = (event) => {
-            const msg = event.data.pluginMessage;
-            if (!msg) return;
-            
-            if (msg.type === 'selection-updated') {
-              this.hasSelection = msg.hasSelection;
-              this.selectedCount = msg.count || 0;
-              this.hasInstances = msg.hasInstances || false;
-              this.selectedFrameIds = msg.selectedFrameIds || [];
-            }
-            // Handle other message types
-            if (msg.type === 'variables-analysis') {
-              this.handleVariablesAnalysis(msg.data);
-            } else if (msg.type === 'scan-progress') {
-              this.handleScanProgress(msg);
-            } else if (msg.type === 'scan-complete') {
-              this.handleScanComplete(msg);
-            } else if (msg.type === 'scan-error') {
-              this.handleScanError(msg);
-            }
-          };
         },
         created() {
           // Ensure we stay on the tokens tab
