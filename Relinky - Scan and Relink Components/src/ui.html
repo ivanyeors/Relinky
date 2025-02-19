@@ -240,16 +240,16 @@
                   <!-- Start/Rescan button -->
                   <button 
                     v-if="!isScanning"
-                    @click="startScan(hasResults)" 
+                    @click="startScan(showRescanButton)" 
                     class="button"
                     :class="{
-                      'primary-button': !hasResults,
-                      'secondary-button rescan': hasResults
+                      'primary-button': !showRescanButton,
+                      'secondary-button rescan': showRescanButton
                     }"
                     :disabled="!canStartScan"
                     :title="getStartScanButtonTitle()"
                   >
-                    {{ hasResults ? 'Rescan' : 'Start Scan' }}
+                    {{ showRescanButton ? 'Rescan' : 'Start Scan' }}
                   </button>
                   
                   <!-- Stop button - only show when actively scanning -->
@@ -4623,7 +4623,8 @@
                   }
                 ]
               }
-            ]
+            ],
+            lastScannedType: null, // Add this to track the last scan type
           }
         },
         computed: {
@@ -4705,6 +4706,10 @@
           },
           showStopButton() {
             return this.isScanning && !this.scanComplete;
+          },
+          showRescanButton() {
+            // Only show rescan if we have results AND the scan type hasn't changed
+            return this.hasResults && this.selectedScanType === this.lastScannedType;
           }
         },
         methods: {
@@ -4762,6 +4767,8 @@
                 selectedFrameIds
               }
             }, '*');
+            // Update lastScannedType
+            this.lastScannedType = this.selectedScanType;
           },
           stopScan() {
             // Log stop request
@@ -5254,6 +5261,10 @@
               this.selectedScanType = null;
             } else {
               this.selectedScanType = value;
+            }
+            // Reset lastScannedType if selecting a different type
+            if (this.lastScannedType !== value) {
+              this.lastScannedType = null;
             }
           },
           getTotalResultsCount() {
