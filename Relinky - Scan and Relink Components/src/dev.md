@@ -200,3 +200,88 @@ Performance Considerations
 - Cache library status checks
 - Batch process selections
 - Progressive loading of usage details
+
+**Future Development Roadmap**
+
+*Pro vs Free Version Features*
+- Free Version limitations:
+    - Basic variable scanning
+    - Limited selection options
+    - Basic grouping features
+    - Standard export options
+- Pro Version features:
+    - Advanced variable scanning
+    - Comprehensive selection tools
+    - Advanced grouping options
+    - Premium export formats
+    - Batch processing capabilities
+    - Advanced filtering options
+
+*Enhanced Variable Scanning Features*
+- Scan for linked tokens from inactive libraries:
+    - Identify all tokens linked to inactive libraries
+    - Show activation status for each library
+    - Provide quick activation options
+    - Group results by library source
+
+- Similar Variable Token Scanning:
+    - Group variables with similar properties
+    - Compare variable values across different libraries
+    - Identify potential consolidation opportunities
+    - Show usage statistics for similar variables
+
+- Typography Grouping Improvements:
+    - Group by font settings regardless of content
+    - Match by:
+        - Font family
+        - Font weight
+        - Font size
+        - Line height
+        - Letter spacing
+    - Ignore text content differences
+    - Show group statistics
+
+*Padding Controls Enhancement*
+- Horizontal Padding:
+    - Separate left/right padding controls
+    - Individual padding value display
+    - Toggle for unified/separate control
+    - Preview of padding changes
+
+- Vertical Padding:
+    - Separate top/bottom padding controls
+    - Individual padding value display
+    - Toggle for unified/separate control
+    - Preview of padding changes
+
+*Variable Reference Scanner*
+- Select and scan specific variables:
+    - Show all elements linked to selected variable
+    - Display usage context
+    - Group by component/frame
+    - Show inheritance chain
+    - Provide direct selection tools
+
+*Terminology Standardization*
+- Update "instance" terminology:
+    - Use consistent naming across UI
+    - Clear distinction between instances and components
+    - Update all related documentation
+    - Review and update error messages
+
+*Feedback System*
+- Implement JIRA integration:
+    - Direct feedback form in plugin
+    - Bug report template
+    - Feature request template
+    - User experience feedback
+    - Automatic issue creation in JIRA
+    - Feedback status tracking
+
+*UI/UX Considerations*
+- Clear feature differentiation between versions
+- Intuitive pro upgrade path
+- Consistent terminology
+- Enhanced error messaging
+- Improved progress indicators
+- Responsive feedback forms
