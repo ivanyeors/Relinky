@@ -231,7 +231,7 @@
                            background: getProgressBarColor()
                          }"
                     ></div>
-                    <span class="progress-text">{{ getProgressStatus() }}</span>
+                    <span class="progress-text" v-if="canStartScan || isScanning">{{ getProgressStatus() }}</span>
                   </div>
                 </div>
 
@@ -805,11 +805,29 @@
     .primary-button {
       background: var(--figma-color-bg-brand);
       color: white;
+      border: 1px solid var(--figma-color-border-brand-strong);
+    }
+
+    .primary-button:hover {
+      background: var(--figma-color-bg-brand);
+      filter: brightness(1.1); /* Subtle brightness increase on hover */
     }
 
     .secondary-button {
       background: var(--figma-color-bg-secondary);
       color: var(--figma-color-text);
+    }
+
+    .secondary-button.rescan {
+      background: var(--figma-color-bg-brand-tertiary);
+      color: var(--figma-color-text-brand);
+      border: 1px solid var(--figma-color-border-brand-strong);
+    }
+
+    .secondary-button.rescan:hover {
+      background: var(--figma-color-bg-brand);
+      color: white;
+      border-color: var(--figma-color-border-brand-strong);
     }
 
     .button:disabled {
@@ -1088,11 +1106,11 @@
     }
 
     .slow-badge {
-      font-size: 8px; /* Reduced from 10px */
-      padding: 1px 2px; /* Reduced padding */
-      background: var(--figma-color-bg-warning-tertiary); /* Darker warning color */
-      color: white; /* White text for better contrast */
-      border-radius: 3px; /* Slightly reduced radius */
+      font-size: 9px;
+      padding: 1px 4px;
+      background: var(--figma-color-bg-warning-tertiary);
+      color: var(--figma-color-text-warning);
+      border-radius: 3px;
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.2px;
