@@ -1084,14 +1084,19 @@
     }
 
     .slow-badge {
-      font-size: 10px;
-      padding: 2px 6px;
-      background: var(--figma-color-bg-warning);
-      color: white;
-      border-radius: 4px;
-      font-weight: 500;
+      font-size: 8px; /* Reduced from 10px */
+      padding: 1px 2px; /* Reduced padding */
+      background: var(--figma-color-bg-warning-tertiary); /* Darker warning color */
+      color: white; /* White text for better contrast */
+      border-radius: 3px; /* Slightly reduced radius */
+      font-weight: 600;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.2px;
+    }
+
+    /* Add hover state */
+    .toggle-label:hover .slow-badge {
+      opacity: 1;
     }
 
     .toggle-input {
