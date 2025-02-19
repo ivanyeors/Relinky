@@ -153,33 +153,103 @@ function formatTypographyValue(value: any): string {
   return `${fontFamily} ${fontWeight} ${fontSize}px`;
 }
 
-// Update helper function to properly check if a node is truly visible
+// Add type guard for nodes with opacity
+function hasOpacity(node: BaseNode): node is SceneNode & MinimalFillsMixin & MinimalStrokesMixin {
+  return 'opacity' in node && typeof (node as any).opacity === 'number';
+}
+
+// Add type guard for nodes with blend mode
+function hasBlendMode(node: BaseNode): node is SceneNode & { blendMode: BlendMode } {
+  return 'blendMode' in node;
+}
+
+// Add type guard for nodes with constraints
+function hasConstraints(node: BaseNode): node is SceneNode & { constraints: Constraints } {
+  return 'constraints' in node;
+}
+
+// Update the isNodeVisible function to use these type guards
 function isNodeVisible(node: BaseNode): boolean {
   try {
-    // Check if the node itself has a visible property
+    // 1. Check if node itself is visible
     if ('visible' in node && !(node as SceneNode).visible) {
       return false;
     }
 
-    // Check if node is inside a collapsed group
-    // A node in a collapsed group is effectively hidden
+    // 2. Check if node is inside a collapsed group/frame/component
     let current: BaseNode | null = node;
     while (current && current.parent) {
-      if (current.parent.type === 'GROUP') {
-        const parentGroup = current.parent as GroupNode;
-        // If any parent group is collapsed, the node is not visible
-        if (!parentGroup.expanded) {
+      const parent: BaseNode = current.parent;
+      
+      // Check parent visibility
+      if ('visible' in parent && !(parent as SceneNode).visible) {
+        return false;
+      }
+
+      // Check if parent is collapsed
+      if (parent.type === 'GROUP' || 
+          parent.type === 'FRAME' || 
+          parent.type === 'COMPONENT' || 
+          parent.type === 'COMPONENT_SET') {
+        const parentNode = parent as FrameNode | GroupNode | ComponentNode | ComponentSetNode;
+        if (!parentNode.expanded) {
           return false;
         }
       }
-      
-      // Check parent visibility
-      if ('visible' in current.parent && !(current.parent as SceneNode).visible) {
+
+      // 3. Check if parent is clipped
+      if ('clipsContent' in parent && (parent as FrameNode).clipsContent) {
+        // Check if node is outside parent bounds
+        const parentFrame = parent as FrameNode;
+        const node = current as SceneNode;
+        
+        if (node.x < 0 || 
+            node.y < 0 || 
+            node.x + node.width > parentFrame.width || 
+            node.y + node.height > parentFrame.height) {
+          return false;
+        }
+      }
+
+      // 4. Check opacity
+      if ('opacity' in parent && (parent as SceneNode & { opacity: number }).opacity === 0) {
         return false;
       }
-      
+
+      // 5. Check if inside mask and is not the mask itself
+      if (parent.type === 'FRAME' && (parent as FrameNode).isMask) {
+        const parentNode = parent as FrameNode;
+        const nodeIndex = parentNode.children.indexOf(current as SceneNode);
+        // If not the first child (mask), then it's hidden by mask
+        if (nodeIndex > 0) {
+          return false;
+        }
+      }
+
+      // 6. Check blend mode
+      if ('blendMode' in current && (current as SceneNode & { blendMode: BlendMode }).blendMode === 'PASS_THROUGH') {
+        const parentOpacity = 'opacity' in parent ? 
+          (parent as SceneNode & { opacity: number }).opacity : 1;
+        if (parentOpacity === 0) {
+          return false;
+        }
+      }
+
+      // 7. Check constraints
+      if ('constraints' in current) {
+        const constraints = (current as SceneNode & { constraints: Constraints }).constraints;
+        // Check if node is constrained outside visible bounds
+        if (constraints.horizontal === 'SCALE' || constraints.vertical === 'SCALE') {
+          const parent = current.parent as FrameNode;
+          if (parent.width === 0 || parent.height === 0) {
+            return false;
+          }
+        }
+      }
+
       current = current.parent;
     }
+
 
     return true;
   } catch (err) {
@@ -189,15 +259,42 @@ function isNodeVisible(node: BaseNode): boolean {
   }
 }
 
-// Add helper to check if a node should be included in scan
+// Update shouldIncludeNode to use the enhanced visibility check
 function shouldIncludeNode(node: BaseNode, ignoreHiddenLayers: boolean): boolean {
   // If we're not ignoring hidden layers, include all nodes
   if (!ignoreHiddenLayers) {
     return true;
   }
 
-  // Check visibility status
   return isNodeVisible(node);
+}
+
+// Add this helper to check if a node is effectively hidden by its parent's properties
+function isHiddenByParent(node: SceneNode): boolean {
+  let current: BaseNode | null = node;
+  
+  while (current && current.parent) {
+    const parent: BaseNode = current.parent;
+    
+    // Check if parent is a SceneNode
+    if ('type' in parent) {
+      const sceneParent = parent as SceneNode;
+      
+      // Check visibility - visible property exists on SceneNode
+      if (!sceneParent.visible) {
+        return true;
+      }
+
+      // Check opacity - only exists on certain node types
+      if ('opacity' in sceneParent && typeof sceneParent.opacity === 'number' && sceneParent.opacity === 0) {
+        return true;
+      }
+    }
+    
+    current = parent;
+  }
+  
+  return false;
 }
 
 // Update scanForTextTokens to respect hidden layers setting
@@ -214,8 +311,8 @@ async function scanForTextTokens(
       .filter(node => {
         if (node.type !== 'TEXT') return false;
         
-        // Check visibility if ignoreHiddenLayers is true
-        if (ignoreHiddenLayers && !isNodeVisible(node)) {
+        // Use the enhanced visibility check
+        if (ignoreHiddenLayers && !shouldIncludeNode(node, true)) {
           return false;
         }
         
@@ -294,7 +391,7 @@ async function scanForTextTokens(
 async function scanForColorTokens(
   progressCallback: (progress: number) => void,
   nodesToScan?: SceneNode[],
-  ignoreHiddenLayers: boolean = false // Add parameter
+  ignoreHiddenLayers: boolean = false
 ): Promise<MissingReference[]> {
   const missingRefs: MissingReference[] = [];
   
@@ -302,8 +399,8 @@ async function scanForColorTokens(
     const nodes = (nodesToScan || figma.currentPage.findAll()).filter(node => {
       if (!node || node.removed) return false;
       
-      // Check visibility if ignoreHiddenLayers is true
-      if (ignoreHiddenLayers && !isNodeVisible(node)) {
+      // Use the enhanced visibility check
+      if (ignoreHiddenLayers && !shouldIncludeNode(node, true)) {
         return false;
       }
       
@@ -552,7 +649,7 @@ async function scanForMissingReferences(
       case 'inactive-tokens':
         refs = await scanForInactiveTokens(progress => {
           if (progressCallback) progressCallback(progress);
-        }, nodesToScan);
+        }, nodesToScan, ignoreHiddenLayers);
         break;
       case 'vertical-gap':
         refs = await scanForVerticalGap(
@@ -565,12 +662,14 @@ async function scanForMissingReferences(
       case 'vertical-padding':
         refs = await scanForPadding(progress => {
           if (progressCallback) progressCallback(progress);
-        }, scanType, nodesToScan);
+        }, scanType, nodesToScan, ignoreHiddenLayers);
         break;
       case 'corner-radius':
-        refs = await scanForCornerRadius(progress => {
-          if (progressCallback) progressCallback(progress);
-        }, nodesToScan);
+        refs = await scanForCornerRadius(
+          progress => progressCallback?.(progress),
+          nodesToScan,
+          ignoreHiddenLayers
+        );
         break;
       case 'fill':
       case 'stroke':
@@ -622,6 +721,7 @@ interface DocumentChangeHandler {
   changeHandler?: () => void;
   scanEntirePage?: boolean;
   selectedFrameIds?: string[];
+  ignoreHiddenLayers?: boolean;
 }
 
 // Add this state object near the top of the file
@@ -683,7 +783,8 @@ async function startWatchingDocument(scanType: ScanType, scanEntirePage: boolean
                 type: 'scan-progress', 
                 progress 
               });
-            }
+            },
+            documentState.ignoreHiddenLayers || false
           );
 
           // Check if there are any missing references
@@ -778,14 +879,13 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
   if (msg.type === 'scan-for-tokens') {
     try {
       isScanCancelled = false;
-      const scanType = msg.scanType as ScanType;
-      const isRescan = msg.isRescan || false;
+      const { scanType, scanEntirePage, selectedFrameIds, ignoreHiddenLayers = false } = msg;
 
       console.log('Starting scan with progress tracking');
       console.log('Scan scope:', msg.scanScope);
       console.log('Selected frame IDs:', msg.selectedFrameIds);
       console.log('Scan entire page:', msg.scanEntirePage);
-      console.log('Is rescan:', isRescan);
+      console.log('Is rescan:', msg.isRescan || false);
 
       figma.ui.postMessage({ 
         type: 'scan-status', 
@@ -793,10 +893,10 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
       });
 
       // If it's not scanning entire page, handle selection
-      if (!msg.scanEntirePage) {
+      if (!scanEntirePage) {
         let frameIdsToUse: string[];
         
-        if (isRescan) {
+        if (msg.isRescan) {
           // Use initial selection for rescan
           frameIdsToUse = initialScanSelection;
           
@@ -821,7 +921,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
 
         // Perform the scan with the appropriate frame IDs
         const refs = await scanForMissingReferences(
-          scanType,
+          scanType as ScanType,
           frameIdsToUse,
           (progress) => {
             if (isScanCancelled) return;
@@ -831,7 +931,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
               progress
             });
           },
-          msg.ignoreHiddenLayers || false
+          ignoreHiddenLayers
         );
 
         // Check if scan was cancelled before sending results
@@ -853,7 +953,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
         
         // Perform scan for entire page as before
         const refs = await scanForMissingReferences(
-          scanType,
+          scanType as ScanType,
           undefined,
           (progress) => {
             if (isScanCancelled) return;
@@ -863,7 +963,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
               progress
             });
           },
-          msg.ignoreHiddenLayers || false
+          ignoreHiddenLayers
         );
 
         // Rest of the existing code...
@@ -1094,7 +1194,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
 
   if (msg.type === 'scan-library-tokens') {
     try {
-      const results = await scanForLibraryTokens(msg.scanType);
+      const results = await scanForLibraryTokens(msg.scanType, msg.ignoreHiddenLayers || false);
       figma.ui.postMessage({
         type: 'library-tokens-result',
         activeTokens: results.activeLibraryTokens,
@@ -1204,12 +1304,22 @@ async function scanForVerticalGap(
 async function scanForPadding(
   progressCallback: (progress: number) => void,
   type: 'horizontal-padding' | 'vertical-padding',
-  nodesToScan?: SceneNode[]
+  nodesToScan?: SceneNode[],
+  ignoreHiddenLayers: boolean = false
 ): Promise<MissingReference[]> {
   const missingRefs: MissingReference[] = [];
   
   try {
-    const nodes = (nodesToScan || figma.currentPage.findAll()).filter(hasAutoLayout);
+    const nodes = (nodesToScan || figma.currentPage.findAll()).filter(node => {
+      if (!hasAutoLayout(node)) return false;
+      
+      // Use the enhanced visibility check
+      if (ignoreHiddenLayers && !shouldIncludeNode(node, true)) {
+        return false;
+      }
+      
+      return true;
+    });
     console.log(`Found ${nodes.length} nodes with auto-layout`);
 
     for (let i = 0; i < nodes.length; i++) {
@@ -1278,18 +1388,22 @@ async function scanForPadding(
 
 async function scanForCornerRadius(
   progressCallback: (progress: number) => void,
-  nodesToScan?: SceneNode[]
+  nodesToScan?: SceneNode[],
+  ignoreHiddenLayers: boolean = false
 ): Promise<MissingReference[]> {
   const missingRefs: MissingReference[] = [];
   
   try {
     // Update the type check for cornerRadius
     const nodes = (nodesToScan || figma.currentPage.findAll()).filter(node => {
-      if ('cornerRadius' in node) {
-        const radius = (node as any).cornerRadius;
-        return typeof radius === 'number' && radius > 0;
+      if (!hasCornerRadius(node)) return false;
+      
+      // Use the enhanced visibility check
+      if (ignoreHiddenLayers && !shouldIncludeNode(node, true)) {
+        return false;
       }
-      return false;
+      
+      return true;
     });
     
     for (let i = 0; i < nodes.length; i++) {
@@ -1350,7 +1464,8 @@ interface TokenGroup {
 // Update the scanning function with proper types
 async function scanForInactiveTokens(
   progressCallback: (progress: number) => void,
-  nodesToScan?: SceneNode[]
+  nodesToScan?: SceneNode[],
+  ignoreHiddenLayers: boolean = false
 ): Promise<MissingReference[]> {
   const missingRefs: MissingReference[] = [];
   const tokenGroups: Record<string, TokenGroup> = {};
@@ -1485,13 +1600,23 @@ async function scanForInactiveTokens(
 
 async function scanForFillVariables(
   progressCallback: (progress: number) => void,
-  nodesToScan?: SceneNode[]
+  nodesToScan?: SceneNode[],
+  ignoreHiddenLayers: boolean = false
 ): Promise<MissingReference[]> {
   const missingRefs: MissingReference[] = [];
   
   try {
     const nodes = (nodesToScan || figma.currentPage.findAll())
-      .filter(node => hasFills(node));
+      .filter(node => {
+        if (!hasFills(node)) return false;
+        
+        // Use the enhanced visibility check
+        if (ignoreHiddenLayers && !shouldIncludeNode(node, true)) {
+          return false;
+        }
+        
+        return true;
+      });
     
     console.log('Found nodes with fills:', nodes.length);
 
@@ -1703,7 +1828,10 @@ interface PublishedVariable {
 let isScanPaused = false;
 let isScanStopped = false;
 
-async function scanForLibraryTokens(scanType: string = 'all'): Promise<TokenScanResult> {
+async function scanForLibraryTokens(
+  scanType: string = 'all',
+  ignoreHiddenLayers: boolean = false
+): Promise<TokenScanResult> {
   // Reset control flags at start
   isScanPaused = false;
   isScanStopped = false;
