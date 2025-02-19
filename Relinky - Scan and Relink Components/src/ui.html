@@ -224,14 +224,13 @@
                 <!-- 2. Progress Bar -->
                 <div class="progress-container">
                   <div class="progress-bar">
-                    <div class="progress-track"></div>
+                    <!-- Remove progress track -->
                     <div class="progress-fill" 
                          :style="{ 
                            width: `${scanProgress}%`,
                            background: getProgressBarColor()
                          }"
                     ></div>
-                    <!-- Text is now separate from progress fill -->
                     <span class="progress-text">{{ getProgressStatus() }}</span>
                   </div>
                 </div>
@@ -246,7 +245,6 @@
                     :disabled="!canStartScan"
                     :title="getStartScanButtonTitle()"
                   >
-                    <span class="button-icon">{{ hasResults ? '🔄' : '⚡' }}</span>
                     {{ hasResults ? 'Rescan' : 'Start Scan' }}
                   </button>
                   
@@ -256,7 +254,6 @@
                     @click="stopScan()" 
                     class="button warning-button"
                   >
-                    <span class="button-icon">⏹</span>
                     Stop
                   </button>
                 </div>
@@ -1148,13 +1145,13 @@
 
     .warning-message,
     .info-message {
-      margin-top: 8px;
-      padding: 8px;
-      border-radius: 4px;
+      margin: var(--spacing-xs);
+      padding: var(--spacing-sm);
+      border-radius: 6px;
       font-size: 11px;
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: var(--spacing-xs);
     }
 
     .warning-message {
@@ -1188,8 +1185,9 @@
 
     /* Update existing styles */
     .toggle-label {
-      width: 100%;
+      width: calc(100% - var(--spacing-xs) * 2); /* Account for padding */
       justify-content: space-between;
+      padding: var(--spacing-2xs) 0;
     }
 
     .button.primary-button:disabled {
@@ -1910,6 +1908,7 @@
       background: var(--figma-color-bg-secondary);
       border-radius: 6px;
       overflow: hidden;
+      padding: 0 var(--spacing-2xs); /* Match horizontal padding */
     }
 
     .settings-header {
@@ -4082,6 +4081,8 @@
       height: 100%;
       background: var(--figma-color-bg-brand);
       transition: width 0.3s ease;
+      min-width: 0; /* Allow progress to start from 0 */
+      width: 0; /* Start at 0 width */
     }
 
     /* Separate text from progress fill */
@@ -4098,14 +4099,96 @@
       white-space: nowrap;
       /* Add subtle text shadow for better readability */
       text-shadow: 
-        0 0 2px var(--figma-color-bg),
-        0 0 2px var(--figma-color-bg),
-        0 0 2px var(--figma-color-bg);
+        0 0 1px var(--figma-color-bg),
+        0 0 1px var(--figma-color-bg),
+        0 0 1px var(--figma-color-bg);
     }
 
     /* Add hover effect */
     .progress-bar:hover .progress-fill {
       filter: brightness(0.95);
+    }
+
+    /* Update warning button style */
+    .button.warning-button {
+      background: var(--figma-color-bg);
+      border: 1px solid var(--figma-color-border-danger);
+      color: var(--figma-color-text-danger);
+    }
+
+    .button.warning-button:hover {
+      background: var(--figma-color-bg-danger-secondary);
+      border-color: var(--figma-color-border-danger-strong);
+    }
+
+    .button.warning-button:active {
+      background: var(--figma-color-bg-danger-tertiary);
+      border-color: var(--figma-color-border-danger-strong);
+    }
+
+    /* Update base button styles */
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 5px 12px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.1s ease;
+      height: 32px;
+      min-width: 64px;
+    }
+
+    /* Update spacing variables */
+    :root {
+      --spacing-2xs: 4px;  /* Smallest padding */
+      --spacing-xs: 8px;   /* Small gaps */
+      --spacing-sm: 12px;  /* Medium gaps */
+      --spacing-md: 16px;  /* Large gaps */
+    }
+
+    /* Update section spacing */
+    .step-container {
+      padding: var(--spacing-2xs);
+    }
+
+    /* Make "Start scanning" section more compact */
+    .step-container:nth-child(2) {
+      padding-top: 0; /* Remove top padding for second section */
+    }
+
+    .step-content {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-2xs); /* Smaller gap between elements */
+    }
+
+    /* Update progress container spacing */
+    .progress-container {
+      margin: var(--spacing-2xs) 0;
+    }
+
+    /* Update scan buttons spacing */
+    .scan-buttons {
+      margin-top: var(--spacing-2xs);
+      display: flex;
+      gap: var(--spacing-xs);
+    }
+
+    /* Update divider spacing */
+    .divider {
+      margin: var(--spacing-xs) 0;
+      height: 1px;
+      background: var(--figma-color-border);
+    }
+
+    /* Update step title spacing */
+    .step-title {
+      margin: var(--spacing-2xs) 0;
+      font-size: 13px;
+      font-weight: 600;
     }
   </style>
 
