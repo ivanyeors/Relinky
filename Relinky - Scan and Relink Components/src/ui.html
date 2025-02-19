@@ -241,7 +241,11 @@
                   <button 
                     v-if="!isScanning"
                     @click="startScan(hasResults)" 
-                    class="button primary-button"
+                    class="button"
+                    :class="{
+                      'primary-button': !hasResults,
+                      'secondary-button rescan': hasResults
+                    }"
                     :disabled="!canStartScan"
                     :title="getStartScanButtonTitle()"
                   >
@@ -4194,6 +4198,25 @@
       margin: var(--spacing-2xs) 0;
       font-size: 13px;
       font-weight: 600;
+    }
+
+    /* Update button styles for Rescan */
+    .button.primary-button {
+      background: var(--figma-color-bg-brand);
+      color: white;
+    }
+
+    /* Add specific styles for rescan button */
+    .button.secondary-button.rescan {
+      background: var(--figma-color-bg-brand-tertiary);
+      color: var(--figma-color-text-brand);
+      border: 1px solid var(--figma-color-border-brand-strong);
+    }
+
+    .button.secondary-button.rescan:hover {
+      background: var(--figma-color-bg-brand);
+      color: white;
+      border-color: var(--figma-color-border-brand-strong);
     }
   </style>
 
