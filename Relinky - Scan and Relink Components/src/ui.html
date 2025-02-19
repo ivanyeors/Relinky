@@ -301,12 +301,21 @@
                           <span class="expand-icon">
                             {{ isGroupExpanded(groupKey) ? '▼' : '▶' }}
                           </span>
-                          <!-- Show appropriate preview based on type -->
+                          <!-- Add typography-specific template -->
                           <template v-if="group.refs[0]?.type === 'typography'">
-                            <div class="typography-preview">
-                              {{ formatTypographyValue(group.value) }}
+                            <div class="typography-labels">
+                              <span class="label font-family" v-if="group.value.fontFamily">
+                                {{ group.value.fontFamily }}
+                              </span>
+                              <span class="label font-weight" v-if="group.value.fontWeight">
+                                {{ group.value.fontWeight }}
+                              </span>
+                              <span class="label font-size" v-if="group.value.fontSize">
+                                {{ group.value.fontSize }}px
+                              </span>
                             </div>
                           </template>
+                          <!-- Keep existing templates for other types -->
                           <template v-else-if="group.refs[0]?.type === 'fill' || group.refs[0]?.type === 'stroke'">
                             <color-preview :color="group.value" />
                           </template>
@@ -315,7 +324,7 @@
                           </template>
                         </div>
                         <div class="group-actions">
-                          <span class="instance-count">{{ group.refs.length }} instances</span>
+                          <span class="label instance-count">{{ group.refs.length }}×</span>
                           <button 
                             class="button secondary-button"
                             @click.stop="selectGroup(group.refs, $event)"
@@ -4235,6 +4244,72 @@
       background: var(--figma-color-bg-brand);
       color: white;
       border-color: var(--figma-color-border-brand-strong);
+    }
+
+    /* Add these styles */
+    .typography-labels {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: 8px;
+    }
+
+    .label {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 500;
+      background: var(--figma-color-bg-secondary);
+      color: var(--figma-color-text);
+    }
+
+    .label.font-family {
+      background: var(--figma-color-bg-brand-tertiary);
+      color: var(--figma-color-text-brand);
+    }
+
+    .label.font-weight {
+      background: var(--figma-color-bg-secondary);
+      color: var(--figma-color-text);
+    }
+
+    .label.font-size {
+      background: var(--figma-color-bg-secondary);
+      color: var(--figma-color-text);
+    }
+
+    .label.instance-count {
+      background: var(--figma-color-bg-disabled);
+      color: var(--figma-color-text-secondary);
+      font-feature-settings: 'tnum';
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Update existing group header styles */
+    .value-group-header {
+      padding: 8px 12px;
+      border-radius: 6px;
+      transition: background-color 0.2s ease;
+    }
+
+    .value-group-header:hover {
+      background: var(--figma-color-bg-hover);
+    }
+
+    .group-info {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .expand-icon {
+      color: var(--figma-color-text-secondary);
+      width: 16px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
     }
   </style>
 
