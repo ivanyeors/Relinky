@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <html>
-<head>
+  <head>
   <!-- Replace the mock Vue implementation with the actual Vue.js library -->
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
-</head>
+  </head>
+
 <body>
   <!-- Loading indicator -->
   <div id="loading" style="display: flex; justify-content: center; align-items: center; height: 100vh;">
@@ -36,7 +37,7 @@
           >
             <div class="tab-label">
               <span>Variables</span>
-              <span class="beta-badge">Beta</span>
+              <span class="beta-badge">SOON</span>
             </div>
             <span v-if="inactiveLibraryTokens.length" class="tab-badge">
               {{ inactiveLibraryTokens.length }}
@@ -635,10 +636,10 @@
         </button>
         <div class="resize-handle"></div>
       </div>
-    </div>
+  </div>
 
-    <!-- Success Toast -->
-    <div 
+  <!-- Success Toast -->
+  <div 
       class="success-toast" 
       :class="{ 
         visible: showSuccessToast,
@@ -663,10 +664,10 @@
         </svg>
         </button>
       </div>
-    </div>
+  </div>
 
-    <!-- Add error toast component -->
-    <div class="error-toast" v-if="showErrorToast">
+  <!-- Add error toast component -->
+  <div class="error-toast" v-if="showErrorToast">
       <div class="error-toast-content">
         <div class="error-toast-icon">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -680,14 +681,5302 @@
           </svg>
         </button>
       </div>
-    </div>
   </div>
+  </div>
+
+
+
+
+
+
+
 
   <style>
     /* Add Figma's font stack at the top of your styles */
     :root {
-      --font-stack: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen-Sans, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
+      --font-stack: 
+      -apple-system, 
+      BlinkMacSystemFont, 
+      'Segoe UI', 
+      Roboto, 
+      Oxygen-Sans, 
+      Ubuntu, 
+      Cantarell, 
+      'Helvetica Neue', 
+      sans-serif;
+
+    /* Add root spacing variables */
+      --spacing-xxs: 2px;
+      --spacing-xs: 4px;
+      --spacing-sm: 8px;
+      --spacing-md: 12px;
     }
+
+    [v-cloak] { display: none; }
+    
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow: hidden;
+      background-color: #2C2C2C;
+      color: #FFFFFF;
+      font-family: var(--font-stack);
+      font-size: 11px;
+      line-height: 16px;
+    }
+
+    #app {
+      position: relative;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Disable text selection globally */
+    body {
+      user-select: none;
+      -webkit-user-select: none; /* Safari */
+      -moz-user-select: none; /* Firefox */
+      -ms-user-select: none; /* IE/Edge */
+    }
+
+    /* Allow text selection in specific areas if needed */
+    .code, .selectable-text {
+      user-select: text;
+      -webkit-user-select: text;
+      -moz-user-select: text;
+      -ms-user-select: text;
+    }
+
+    /* Update plugin container spacing */
+    .plugin-container {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+      padding: 0; /* Remove any default padding */
+    }
+
+    /* Update step container spacing */
+    .step-container {
+      padding: 8px; /* Consistent padding */
+    }
+
+    /* Update step header spacing */
+    .step-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0; /* Remove padding */
+      margin: 0; /* Remove margin */
+    }
+
+    /* Update step title spacing */
+    .step-title {
+      font-size: 13px;
+      font-weight: 600;
+      margin: 0;
+      padding: 0; /* Remove padding */
+    }
+
+    /* Update scan settings spacing */
+    .scan-settings {
+      margin-top: 4px; /* Reduce top margin */
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      overflow: hidden;
+      padding: 0; /* Remove default padding */
+    }
+
+    /* Update settings header spacing */
+    .settings-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 8px; /* Reduce padding */
+      cursor: pointer;
+    }
+
+    /* Update toast spacing */
+    .toast {
+      display: flex;
+      align-items: center;
+      padding: 6px 8px; /* Adjust padding */
+      margin: 4px 0; /* Add minimal vertical margin */
+      border-radius: 4px;
+    }
+
+    /* Update selection container spacing */
+    .selection-container {
+      margin: 4px 0; /* Add minimal vertical margin */
+    }
+
+    /* Update content section spacing */
+    .content-section {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0; /* Remove padding */
+    }
+
+    /* Update scan section spacing */
+    .scan-section {
+      background: var(--figma-color-bg);
+      padding: 0; /* Remove padding */
+    }
+
+    /* Update divider spacing */
+    .divider {
+      height: 1px;
+      background-color: var(--figma-color-border);
+      margin: 8px 0; /* Adjust margin */
+    }
+
+    /* Update watch toggle spacing */
+    .watch-toggle {
+      padding: 4px 6px; /* Reduce padding */
+      margin: -2px; /* Add negative margin to align better */
+    }
+
+    /* Update first section specific styles */
+    .first-section {
+      background: var(--figma-color-bg);
+      padding: 0;
+      
+      & .step-content {
+        gap: 4px; /* Reduce gap between elements */
+        padding: 0; /* Remove padding */
+      }
+    }
+
+    /* Add root spacing variables */
+    :root {
+      --spacing-xxs: 2px;
+      --spacing-xs: 4px;
+      --spacing-sm: 8px;
+      --spacing-md: 12px;
+    }
+
+    .results-section {
+      padding-bottom: 16px;
+    }
+
+    .header {
+      flex-shrink: 0;
+      padding: 16px;
+      border-bottom: 1px solid var(--figma-color-border);
+    }
+
+    .header h2 {
+      font-family: var(--font-stack);
+      font-weight: 600;
+      font-size: 13px;
+      line-height: 24px;
+      margin: 0;
+    }
+
+    .scan-type-selector {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .scan-type-selector label {
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+      margin-bottom: 4px;
+    }
+
+    .select-input {
+      padding: 8px 8px 8px 12px;
+      height: 32px;
+      border: 1px solid var(--figma-color-border);
+      border-radius: 2px;
+      background: var(--figma-color-bg);
+      color: var(--figma-color-text);
+      font-family: var(--font-stack);
+      font-size: 11px;
+      line-height: 16px;
+      appearance: none;
+      cursor: pointer;
+    }
+
+    .scan-controls {
+      margin: 16px;
+    }
+
+    .scan-buttons {
+      display: flex;
+      gap: var(--spacing-xs);
+      padding: var(--spacing-xxs);
+    }
+
+    .button {
+      height: 32px;
+      padding: 0 var(--spacing-md);
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 500;
+      border: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: unset;
+      width: auto;
+    }
+
+    .primary-button {
+      background: var(--figma-color-bg-brand);
+      color: white;
+      border: 1px solid var(--figma-color-border-brand-strong);
+    }
+
+    .primary-button:hover {
+      background: var(--figma-color-bg-brand);
+      filter: brightness(1.1); /* Subtle brightness increase on hover */
+    }
+
+    .secondary-button {
+      background: var(--figma-color-bg-secondary);
+      color: var(--figma-color-text);
+    }
+
+    .secondary-button.rescan {
+      background: var(--figma-color-bg-brand-tertiary);
+      color: var(--figma-color-text-brand);
+      border: 1px solid var(--figma-color-border-brand-strong);
+    }
+
+    .secondary-button.rescan:hover {
+      background: var(--figma-color-bg-brand);
+      color: white;
+      border-color: var(--figma-color-border-brand-strong);
+    }
+
+    .button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Progress Bar Styles */
+    .progress-container {
+      padding: var(--spacing-xxs);
+    }
+
+    .progress-bar {
+      position: relative;
+      width: 100%;
+      height: 24px;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .progress-track {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background: var(--figma-color-bg-secondary);
+    }
+
+    .progress-fill {
+      position: absolute;
+      left: 0;
+      top: 0;
+      height: 100%;
+      min-width: 0;
+      transition: width 0.2s ease;
+    }
+
+    .progress-text {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 11px;
+      font-weight: 500;
+      z-index: 1;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    }
+
+    .scan-details {
+      color: var(--figma-color-text-secondary);
+    }
+
+    .references-container {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow-y: auto;
+    }
+
+    .reference-card {
+      padding: 0;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 2px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .reference-info {
+      flex: 1;
+      padding: 12px;
+    }
+
+    .reference-header {
+      cursor: pointer;
+      user-select: none;
+      padding: 4px 0;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .expand-icon {
+      color: var(--figma-color-text-secondary);
+      width: 16px;
+      height: 16px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.1s ease;
+      margin: -4px;
+    }
+
+    .current-value-label {
+      color: var(--figma-color-text-secondary);
+      font-size: 11px;
+    }
+
+    .reference-header:hover {
+      background: var(--figma-color-bg-hover);
+    }
+
+    .parameter-name {
+      font-family: var(--font-stack);
+      font-weight: 500;
+      font-size: 11px;
+    }
+
+    .missing-count {
+      font-size: 12px;
+      color: var(--figma-color-text-secondary);
+      font-family: var(--font-stack);
+      font-size: 11px;
+      line-height: 16px;
+    }
+
+    .variable-details {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--figma-color-border);
+    }
+
+    .variable-item {
+      padding: 8px 12px;
+      background: var(--figma-color-bg-tertiary);
+      border-radius: 2px;
+    }
+
+    .node-info,
+    .location-info {
+      font-family: var(--font-stack);
+      font-size: 11px;
+      line-height: 16px;
+      margin-top: 2px;
+    }
+
+    .select-button {
+      padding: 5px 12px;
+      height: 32px;
+      min-width: 64px;
+    }
+
+    .empty-state {
+      padding: 16px;
+      text-align: center;
+      color: var(--figma-color-text-secondary);
+    }
+
+    .empty-state p {
+      margin: 0 0 16px 0;
+    }
+
+    .empty-state-steps {
+      text-align: left;
+      display: inline-block;
+      line-height: 24px;
+    }
+
+    .value-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .value-group-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      cursor: pointer;
+      min-height: 40px;
+      border-radius: 6px;
+      transition: background-color 0.2s ease;
+    }
+
+    .value-group-header:hover {
+      background: var(--figma-color-bg-hover);
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .expand-icon {
+      color: var(--figma-color-text-secondary);
+    }
+
+    .reference-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      margin-bottom: 4px;
+      transition: all 0.2s ease;
+    }
+
+    .reference-item:hover {
+      background: var(--figma-color-bg-hover);
+      transform: translateX(4px);
+    }
+
+    .select-button {
+      padding: 4px 8px;
+      background: var(--figma-color-bg-brand);
+      color: var(--figma-color-text-onbrand);
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 11px;
+      transition: all 0.2s ease;
+      opacity: 0.9;
+    }
+
+    .select-button:hover {
+      opacity: 1;
+      transform: scale(1.05);
+    }
+
+    .scan-scope-selector {
+      padding: 2px 0;
+      width: 100%;
+    }
+
+    .toggle-container {
+      display: flex;
+      align-items: center;
+      padding: 2px 0;
+      width: 100%;
+    }
+
+    .toggle-wrapper {
+      position: relative;
+      width: 28px;
+      height: 16px;
+      flex-shrink: 0;
+    }
+
+    .toggle-label {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      user-select: none;
+      color: var(--figma-color-text);
+      width: 100%;
+      justify-content: space-between;
+      padding: 2px 0;
+    }
+
+    .toggle-label-content {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1;
+    }
+
+    .slow-badge {
+      font-size: 9px;
+      padding: 1px 4px;
+      background: var(--figma-color-bg-warning-tertiary);
+      color: var(--figma-color-text-warning);
+      border-radius: 3px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.2px;
+    }
+
+    /* Add hover state */
+    .toggle-label:hover .slow-badge {
+      opacity: 1;
+    }
+
+    .toggle-input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+      position: absolute;
+    }
+
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: var(--figma-color-bg-disabled);
+      transition: .2s;
+      border-radius: 16px;
+    }
+
+    .toggle-slider:before {
+      position: absolute;
+      content: "";
+      height: 12px;
+      width: 12px;
+      left: 2px;
+      bottom: 2px;
+      background-color: white;
+      transition: .2s;
+      border-radius: 50%;
+    }
+
+    .toggle-input:checked + .toggle-slider {
+      background-color: var(--figma-color-bg-brand);
+    }
+
+    .toggle-input:checked + .toggle-slider:before {
+      transform: translateX(12px);
+    }
+
+    .toggle-input:disabled + .toggle-slider {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .selection-count {
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    .warning-message,
+    .info-message {
+      margin: var(--spacing-xs);
+      padding: var(--spacing-sm);
+      border-radius: 6px;
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-xs);
+    }
+
+    .warning-message {
+      background-color: var(--figma-color-bg-warning-secondary);
+      color: white;
+      border: 1px solid var(--figma-color-border-warning);
+      background: var(--figma-color-bg-warning);
+    }
+
+    .info-message {
+      background-color: var(--figma-color-bg-secondary);
+      color: var(--figma-color-text-secondary);
+    }
+
+    .warning-icon,
+    .info-icon {
+      width: 12px;
+      height: 12px;
+      flex-shrink: 0;
+      color: white;
+    }
+
+    /* Add icon components */
+    .icon-warning {
+      color: var(--figma-color-text-warning);
+    }
+
+    .icon-info {
+      color: var(--figma-color-text-secondary);
+    }
+
+    /* Update existing styles */
+    .toggle-label {
+      width: calc(100% - var(--spacing-xs) * 2); /* Account for padding */
+      justify-content: space-between;
+      padding: var(--spacing-2xs) 0;
+    }
+
+    .button.primary-button:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    /* Add these styles */
+    .typography-details {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 8px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 4px;
+      transition: all 0.2s ease;
+    }
+
+    .typography-details:hover {
+      background: var(--figma-color-bg-hover);
+      transform: translateX(4px);
+    }
+
+    .typography-preview {
+      font-family: system-ui;
+      color: var(--figma-color-text);
+      opacity: 0.8;
+      font-style: italic;
+    }
+
+    .typography-specs {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 4px;
+      font-size: 12px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    /* Add these styles */
+    .section-title {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: var(--figma-color-text);
+    }
+
+    /* Update scan card styles */
+    .scan-cards {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+
+    .scan-card {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.2s ease;
+      user-select: none;
+    }
+
+    /* Combine hover and active states */
+    .scan-card:hover:not(.selected),
+    .scan-card:active:not(.selected) {
+      background: var(--figma-color-bg-hover);
+      border-color: var(--figma-color-border);
+    }
+
+    /* Selected state (includes active state) */
+    .scan-card.selected {
+      background: var(--figma-color-bg-brand);
+      border-color: var(--figma-color-border-brand);
+    }
+
+    .scan-card.selected .scan-card-icon,
+    .scan-card.selected .scan-card-title,
+    .scan-card.selected .scan-card-description {
+      color: white;
+    }
+
+    /* Focus state */
+    .scan-card:focus {
+      outline: none;
+      box-shadow: 0 0 0 2px var(--figma-color-border-brand);
+    }
+
+    .scan-card-icon {
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--figma-color-text);
+      flex-shrink: 0;
+      pointer-events: none;
+    }
+
+    .scan-card-content {
+      flex: 1;
+      min-width: 0;
+      pointer-events: none;
+    }
+
+    .scan-card-text {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .scan-card-title {
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--figma-color-text);
+      transition: color 0.2s ease;
+    }
+
+    .scan-card-description {
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+      transition: color 0.2s ease;
+    }
+
+    .scan-card.selected .scan-card-icon {
+      color: var(--figma-color-text-brand);
+    }
+
+    .scan-card.selected .scan-card-title {
+      color: var(--figma-color-text-brand);
+    }
+
+    .scan-card.selected .scan-card-description {
+      color: var(--figma-color-text-brand);
+    }
+
+    .toast {
+      display: flex;
+      align-items: center;
+      padding: 6px 8px; /* Adjust padding */
+      margin: 4px 0; /* Add minimal vertical margin */
+      border-radius: 4px;
+      background-color: var(--figma-color-bg-warning-tertiary);
+      color: var(--figma-color-text-onwarning-tertiary);
+      border: 1px solid var(--figma-color-border-warning);
+    }
+
+    .toast-icon {
+      margin-right: 8px;
+      opacity: 0.8;
+      color: white;
+    }
+
+    .toast-message {
+      font-size: 11px;
+      font-weight: 500;
+      opacity: 0.9;
+      color: white;
+    }
+
+    .toast.success {
+      background: var(--figma-color-bg-success-tertiary);
+      color: white;
+      border: 1px solid var(--figma-color-border-success);
+    }
+
+    .toast.success .toast-icon {
+      margin-right: 8px;
+      opacity: 1;
+      color: white;
+    }
+
+    .toast.success .toast-message {
+      font-size: 11px;
+      font-weight: 500;
+      opacity: 1;
+      color: white;
+    }
+
+    .divider {
+      height: 1px;
+      background-color: var(--figma-color-border);
+      margin: 8px 0; /* Adjust margin */
+    }
+
+    .first-section {
+      background: var(--figma-color-bg);
+      padding: 0;
+      
+      & .step-content {
+        gap: 4px; /* Reduce gap between elements */
+        padding: 0; /* Remove padding */
+      }
+    }
+
+    .step-container {
+      padding: var(--spacing-xxs);
+    }
+
+    .step-content {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-xs);
+    }
+
+    .step-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 0; /* Remove any margin */
+    }
+
+    .step-title {
+      font-size: 13px;
+      font-weight: 600;
+      margin: 0;
+      padding: var(--spacing-xxs);
+    }
+
+    .watch-toggle {
+      background: none;
+      border: none;
+      padding: 4px 6px; /* Reduce padding */
+      margin: -2px; /* Add negative margin to align better */
+      border-radius: 4px;
+      cursor: pointer;
+      color: var(--figma-color-text-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+    }
+
+    .watch-toggle-content {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .watch-toggle-text {
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .watch-toggle:hover {
+      &:not(.disabled) {
+        background: var(--figma-color-bg-hover);
+        color: var(--figma-color-text);
+      }
+    }
+
+    .watch-toggle.active {
+      &:not(.disabled) {
+        color: var(--figma-color-text-brand);
+        background: var(--figma-color-bg-brand-tertiary);
+      }
+    }
+
+    .watch-toggle.disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      background: var(--figma-color-bg-disabled);
+      color: var(--figma-color-text-disabled);
+    }
+
+    .watch-toggle.disabled:hover {
+      background: var(--figma-color-bg-disabled);
+      color: var(--figma-color-text-disabled);
+    }
+
+    .results-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .results-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .results-actions .button {
+      min-width: unset;
+      padding: 5px 12px;
+      height: 28px;
+    }
+
+    .rescan {
+      background: none;
+      border: none;
+      padding: 4px 6px; /* Reduce padding */
+      border-radius: 4px;
+      cursor: pointer;
+      color: var(--figma-color-text-secondary);
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .clear-results {
+      background: none;
+      border: none;
+      padding: 4px 6px; /* Reduce padding */
+      border-radius: 4px;
+      cursor: pointer;
+      color: var(--figma-color-text-secondary);
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .selection-container {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .results-container {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* Add these styles to match Figma's scrollbar */
+    /* Scrollbar styling */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+      background: var(--figma-color-bg-tertiary);
+      border-radius: 3px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--figma-color-bg-secondary);
+    }
+
+    .select-button.loading {
+      position: relative !important;
+      color: transparent !important;
+      pointer-events: none !important;
+    }
+    
+    /* Update the loading spinner styles */
+    .select-button.loading {
+      position: relative;
+      color: transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .select-button .loading-spinner {
+      width: 12px;
+      height: 12px;
+      border-width: 2px;
+      border-top-color: var(--figma-color-text-onbrand);
+      border-right-color: var(--figma-color-text-onbrand);
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      margin: auto;
+    }
+
+    /* Add specific styles for analysis loading spinner */
+    .analysis-loading .loading-spinner {
+      width: 24px;
+      height: 24px;
+      border-width: 2.5px;
+      margin: 8px auto;
+    }
+
+    .select-button:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+    }
+
+    .success-toast.warning {
+      background: var(--figma-color-bg-warning);
+      border: 1px solid var(--figma-color-border-warning);
+    }
+
+    .success-toast.warning .success-toast-message,
+    .success-toast.warning .success-toast-icon {
+      color: white;
+    }
+
+    .watch-toggle.disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      background: var(--figma-color-bg-disabled);
+      color: var(--figma-color-text-disabled);
+    }
+
+    .watch-toggle.disabled:hover {
+      background: var(--figma-color-bg-disabled);
+      color: var(--figma-color-text-disabled);
+    }
+
+    .watch-toggle:hover {
+      &:not(.disabled) {
+        background: var(--figma-color-bg-hover);
+        color: var(--figma-color-text);
+      }
+    }
+
+    .watch-toggle.active {
+      &:not(.disabled) {
+        color: var(--figma-color-text-brand);
+        background: var(--figma-color-bg-brand-tertiary);
+      }
+    }
+
+    .tab-navigation {
+      display: flex;
+      gap: 2px;
+      padding: 2px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      margin-bottom: 16px;
+    }
+
+    .tab-button {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: 4px;
+      border: none;
+      background: none;
+      color: var(--figma-color-text-secondary);
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .tab-button.active {
+      background: var(--figma-color-bg);
+      color: var(--figma-color-text);
+      font-weight: 500;
+    }
+
+    .tab-button.inactive:hover {
+      background: var(--figma-color-bg-hover);
+      color: var(--figma-color-text);
+    }
+
+    .tab-icon {
+      width: 16px;
+      height: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0.8;
+    }
+
+    .tab-button.active .tab-icon {
+      opacity: 1;
+      color: var(--figma-color-text-brand);
+    }
+
+    .tab-badge {
+      background: var(--figma-color-bg-danger);
+      color: white;
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 10px;
+      margin-left: 4px;
+    }
+
+    .lock-icon {
+      opacity: 0.7;
+    }
+
+    .tab-content {
+      padding: 0;
+    }
+
+    .description {
+      color: var(--figma-color-text-secondary);
+      margin: 8px 0 16px;
+    }
+
+    .library-scan-controls {
+      margin-top: 16px;
+    }
+
+    .library-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .analysis-results {
+      margin: 0;
+      padding: 16px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+    }
+
+    .analysis-summary {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .summary-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .summary-label {
+      color: var(--figma-color-text-secondary);
+      font-size: 11px;
+    }
+
+    .summary-value {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--figma-color-text);
+    }
+
+    .section-subtitle {
+      font-size: 12px;
+      font-weight: 600;
+      margin: 0 0 12px 0;
+      color: var(--figma-color-text);
+    }
+
+    .libraries-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .library-item {
+      padding: 8px;
+      background: var(--figma-color-bg);
+      border-radius: 4px;
+    }
+
+    .library-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+
+    .library-name {
+      font-weight: 500;
+    }
+
+    .library-status {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .library-status.enabled {
+      background: var(--figma-color-bg-success);
+      color: var(--figma-color-text-onbrand);
+    }
+
+    .library-status.disabled {
+      background: var(--figma-color-bg-disabled);
+      color: var(--figma-color-text-secondary);
+    }
+
+    .library-details {
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    .analysis-loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      padding: 16px;
+      margin: 0;
+      color: var(--figma-color-text-secondary);
+    }
+
+    .loading-spinner {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      border-top-color: var(--figma-color-bg-brand);
+      border-right-color: var(--figma-color-bg-brand);
+      animation: spinner 0.6s linear infinite;
+    }
+    
+    @keyframes spinner {
+      from {
+        transform: rotate(0deg);
+      }
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    /* Add specific styles for button loading spinner */
+    .select-button .loading-spinner {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      margin: auto;
+      width: 12px;
+      height: 12px;
+      border-width: 2px;
+      border-top-color: var(--figma-color-text-onbrand);
+      border-right-color: var(--figma-color-text-onbrand);
+    }
+
+    /* Add specific styles for analysis loading spinner */
+    .analysis-loading .loading-spinner {
+      width: 24px;
+      height: 24px;
+      border-width: 2.5px;
+      margin: 8px auto;
+    }
+
+    /* Container for select button spinner */
+    .select-button.loading {
+      position: relative;
+      color: transparent;
+    }
+
+    .button.button-disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      pointer-events: none;
+      background: var(--figma-color-bg-disabled);
+      color: var(--figma-color-text-disabled);
+    }
+
+    .sticky-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 16px;
+      background: var(--figma-color-bg);
+      border-top: 1px solid var(--figma-color-border);
+      height: 32px;
+      z-index: 100;
+      position: relative; /* For resize handle positioning */
+    }
+
+    .version-info {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--figma-color-text-secondary);
+      font-size: 11px;
+    }
+
+    .version-number {
+      color: var(--figma-color-text-tertiary);
+    }
+
+    .donate-button {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      border: none;
+      border-radius: 4px;
+      background: var(--figma-color-bg-secondary);
+      color: var(--figma-color-text-tertiary);
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-weight: 500;
+      margin-right: 12px; /* Adjust donate button margin */
+    }
+
+    .donate-button:hover {
+      background: var(--figma-color-bg-hover);
+      color: var(--figma-color-text);
+      transform: scale(1.02);
+    }
+
+    .cat-icon {
+      font-size: 12px;
+      transition: transform 0.2s ease;
+    }
+
+    .donate-button:hover .cat-icon {
+      transform: scale(1.1);
+    }
+
+    /* Add these styles */
+    .scan-settings {
+      margin-top: 4px; /* Reduce top margin */
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      overflow: hidden;
+      padding: 0; /* Remove default padding */
+    }
+
+    .settings-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 8px; /* Reduce padding */
+      cursor: pointer;
+    }
+
+    .settings-title {
+      margin: 0;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--figma-color-text);
+    }
+
+    .settings-toggle {
+      background: none;
+      border: none;
+      padding: 8px;
+      cursor: pointer;
+      color: var(--figma-color-text-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.1s ease;
+      border-radius: 6px;
+      margin: -4px;
+    }
+
+    .settings-toggle:hover {
+      background: var(--figma-color-bg-hover);
+      color: var(--figma-color-text);
+    }
+
+    .settings-toggle:active {
+      background: var(--figma-color-bg-pressed);
+      color: var(--figma-color-text);
+    }
+
+    .settings-content {
+      padding: 0 12px 12px; /* Keep horizontal padding consistent */
+    }
+
+    .setting-item {
+      margin-bottom: 8px;
+    }
+
+    .setting-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .toggle-label-content {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .info-badge {
+      color: var(--figma-color-text-secondary);
+      font-size: 11px;
+      cursor: help;
+    }
+
+    /* Add these styles */
+    .color-preview {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      background: var(--figma-color-bg);
+      border-radius: 2px;
+      max-width: fit-content;
+      border: 1px solid var(--figma-color-border);
+      transition: all 0.2s ease;
+    }
+
+    .color-preview:hover {
+      border-color: var(--figma-color-border-brand);
+      transform: scale(1.02);
+    }
+
+    .color-swatch-container {
+      width: 20px;
+      height: 20px;
+      padding: 0;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 3px;
+      overflow: hidden;
+      border: 1px solid var(--figma-color-border);
+    }
+
+    .color-swatch {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    .color-info {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-family: var(--font-stack);
+      color: var(--figma-color-text);
+    }
+
+    .color-hex {
+      font-family: var(--font-stack);
+      font-weight: 400;
+    }
+
+    .color-opacity {
+      color: var(--figma-color-text-secondary);
+      padding-left: 4px;
+      border-left: 1px solid var(--figma-color-border);
+      font-family: var(--font-stack);
+      font-weight: 400;
+    }
+
+    /* Update color preview styles for results */
+    .value-group-header .color-preview {
+      background: transparent;
+      padding: 4px 8px;
+      font-family: var(--font-stack);
+      border: none;
+    }
+
+    /* Resize handle styles */
+    .resize-handle {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      width: 16px;
+      height: 16px;
+      cursor: nwse-resize;
+      z-index: 1000;
+      touch-action: none; /* Prevent touch scrolling while resizing */
+    }
+
+    .resize-handle::after {
+      content: '';
+      position: absolute;
+      right: 4px;
+      bottom: 4px;
+      width: 8px;
+      height: 8px;
+      border-right: 2px solid var(--figma-color-border);
+      border-bottom: 2px solid var(--figma-color-border);
+      pointer-events: none; /* Ensure handle doesn't interfere with resize */
+    }
+
+    /* Add visual feedback on hover */
+    .resize-handle:hover::after {
+      border-color: var(--figma-color-border-brand);
+    }
+
+    .icon {
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .icon svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* Add specific styles for the scan card icons */
+    .scan-card-icon .icon {
+      opacity: 0.8;
+    }
+
+    .scan-card:hover .icon,
+    .scan-card.selected .icon {
+      opacity: 1;
+    }
+
+    /* Add these styles */
+    .step-title-with-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .results-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 20px;
+      height: 20px;
+      padding: 0 6px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--figma-color-text);
+    }
+
+    /* Update typography styles */
+    .typography-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .typography-tags {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    .typography-tag {
+      padding: 2px 6px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 4px;
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex-shrink: 0;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      transition: all 0.2s ease;
+    }
+
+    .typography-tag.font-family {
+      background: var(--figma-color-bg-brand-tertiary);
+      color: var(--figma-color-text-brand);
+      font-weight: 600;
+    }
+
+    .typography-tag.weight {
+      background: var(--figma-color-bg-secondary);
+    }
+
+    .typography-tag.size {
+      background: var(--figma-color-bg-secondary);
+      min-width: 35px;
+      justify-content: center;
+    }
+
+    .typography-details {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex: 1;
+    }
+
+    .typography-preview {
+      font-family: var(--font-stack);
+      color: var(--figma-color-text);
+      opacity: 0.8;
+      font-size: 11px;
+      line-height: 16px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .typography-specs {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    /* Update reference item styles for typography */
+    .reference-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      margin-bottom: 4px;
+    }
+
+    .reference-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .token-section {
+      margin-top: 16px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px;
+      background: var(--figma-color-bg);
+    }
+
+    .section-header.warning {
+      background: var(--figma-color-bg-warning);
+      color: white;
+    }
+
+    .token-count {
+      background: var(--figma-color-bg-tertiary);
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .token-list {
+      padding: 8px;
+    }
+
+    .token-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      background: var(--figma-color-bg);
+      border-radius: 4px;
+      margin-bottom: 4px;
+      transition: all 0.2s ease;
+    }
+
+    .token-item:hover {
+      background: var(--figma-color-bg-hover);
+      transform: translateX(4px);
+    }
+
+    .token-item.inactive {
+      border: 1px solid var(--figma-color-border-warning);
+    }
+
+    .token-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .token-name {
+      font-weight: 500;
+    }
+
+    .library-name {
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    /* Library Results Styles */
+    .library-results {
+      margin-top: 24px;
+    }
+
+    .results-summary {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 16px;
+      padding: 12px;
+      background: var(--figma-color-bg);
+      border-radius: 6px;
+    }
+
+    .summary-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .summary-item.warning .summary-value {
+      color: var(--figma-color-text-danger);
+    }
+
+    .summary-label {
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    .summary-value {
+      font-size: 16px;
+      font-weight: 500;
+    }
+
+    .library-group {
+      margin-bottom: 16px;
+    }
+
+    .library-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+
+    .library-name {
+      font-weight: 500;
+    }
+
+    .library-status {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .library-status.enabled {
+      background: var(--figma-color-bg-success);
+      color: var(--figma-color-text-onbrand);
+    }
+
+    .library-status.disabled {
+      background: var(--figma-color-bg-disabled);
+      color: var(--figma-color-text-secondary);
+    }
+
+    .library-details {
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    .analysis-loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      padding: 16px;
+      margin: 0;
+      color: var(--figma-color-text-secondary);
+    }
+
+    .loading-spinner {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      border-top-color: var(--figma-color-bg-brand);
+      border-right-color: var(--figma-color-bg-brand);
+      animation: spinner 0.6s linear infinite;
+    }
+    
+    @keyframes spinner {
+      from {
+        transform: rotate(0deg);
+      }
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    /* Add specific styles for button loading spinner */
+    .select-button .loading-spinner {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      margin: auto;
+      width: 12px;
+      height: 12px;
+      border-width: 2px;
+      border-top-color: var(--figma-color-text-onbrand);
+      border-right-color: var(--figma-color-text-onbrand);
+    }
+
+    /* Add specific styles for analysis loading spinner */
+    .analysis-loading .loading-spinner {
+      width: 24px;
+      height: 24px;
+      border-width: 2.5px;
+      margin: 8px auto;
+    }
+
+    /* Container for select button spinner */
+    .select-button.loading {
+      position: relative;
+      color: transparent;
+    }
+
+    .button.button-disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      pointer-events: none;
+      background: var(--figma-color-bg-disabled);
+      color: var(--figma-color-text-disabled);
+    }
+
+    .sticky-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 16px;
+      background: var(--figma-color-bg);
+      border-top: 1px solid var(--figma-color-border);
+      height: 32px;
+      z-index: 100;
+      position: relative; /* For resize handle positioning */
+    }
+
+    .version-info {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--figma-color-text-secondary);
+      font-size: 11px;
+    }
+
+    .version-number {
+      color: var(--figma-color-text-tertiary);
+    }
+
+    .donate-button {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      border: none;
+      border-radius: 4px;
+      background: var(--figma-color-bg-secondary);
+      color: var(--figma-color-text-tertiary);
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-weight: 500;
+      margin-right: 12px; /* Adjust donate button margin */
+    }
+
+    .donate-button:hover {
+      background: var(--figma-color-bg-hover);
+      color: var(--figma-color-text);
+      transform: scale(1.02);
+    }
+
+    .cat-icon {
+      font-size: 12px;
+      transition: transform 0.2s ease;
+    }
+
+    .donate-button:hover .cat-icon {
+      transform: scale(1.1);
+    }
+
+    /* Add these styles */
+    .scan-settings {
+      margin-top: 4px; /* Reduce top margin */
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      overflow: hidden;
+      padding: 0; /* Remove default padding */
+    }
+
+    .settings-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 8px; /* Reduce padding */
+      cursor: pointer;
+    }
+
+    .settings-title {
+      margin: 0;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--figma-color-text);
+    }
+
+    .settings-toggle {
+      background: none;
+      border: none;
+      padding: 8px;
+      cursor: pointer;
+      color: var(--figma-color-text-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.1s ease;
+      border-radius: 6px;
+      margin: -4px;
+    }
+
+    .settings-toggle:hover {
+      background: var(--figma-color-bg-hover);
+      color: var(--figma-color-text);
+    }
+
+    .settings-toggle:active {
+      background: var(--figma-color-bg-pressed);
+      color: var(--figma-color-text);
+    }
+
+    .settings-content {
+      padding: 0 12px 12px; /* Keep horizontal padding consistent */
+    }
+
+    .setting-item {
+      margin-bottom: 8px;
+    }
+
+    .setting-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .toggle-label-content {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .info-badge {
+      color: var(--figma-color-text-secondary);
+      font-size: 11px;
+      cursor: help;
+    }
+
+    /* Add these styles */
+    .color-preview {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      background: var(--figma-color-bg);
+      border-radius: 2px;
+      max-width: fit-content;
+      border: 1px solid var(--figma-color-border);
+      transition: all 0.2s ease;
+    }
+
+    .color-preview:hover {
+      border-color: var(--figma-color-border-brand);
+      transform: scale(1.02);
+    }
+
+    .color-swatch-container {
+      width: 20px;
+      height: 20px;
+      padding: 0;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 3px;
+      overflow: hidden;
+      border: 1px solid var(--figma-color-border);
+    }
+
+    .color-swatch {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    .color-info {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-family: var(--font-stack);
+      color: var(--figma-color-text);
+    }
+
+    .color-hex {
+      font-family: var(--font-stack);
+      font-weight: 400;
+    }
+
+    .color-opacity {
+      color: var(--figma-color-text-secondary);
+      padding-left: 4px;
+      border-left: 1px solid var(--figma-color-border);
+      font-family: var(--font-stack);
+      font-weight: 400;
+    }
+
+    /* Update color preview styles for results */
+    .value-group-header .color-preview {
+      background: transparent;
+      padding: 4px 8px;
+      font-family: var(--font-stack);
+      border: none;
+    }
+
+    /* Resize handle styles */
+    .resize-handle {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      width: 16px;
+      height: 16px;
+      cursor: nwse-resize;
+      z-index: 1000;
+      touch-action: none; /* Prevent touch scrolling while resizing */
+    }
+
+    .resize-handle::after {
+      content: '';
+      position: absolute;
+      right: 4px;
+      bottom: 4px;
+      width: 8px;
+      height: 8px;
+      border-right: 2px solid var(--figma-color-border);
+      border-bottom: 2px solid var(--figma-color-border);
+      pointer-events: none; /* Ensure handle doesn't interfere with resize */
+    }
+
+    /* Add visual feedback on hover */
+    .resize-handle:hover::after {
+      border-color: var(--figma-color-border-brand);
+    }
+
+    .icon {
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .icon svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* Add specific styles for the scan card icons */
+    .scan-card-icon .icon {
+      opacity: 0.8;
+    }
+
+    .scan-card:hover .icon,
+    .scan-card.selected .icon {
+      opacity: 1;
+    }
+
+    /* Add these styles */
+    .step-title-with-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .results-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 20px;
+      height: 20px;
+      padding: 0 6px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--figma-color-text);
+    }
+
+    /* Update typography styles */
+    .typography-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .typography-tags {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    .typography-tag {
+      padding: 2px 6px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 4px;
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex-shrink: 0;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      transition: all 0.2s ease;
+    }
+
+    .typography-tag.font-family {
+      background: var(--figma-color-bg-brand-tertiary);
+      color: var(--figma-color-text-brand);
+      font-weight: 600;
+    }
+
+    .typography-tag.weight {
+      background: var(--figma-color-bg-secondary);
+    }
+
+    .typography-tag.size {
+      background: var(--figma-color-bg-secondary);
+      min-width: 35px;
+      justify-content: center;
+    }
+
+    .typography-details {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex: 1;
+    }
+
+    .typography-preview {
+      font-family: var(--font-stack);
+      color: var(--figma-color-text);
+      opacity: 0.8;
+      font-size: 11px;
+      line-height: 16px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .typography-specs {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    /* Update reference item styles for typography */
+    .reference-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      margin-bottom: 4px;
+    }
+
+    .reference-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .token-section {
+      margin-top: 16px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px;
+      background: var(--figma-color-bg);
+    }
+
+    .section-header.warning {
+      background: var(--figma-color-bg-warning);
+      color: white;
+    }
+
+    .token-count {
+      background: var(--figma-color-bg-tertiary);
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .token-list {
+      padding: 8px;
+    }
+
+    .token-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      background: var(--figma-color-bg);
+      border-radius: 4px;
+      margin-bottom: 4px;
+      transition: all 0.2s ease;
+    }
+
+    .token-item:hover {
+      background: var(--figma-color-bg-hover);
+      transform: translateX(4px);
+    }
+
+    .token-item.inactive {
+      border: 1px solid var(--figma-color-border-warning);
+    }
+
+    .token-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .token-name {
+      font-weight: 500;
+    }
+
+    .library-name {
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    /* Library Results Styles */
+    .library-results {
+      margin-top: 24px;
+    }
+
+    .results-summary {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 16px;
+      padding: 12px;
+      background: var(--figma-color-bg);
+      border-radius: 6px;
+    }
+
+    .summary-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .summary-item.warning .summary-value {
+      color: var(--figma-color-text-danger);
+    }
+
+    .summary-label {
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    .summary-value {
+      font-size: 16px;
+      font-weight: 500;
+    }
+
+    .library-group {
+      margin-bottom: 16px;
+    }
+
+    .library-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+
+    .library-name {
+      font-weight: 500;
+    }
+
+    .library-status {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .library-status.enabled {
+      background: var(--figma-color-bg-success);
+      color: var(--figma-color-text-onbrand);
+    }
+
+    .library-status.disabled {
+      background: var(--figma-color-bg-disabled);
+      color: var(--figma-color-text-secondary);
+    }
+
+    .library-details {
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    .analysis-loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      padding: 16px;
+      margin: 0;
+      color: var(--figma-color-text-secondary);
+    }
+
+    .loading-spinner {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      border-top-color: var(--figma-color-bg-brand);
+      border-right-color: var(--figma-color-bg-brand);
+      animation: spinner 0.6s linear infinite;
+    }
+    
+    @keyframes spinner {
+      from {
+        transform: rotate(0deg);
+      }
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    /* Add specific styles for button loading spinner */
+    .select-button .loading-spinner {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      margin: auto;
+      width: 12px;
+      height: 12px;
+      border-width: 2px;
+      border-top-color: var(--figma-color-text-onbrand);
+      border-right-color: var(--figma-color-text-onbrand);
+    }
+
+    /* Add specific styles for analysis loading spinner */
+    .analysis-loading .loading-spinner {
+      width: 24px;
+      height: 24px;
+      border-width: 2.5px;
+      margin: 8px auto;
+    }
+
+    /* Container for select button spinner */
+    .select-button.loading {
+      position: relative;
+      color: transparent;
+    }
+
+    .button.button-disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      pointer-events: none;
+      background: var(--figma-color-bg-disabled);
+      color: var(--figma-color-text-disabled);
+    }
+
+    .sticky-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 16px;
+      background: var(--figma-color-bg);
+      border-top: 1px solid var(--figma-color-border);
+      height: 32px;
+      z-index: 100;
+      position: relative; /* For resize handle positioning */
+    }
+
+    .version-info {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--figma-color-text-secondary);
+      font-size: 11px;
+    }
+
+    .version-number {
+      color: var(--figma-color-text-tertiary);
+    }
+
+    .donate-button {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      border: none;
+      border-radius: 4px;
+      background: var(--figma-color-bg-secondary);
+      color: var(--figma-color-text-tertiary);
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-weight: 500;
+      margin-right: 12px; /* Adjust donate button margin */
+    }
+
+    .donate-button:hover {
+      background: var(--figma-color-bg-hover);
+      color: var(--figma-color-text);
+      transform: scale(1.02);
+    }
+
+    .cat-icon {
+      font-size: 12px;
+      transition: transform 0.2s ease;
+    }
+
+    .donate-button:hover .cat-icon {
+      transform: scale(1.1);
+    }
+
+    /* Add these styles */
+    .scan-settings {
+      margin-top: 4px; /* Reduce top margin */
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      overflow: hidden;
+      padding: 0; /* Remove default padding */
+    }
+
+    .settings-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 8px; /* Reduce padding */
+      cursor: pointer;
+    }
+
+    .settings-title {
+      margin: 0;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--figma-color-text);
+    }
+
+    .settings-toggle {
+      background: none;
+      border: none;
+      padding: 8px;
+      cursor: pointer;
+      color: var(--figma-color-text-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.1s ease;
+      border-radius: 6px;
+      margin: -4px;
+    }
+
+    .settings-toggle:hover {
+      background: var(--figma-color-bg-hover);
+      color: var(--figma-color-text);
+    }
+
+    .settings-toggle:active {
+      background: var(--figma-color-bg-pressed);
+      color: var(--figma-color-text);
+    }
+
+    .settings-content {
+      padding: 0 12px 12px; /* Keep horizontal padding consistent */
+    }
+
+    .setting-item {
+      margin-bottom: 8px;
+    }
+
+    .setting-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .toggle-label-content {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .info-badge {
+      color: var(--figma-color-text-secondary);
+      font-size: 11px;
+      cursor: help;
+    }
+
+    /* Add these styles */
+    .color-preview {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      background: var(--figma-color-bg);
+      border-radius: 2px;
+      max-width: fit-content;
+      border: 1px solid var(--figma-color-border);
+      transition: all 0.2s ease;
+    }
+
+    .color-preview:hover {
+      border-color: var(--figma-color-border-brand);
+      transform: scale(1.02);
+    }
+
+    .color-swatch-container {
+      width: 20px;
+      height: 20px;
+      padding: 0;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 3px;
+      overflow: hidden;
+      border: 1px solid var(--figma-color-border);
+    }
+
+    .color-swatch {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    .color-info {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-family: var(--font-stack);
+      color: var(--figma-color-text);
+    }
+
+    .color-hex {
+      font-family: var(--font-stack);
+      font-weight: 400;
+    }
+
+    .color-opacity {
+      color: var(--figma-color-text-secondary);
+      padding-left: 4px;
+      border-left: 1px solid var(--figma-color-border);
+      font-family: var(--font-stack);
+      font-weight: 400;
+    }
+
+    /* Update color preview styles for results */
+    .value-group-header .color-preview {
+      background: transparent;
+      padding: 4px 8px;
+      font-family: var(--font-stack);
+      border: none;
+    }
+
+    /* Resize handle styles */
+    .resize-handle {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      width: 16px;
+      height: 16px;
+      cursor: nwse-resize;
+      z-index: 1000;
+      touch-action: none; /* Prevent touch scrolling while resizing */
+    }
+
+    .resize-handle::after {
+      content: '';
+      position: absolute;
+      right: 4px;
+      bottom: 4px;
+      width: 8px;
+      height: 8px;
+      border-right: 2px solid var(--figma-color-border);
+      border-bottom: 2px solid var(--figma-color-border);
+      pointer-events: none; /* Ensure handle doesn't interfere with resize */
+    }
+
+    /* Add visual feedback on hover */
+    .resize-handle:hover::after {
+      border-color: var(--figma-color-border-brand);
+    }
+
+    .icon {
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .icon svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* Add specific styles for the scan card icons */
+    .scan-card-icon .icon {
+      opacity: 0.8;
+    }
+
+    .scan-card:hover .icon,
+    .scan-card.selected .icon {
+      opacity: 1;
+    }
+
+    /* Add these styles */
+    .step-title-with-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .results-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 20px;
+      height: 20px;
+      padding: 0 6px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--figma-color-text);
+    }
+
+    /* Update typography styles */
+    .typography-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .typography-tags {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    .typography-tag {
+      padding: 2px 6px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 4px;
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex-shrink: 0;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      transition: all 0.2s ease;
+    }
+
+    .typography-tag.font-family {
+      background: var(--figma-color-bg-brand-tertiary);
+      color: var(--figma-color-text-brand);
+      font-weight: 600;
+    }
+
+    .typography-tag.weight {
+      background: var(--figma-color-bg-secondary);
+    }
+
+    .typography-tag.size {
+      background: var(--figma-color-bg-secondary);
+      min-width: 35px;
+      justify-content: center;
+    }
+
+    .typography-details {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex: 1;
+    }
+
+    .typography-preview {
+      font-family: var(--font-stack);
+      color: var(--figma-color-text);
+      opacity: 0.8;
+      font-size: 11px;
+      line-height: 16px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .typography-specs {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    /* Update reference item styles for typography */
+    .reference-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      margin-bottom: 4px;
+    }
+
+    .reference-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .token-section {
+      margin-top: 16px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px;
+      background: var(--figma-color-bg);
+    }
+
+    .section-header.warning {
+      background: var(--figma-color-bg-warning);
+      color: white;
+    }
+
+    .token-count {
+      background: var(--figma-color-bg-tertiary);
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .token-list {
+      padding: 8px;
+    }
+
+    .token-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      background: var(--figma-color-bg);
+      border-radius: 4px;
+      margin-bottom: 4px;
+      transition: all 0.2s ease;
+    }
+
+    .token-item:hover {
+      background: var(--figma-color-bg-hover);
+      transform: translateX(4px);
+    }
+
+    .token-item.inactive {
+      border: 1px solid var(--figma-color-border-warning);
+    }
+
+    .token-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .token-name {
+      font-weight: 500;
+    }
+
+    .library-name {
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    /* Library Results Styles */
+    .library-results {
+      margin-top: 24px;
+    }
+
+    .results-summary {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 16px;
+      padding: 12px;
+      background: var(--figma-color-bg);
+      border-radius: 6px;
+    }
+
+    .summary-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .summary-item.warning .summary-value {
+      color: var(--figma-color-text-danger);
+    }
+
+    .summary-label {
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    .summary-value {
+      font-size: 16px;
+      font-weight: 500;
+    }
+
+    .library-group {
+      margin-bottom: 16px;
+    }
+
+    .library-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+
+    .library-name {
+      font-weight: 500;
+    }
+
+    .library-status {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .library-status.enabled {
+      background: var(--figma-color-bg-success);
+      color: var(--figma-color-text-onbrand);
+    }
+
+    .library-status.disabled {
+      background: var(--figma-color-bg-disabled);
+      color: var(--figma-color-text-secondary);
+    }
+
+    .library-details {
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    .analysis-loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      padding: 16px;
+      margin: 0;
+      color: var(--figma-color-text-secondary);
+    }
+
+    .loading-spinner {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      border-top-color: var(--figma-color-bg-brand);
+      border-right-color: var(--figma-color-bg-brand);
+      animation: spinner 0.6s linear infinite;
+    }
+    
+    @keyframes spinner {
+      from {
+        transform: rotate(0deg);
+      }
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    /* Add specific styles for button loading spinner */
+    .select-button .loading-spinner {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      margin: auto;
+      width: 12px;
+      height: 12px;
+      border-width: 2px;
+      border-top-color: var(--figma-color-text-onbrand);
+      border-right-color: var(--figma-color-text-onbrand);
+    }
+
+    /* Add specific styles for analysis loading spinner */
+    .analysis-loading .loading-spinner {
+      width: 24px;
+      height: 24px;
+      border-width: 2.5px;
+      margin: 8px auto;
+    }
+
+    /* Container for select button spinner */
+    .select-button.loading {
+      position: relative;
+      color: transparent;
+    }
+
+    .button.button-disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      pointer-events: none;
+      background: var(--figma-color-bg-disabled);
+      color: var(--figma-color-text-disabled);
+    }
+
+    .sticky-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 16px;
+      background: var(--figma-color-bg);
+      border-top: 1px solid var(--figma-color-border);
+      height: 32px;
+      z-index: 100;
+      position: relative; /* For resize handle positioning */
+    }
+
+    .version-info {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--figma-color-text-secondary);
+      font-size: 11px;
+    }
+
+    .version-number {
+      color: var(--figma-color-text-tertiary);
+    }
+
+    .donate-button {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      border: none;
+      border-radius: 4px;
+      background: var(--figma-color-bg-secondary);
+      color: var(--figma-color-text-tertiary);
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-weight: 500;
+      margin-right: 12px; /* Adjust donate button margin */
+    }
+
+    .donate-button:hover {
+      background: var(--figma-color-bg-hover);
+      color: var(--figma-color-text);
+      transform: scale(1.02);
+    }
+
+    .cat-icon {
+      font-size: 12px;
+      transition: transform 0.2s ease;
+    }
+
+    .donate-button:hover .cat-icon {
+      transform: scale(1.1);
+    }
+
+    /* Add these styles */
+    .scan-settings {
+      margin-top: 4px; /* Reduce top margin */
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      overflow: hidden;
+      padding: 0; /* Remove default padding */
+    }
+
+    .settings-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 8px; /* Reduce padding */
+      cursor: pointer;
+    }
+
+    .settings-title {
+      margin: 0;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--figma-color-text);
+    }
+
+    .settings-toggle {
+      background: none;
+      border: none;
+      padding: 8px;
+      cursor: pointer;
+      color: var(--figma-color-text-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.1s ease;
+      border-radius: 6px;
+      margin: -4px;
+    }
+
+    .settings-toggle:hover {
+      background: var(--figma-color-bg-hover);
+      color: var(--figma-color-text);
+    }
+
+    .settings-toggle:active {
+      background: var(--figma-color-bg-pressed);
+      color: var(--figma-color-text);
+    }
+
+    .settings-content {
+      padding: 0 12px 12px; /* Keep horizontal padding consistent */
+    }
+
+    .setting-item {
+      margin-bottom: 8px;
+    }
+
+    .setting-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .toggle-label-content {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .info-badge {
+      color: var(--figma-color-text-secondary);
+      font-size: 11px;
+      cursor: help;
+    }
+
+    /* Add these styles */
+    .color-preview {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      background: var(--figma-color-bg);
+      border-radius: 2px;
+      max-width: fit-content;
+      border: 1px solid var(--figma-color-border);
+      transition: all 0.2s ease;
+    }
+
+    .color-preview:hover {
+      border-color: var(--figma-color-border-brand);
+      transform: scale(1.02);
+    }
+
+    .color-swatch-container {
+      width: 20px;
+      height: 20px;
+      padding: 0;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 3px;
+      overflow: hidden;
+      border: 1px solid var(--figma-color-border);
+    }
+
+    .color-swatch {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    .color-info {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-family: var(--font-stack);
+      color: var(--figma-color-text);
+    }
+
+    .color-hex {
+      font-family: var(--font-stack);
+      font-weight: 400;
+    }
+
+    .color-opacity {
+      color: var(--figma-color-text-secondary);
+      padding-left: 4px;
+      border-left: 1px solid var(--figma-color-border);
+      font-family: var(--font-stack);
+      font-weight: 400;
+    }
+
+    /* Update color preview styles for results */
+    .value-group-header .color-preview {
+      background: transparent;
+      padding: 4px 8px;
+      font-family: var(--font-stack);
+      border: none;
+    }
+
+    /* Resize handle styles */
+    .resize-handle {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      width: 16px;
+      height: 16px;
+      cursor: nwse-resize;
+      z-index: 1000;
+      touch-action: none; /* Prevent touch scrolling while resizing */
+    }
+
+    .resize-handle::after {
+      content: '';
+      position: absolute;
+      right: 4px;
+      bottom: 4px;
+      width: 8px;
+      height: 8px;
+      border-right: 2px solid var(--figma-color-border);
+      border-bottom: 2px solid var(--figma-color-border);
+      pointer-events: none; /* Ensure handle doesn't interfere with resize */
+    }
+
+    /* Add visual feedback on hover */
+    .resize-handle:hover::after {
+      border-color: var(--figma-color-border-brand);
+    }
+
+    .icon {
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .icon svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* Add specific styles for the scan card icons */
+    .scan-card-icon .icon {
+      opacity: 0.8;
+    }
+
+    .scan-card:hover .icon,
+    .scan-card.selected .icon {
+      opacity: 1;
+    }
+
+    /* Add these styles */
+    .step-title-with-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .results-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 20px;
+      height: 20px;
+      padding: 0 6px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--figma-color-text);
+    }
+
+    /* Update typography styles */
+    .typography-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .typography-tags {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    .typography-tag {
+      padding: 2px 6px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 4px;
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex-shrink: 0;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      transition: all 0.2s ease;
+    }
+
+    .typography-tag.font-family {
+      background: var(--figma-color-bg-brand-tertiary);
+      color: var(--figma-color-text-brand);
+      font-weight: 600;
+    }
+
+    .typography-tag.weight {
+      background: var(--figma-color-bg-secondary);
+    }
+
+    .typography-tag.size {
+      background: var(--figma-color-bg-secondary);
+      min-width: 35px;
+      justify-content: center;
+    }
+
+    .typography-details {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex: 1;
+    }
+
+    .typography-preview {
+      font-family: var(--font-stack);
+      color: var(--figma-color-text);
+      opacity: 0.8;
+      font-size: 11px;
+      line-height: 16px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .typography-specs {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    /* Update reference item styles for typography */
+    .reference-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      margin-bottom: 4px;
+    }
+
+    .reference-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .token-section {
+      margin-top: 16px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px;
+      background: var(--figma-color-bg);
+    }
+
+    .section-header.warning {
+      background: var(--figma-color-bg-warning);
+      color: white;
+    }
+
+    .token-count {
+      background: var(--figma-color-bg-tertiary);
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .token-list {
+      padding: 8px;
+    }
+
+    .token-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      background: var(--figma-color-bg);
+      border-radius: 4px;
+      margin-bottom: 4px;
+      transition: all 0.2s ease;
+    }
+
+    .token-item:hover {
+      background: var(--figma-color-bg-hover);
+      transform: translateX(4px);
+    }
+
+    .token-item.inactive {
+      border: 1px solid var(--figma-color-border-warning);
+    }
+
+    .token-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .token-name {
+      font-weight: 500;
+    }
+
+    .library-name {
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    /* Library Results Styles */
+    .library-results {
+      margin-top: 24px;
+    }
+
+    .results-summary {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 16px;
+      padding: 12px;
+      background: var(--figma-color-bg);
+      border-radius: 6px;
+    }
+
+    .summary-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .summary-item.warning .summary-value {
+      color: var(--figma-color-text-danger);
+    }
+
+    .summary-label {
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    .summary-value {
+      font-size: 16px;
+      font-weight: 500;
+    }
+
+    .library-group {
+      margin-bottom: 16px;
+    }
+
+    .library-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+
+    .library-name {
+      font-weight: 500;
+    }
+
+    .library-status {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .library-status.enabled {
+      background: var(--figma-color-bg-success);
+      color: var(--figma-color-text-onbrand);
+    }
+
+    .library-status.disabled {
+      background: var(--figma-color-bg-disabled);
+      color: var(--figma-color-text-secondary);
+    }
+
+    .library-details {
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    .analysis-loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      padding: 16px;
+      margin: 0;
+      color: var(--figma-color-text-secondary);
+    }
+
+    .loading-spinner {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      border-top-color: var(--figma-color-bg-brand);
+      border-right-color: var(--figma-color-bg-brand);
+      animation: spinner 0.6s linear infinite;
+    }
+    
+    @keyframes spinner {
+      from {
+        transform: rotate(0deg);
+      }
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    /* Add specific styles for button loading spinner */
+    .select-button .loading-spinner {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      margin: auto;
+      width: 12px;
+      height: 12px;
+      border-width: 2px;
+      border-top-color: var(--figma-color-text-onbrand);
+      border-right-color: var(--figma-color-text-onbrand);
+    }
+
+    /* Add specific styles for analysis loading spinner */
+    .analysis-loading .loading-spinner {
+      width: 24px;
+      height: 24px;
+      border-width: 2.5px;
+      margin: 8px auto;
+    }
+
+    /* Container for select button spinner */
+    .select-button.loading {
+      position: relative;
+      color: transparent;
+    }
+
+    .button.button-disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      pointer-events: none;
+      background: var(--figma-color-bg-disabled);
+      color: var(--figma-color-text-disabled);
+    }
+
+    .sticky-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 16px;
+      background: var(--figma-color-bg);
+      border-top: 1px solid var(--figma-color-border);
+      height: 32px;
+      z-index: 100;
+      position: relative; /* For resize handle positioning */
+    }
+
+    .version-info {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--figma-color-text-secondary);
+      font-size: 11px;
+    }
+
+    .version-number {
+      color: var(--figma-color-text-tertiary);
+    }
+
+    .donate-button {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      border: none;
+      border-radius: 4px;
+      background: var(--figma-color-bg-secondary);
+      color: var(--figma-color-text-tertiary);
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-weight: 500;
+      margin-right: 12px; /* Adjust donate button margin */
+    }
+
+    .donate-button:hover {
+      background: var(--figma-color-bg-hover);
+      color: var(--figma-color-text);
+      transform: scale(1.02);
+    }
+
+    .cat-icon {
+      font-size: 12px;
+      transition: transform 0.2s ease;
+    }
+
+    .donate-button:hover .cat-icon {
+      transform: scale(1.1);
+    }
+
+    /* Add these styles */
+    .scan-settings {
+      margin-top: 4px; /* Reduce top margin */
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      overflow: hidden;
+      padding: 0; /* Remove default padding */
+    }
+
+    .settings-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 8px; /* Reduce padding */
+      cursor: pointer;
+    }
+
+    .settings-title {
+      margin: 0;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--figma-color-text);
+    }
+
+    .settings-toggle {
+      background: none;
+      border: none;
+      padding: 8px;
+      cursor: pointer;
+      color: var(--figma-color-text-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.1s ease;
+      border-radius: 6px;
+      margin: -4px;
+    }
+
+    .settings-toggle:hover {
+      background: var(--figma-color-bg-hover);
+      color: var(--figma-color-text);
+    }
+
+    .settings-toggle:active {
+      background: var(--figma-color-bg-pressed);
+      color: var(--figma-color-text);
+    }
+
+    .settings-content {
+      padding: 0 12px 12px; /* Keep horizontal padding consistent */
+    }
+
+    .setting-item {
+      margin-bottom: 8px;
+    }
+
+    .setting-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .toggle-label-content {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .info-badge {
+      color: var(--figma-color-text-secondary);
+      font-size: 11px;
+      cursor: help;
+    }
+
+    /* Add these styles */
+    .color-preview {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      background: var(--figma-color-bg);
+      border-radius: 2px;
+      max-width: fit-content;
+      border: 1px solid var(--figma-color-border);
+      transition: all 0.2s ease;
+    }
+
+    .color-preview:hover {
+      border-color: var(--figma-color-border-brand);
+      transform: scale(1.02);
+    }
+
+    .color-swatch-container {
+      width: 20px;
+      height: 20px;
+      padding: 0;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 3px;
+      overflow: hidden;
+      border: 1px solid var(--figma-color-border);
+    }
+
+    .color-swatch {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    .color-info {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-family: var(--font-stack);
+      color: var(--figma-color-text);
+    }
+
+    .color-hex {
+      font-family: var(--font-stack);
+      font-weight: 400;
+    }
+
+    .color-opacity {
+      color: var(--figma-color-text-secondary);
+      padding-left: 4px;
+      border-left: 1px solid var(--figma-color-border);
+      font-family: var(--font-stack);
+      font-weight: 400;
+    }
+
+    /* Update color preview styles for results */
+    .value-group-header .color-preview {
+      background: transparent;
+      padding: 4px 8px;
+      font-family: var(--font-stack);
+      border: none;
+    }
+
+    /* Resize handle styles */
+    .resize-handle {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      width: 16px;
+      height: 16px;
+      cursor: nwse-resize;
+      z-index: 1000;
+      touch-action: none; /* Prevent touch scrolling while resizing */
+    }
+
+    .resize-handle::after {
+      content: '';
+      position: absolute;
+      right: 4px;
+      bottom: 4px;
+      width: 8px;
+      height: 8px;
+      border-right: 2px solid var(--figma-color-border);
+      border-bottom: 2px solid var(--figma-color-border);
+      pointer-events: none; /* Ensure handle doesn't interfere with resize */
+    }
+
+    /* Add visual feedback on hover */
+    .resize-handle:hover::after {
+      border-color: var(--figma-color-border-brand);
+    }
+
+    .icon {
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .icon svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* Add specific styles for the scan card icons */
+    .scan-card-icon .icon {
+      opacity: 0.8;
+    }
+
+    .scan-card:hover .icon,
+    .scan-card.selected .icon {
+      opacity: 1;
+    }
+
+    /* Add these styles */
+    .step-title-with-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .results-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 20px;
+      height: 20px;
+      padding: 0 6px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--figma-color-text);
+    }
+
+    /* Update typography styles */
+    .typography-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .typography-tags {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    .typography-tag {
+      padding: 2px 6px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 4px;
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex-shrink: 0;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      transition: all 0.2s ease;
+    }
+
+    .typography-tag.font-family {
+      background: var(--figma-color-bg-brand-tertiary);
+      color: var(--figma-color-text-brand);
+      font-weight: 600;
+    }
+
+    .typography-tag.weight {
+      background: var(--figma-color-bg-secondary);
+    }
+
+    .typography-tag.size {
+      background: var(--figma-color-bg-secondary);
+      min-width: 35px;
+      justify-content: center;
+    }
+
+    .typography-details {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex: 1;
+    }
+
+    .typography-preview {
+      font-family: var(--font-stack);
+      color: var(--figma-color-text);
+      opacity: 0.8;
+      font-size: 11px;
+      line-height: 16px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .typography-specs {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    /* Update reference item styles for typography */
+    .reference-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      margin-bottom: 4px;
+    }
+
+    .reference-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .token-section {
+      margin-top: 16px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px;
+      background: var(--figma-color-bg);
+    }
+
+    .section-header.warning {
+      background: var(--figma-color-bg-warning);
+      color: white;
+    }
+
+    .token-count {
+      background: var(--figma-color-bg-tertiary);
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .token-list {
+      padding: 8px;
+    }
+
+    .token-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      background: var(--figma-color-bg);
+      border-radius: 4px;
+      margin-bottom: 4px;
+      transition: all 0.2s ease;
+    }
+
+    .token-item:hover {
+      background: var(--figma-color-bg-hover);
+      transform: translateX(4px);
+    }
+
+    .token-item.inactive {
+      border: 1px solid var(--figma-color-border-warning);
+    }
+
+    .token-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .token-name {
+      font-weight: 500;
+    }
+
+    .library-name {
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    /* Library Results Styles */
+    .library-results {
+      margin-top: 24px;
+    }
+
+    .results-summary {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 16px;
+      padding: 12px;
+      background: var(--figma-color-bg);
+      border-radius: 6px;
+    }
+
+    .summary-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .summary-item.warning .summary-value {
+      color: var(--figma-color-text-danger);
+    }
+
+    .summary-label {
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    .summary-value {
+      font-size: 16px;
+      font-weight: 500;
+    }
+
+    .library-group {
+      margin-bottom: 16px;
+    }
+
+    .library-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+
+    .library-name {
+      font-weight: 500;
+    }
+
+    .library-status {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .library-status.enabled {
+      background: var(--figma-color-bg-success);
+      color: var(--figma-color-text-onbrand);
+    }
+
+    .library-status.disabled {
+      background: var(--figma-color-bg-disabled);
+      color: var(--figma-color-text-secondary);
+    }
+
+    .library-details {
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    .analysis-loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      padding: 16px;
+      margin: 0;
+      color: var(--figma-color-text-secondary);
+    }
+
+    .loading-spinner {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      border-top-color: var(--figma-color-bg-brand);
+      border-right-color: var(--figma-color-bg-brand);
+      animation: spinner 0.6s linear infinite;
+    }
+    
+    @keyframes spinner {
+      from {
+        transform: rotate(0deg);
+      }
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    /* Add specific styles for button loading spinner */
+    .select-button .loading-spinner {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      margin: auto;
+      width: 12px;
+      height: 12px;
+      border-width: 2px;
+      border-top-color: var(--figma-color-text-onbrand);
+      border-right-color: var(--figma-color-text-onbrand);
+    }
+
+    /* Add specific styles for analysis loading spinner */
+    .analysis-loading .loading-spinner {
+      width: 24px;
+      height: 24px;
+      border-width: 2.5px;
+      margin: 8px auto;
+    }
+
+    /* Container for select button spinner */
+    .select-button.loading {
+      position: relative;
+      color: transparent;
+    }
+
+    .button.button-disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      pointer-events: none;
+      background: var(--figma-color-bg-disabled);
+      color: var(--figma-color-text-disabled);
+    }
+
+    .sticky-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 16px;
+      background: var(--figma-color-bg);
+      border-top: 1px solid var(--figma-color-border);
+      height: 32px;
+      z-index: 100;
+      position: relative; /* For resize handle positioning */
+    }
+
+    .version-info {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--figma-color-text-secondary);
+      font-size: 11px;
+    }
+
+    .version-number {
+      color: var(--figma-color-text-tertiary);
+    }
+
+    .donate-button {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      border: none;
+      border-radius: 4px;
+      background: var(--figma-color-bg-secondary);
+      color: var(--figma-color-text-tertiary);
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-weight: 500;
+      margin-right: 12px; /* Adjust donate button margin */
+    }
+
+    .donate-button:hover {
+      background: var(--figma-color-bg-hover);
+      color: var(--figma-color-text);
+      transform: scale(1.02);
+    }
+
+    .cat-icon {
+      font-size: 12px;
+      transition: transform 0.2s ease;
+    }
+
+    .donate-button:hover .cat-icon {
+      transform: scale(1.1);
+    }
+
+    /* Add these styles */
+    .scan-settings {
+      margin-top: 4px; /* Reduce top margin */
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      overflow: hidden;
+      padding: 0; /* Remove default padding */
+    }
+
+    .settings-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 8px; /* Reduce padding */
+      cursor: pointer;
+    }
+
+    .settings-title {
+      margin: 0;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--figma-color-text);
+    }
+
+    .settings-toggle {
+      background: none;
+      border: none;
+      padding: 8px;
+      cursor: pointer;
+      color: var(--figma-color-text-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.1s ease;
+      border-radius: 6px;
+      margin: -4px;
+    }
+
+    .settings-toggle:hover {
+      background: var(--figma-color-bg-hover);
+      color: var(--figma-color-text);
+    }
+
+    .settings-toggle:active {
+      background: var(--figma-color-bg-pressed);
+      color: var(--figma-color-text);
+    }
+
+    .settings-content {
+      padding: 0 12px 12px; /* Keep horizontal padding consistent */
+    }
+
+    .setting-item {
+      margin-bottom: 8px;
+    }
+
+    .setting-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .toggle-label-content {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .info-badge {
+      color: var(--figma-color-text-secondary);
+      font-size: 11px;
+      cursor: help;
+    }
+
+    /* Add these styles */
+    .color-preview {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      background: var(--figma-color-bg);
+      border-radius: 2px;
+      max-width: fit-content;
+      border: 1px solid var(--figma-color-border);
+      transition: all 0.2s ease;
+    }
+
+    .color-preview:hover {
+      border-color: var(--figma-color-border-brand);
+      transform: scale(1.02);
+    }
+
+    .color-swatch-container {
+      width: 20px;
+      height: 20px;
+      padding: 0;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 3px;
+      overflow: hidden;
+      border: 1px solid var(--figma-color-border);
+    }
+
+    .color-swatch {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    .color-info {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-family: var(--font-stack);
+      color: var(--figma-color-text);
+    }
+
+    .color-hex {
+      font-family: var(--font-stack);
+      font-weight: 400;
+    }
+
+    .color-opacity {
+      color: var(--figma-color-text-secondary);
+      padding-left: 4px;
+      border-left: 1px solid var(--figma-color-border);
+      font-family: var(--font-stack);
+      font-weight: 400;
+    }
+
+    /* Update color preview styles for results */
+    .value-group-header .color-preview {
+      background: transparent;
+      padding: 4px 8px;
+      font-family: var(--font-stack);
+      border: none;
+    }
+
+    /* Resize handle styles */
+    .resize-handle {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      width: 16px;
+      height: 16px;
+      cursor: nwse-resize;
+      z-index: 1000;
+      touch-action: none; /* Prevent touch scrolling while resizing */
+    }
+
+    .resize-handle::after {
+      content: '';
+      position: absolute;
+      right: 4px;
+      bottom: 4px;
+      width: 8px;
+      height: 8px;
+      border-right: 2px solid var(--figma-color-border);
+      border-bottom: 2px solid var(--figma-color-border);
+      pointer-events: none; /* Ensure handle doesn't interfere with resize */
+    }
+
+    /* Add visual feedback on hover */
+    .resize-handle:hover::after {
+      border-color: var(--figma-color-border-brand);
+    }
+
+    .icon {
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .icon svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* Add specific styles for the scan card icons */
+    .scan-card-icon .icon {
+      opacity: 0.8;
+    }
+
+    .scan-card:hover .icon,
+    .scan-card.selected .icon {
+      opacity: 1;
+    }
+
+    /* Add these styles */
+    .step-title-with-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .results-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 20px;
+      height: 20px;
+      padding: 0 6px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--figma-color-text);
+    }
+
+    /* Update typography styles */
+    .typography-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .typography-tags {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    .typography-tag {
+      padding: 2px 6px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 4px;
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex-shrink: 0;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      transition: all 0.2s ease;
+    }
+
+    .typography-tag.font-family {
+      background: var(--figma-color-bg-brand-tertiary);
+      color: var(--figma-color-text-brand);
+      font-weight: 600;
+    }
+
+    .typography-tag.weight {
+      background: var(--figma-color-bg-secondary);
+    }
+
+    .typography-tag.size {
+      background: var(--figma-color-bg-secondary);
+      min-width: 35px;
+      justify-content: center;
+    }
+
+    .typography-details {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex: 1;
+    }
+
+    .typography-preview {
+      font-family: var(--font-stack);
+      color: var(--figma-color-text);
+      opacity: 0.8;
+      font-size: 11px;
+      line-height: 16px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .typography-specs {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    /* Update reference item styles for typography */
+    .reference-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      margin-bottom: 4px;
+    }
+
+    .reference-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .token-section {
+      margin-top: 16px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px;
+      background: var(--figma-color-bg);
+    }
+
+    .section-header.warning {
+      background: var(--figma-color-bg-warning);
+      color: white;
+    }
+
+    .token-count {
+      background: var(--figma-color-bg-tertiary);
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .token-list {
+      padding: 8px;
+    }
+
+    .token-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      background: var(--figma-color-bg);
+      border-radius: 4px;
+      margin-bottom: 4px;
+      transition: all 0.2s ease;
+    }
+
+    .token-item:hover {
+      background: var(--figma-color-bg-hover);
+      transform: translateX(4px);
+    }
+
+    .token-item.inactive {
+      border: 1px solid var(--figma-color-border-warning);
+    }
+
+    .token-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .token-name {
+      font-weight: 500;
+    }
+
+    .library-name {
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    /* Library Results Styles */
+    .library-results {
+      margin-top: 24px;
+    }
+
+    .results-summary {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 16px;
+      padding: 12px;
+      background: var(--figma-color-bg);
+      border-radius: 6px;
+    }
+
+    .summary-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .summary-item.warning .summary-value {
+      color: var(--figma-color-text-danger);
+    }
+
+    .summary-label {
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    .summary-value {
+      font-size: 16px;
+      font-weight: 500;
+    }
+
+    .library-group {
+      margin-bottom: 16px;
+    }
+
+    .library-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+
+    .library-name {
+      font-weight: 500;
+    }
+
+    .library-status {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .library-status.enabled {
+      background: var(--figma-color-bg-success);
+      color: var(--figma-color-text-onbrand);
+    }
+
+    .library-status.disabled {
+      background: var(--figma-color-bg-disabled);
+      color: var(--figma-color-text-secondary);
+    }
+
+    .library-details {
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    .analysis-loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      padding: 16px;
+      margin: 0;
+      color: var(--figma-color-text-secondary);
+    }
+
+    .loading-spinner {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      border-top-color: var(--figma-color-bg-brand);
+      border-right-color: var(--figma-color-bg-brand);
+      animation: spinner 0.6s linear infinite;
+    }
+    
+    @keyframes spinner {
+      from {
+        transform: rotate(0deg);
+      }
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    /* Add specific styles for button loading spinner */
+    .select-button .loading-spinner {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      margin: auto;
+      width: 12px;
+      height: 12px;
+      border-width: 2px;
+      border-top-color: var(--figma-color-text-onbrand);
+      border-right-color: var(--figma-color-text-onbrand);
+    }
+
+    /* Add specific styles for analysis loading spinner */
+    .analysis-loading .loading-spinner {
+      width: 24px;
+      height: 24px;
+      border-width: 2.5px;
+      margin: 8px auto;
+    }
+
+    /* Container for select button spinner */
+    .select-button.loading {
+      position: relative;
+      color: transparent;
+    }
+
+    .button.button-disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      pointer-events: none;
+      background: var(--figma-color-bg-disabled);
+      color: var(--figma-color-text-disabled);
+    }
+
+    .sticky-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 16px;
+      background: var(--figma-color-bg);
+      border-top: 1px solid var(--figma-color-border);
+      height: 32px;
+      z-index: 100;
+      position: relative; /* For resize handle positioning */
+    }
+
+    .version-info {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--figma-color-text-secondary);
+      font-size: 11px;
+    }
+
+    .version-number {
+      color: var(--figma-color-text-tertiary);
+    }
+
+    .donate-button {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      border: none;
+      border-radius: 4px;
+      background: var(--figma-color-bg-secondary);
+      color: var(--figma-color-text-tertiary);
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-weight: 500;
+      margin-right: 12px; /* Adjust donate button margin */
+    }
+
+    .donate-button:hover {
+      background: var(--figma-color-bg-hover);
+      color: var(--figma-color-text);
+      transform: scale(1.02);
+    }
+
+    .cat-icon {
+      font-size: 12px;
+      transition: transform 0.2s ease;
+    }
+
+    .donate-button:hover .cat-icon {
+      transform: scale(1.1);
+    }
+
+    /* Add these styles */
+    .scan-settings {
+      margin-top: 4px; /* Reduce top margin */
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      overflow: hidden;
+      padding: 0; /* Remove default padding */
+    }
+
+    .settings-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 8px; /* Reduce padding */
+      cursor: pointer;
+    }
+
+    .settings-title {
+      margin: 0;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--figma-color-text);
+    }
+
+    .settings-toggle {
+      background: none;
+      border: none;
+      padding: 8px;
+      cursor: pointer;
+      color: var(--figma-color-text-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.1s ease;
+      border-radius: 6px;
+      margin: -4px;
+    }
+
+    .settings-toggle:hover {
+      background: var(--figma-color-bg-hover);
+      color: var(--figma-color-text);
+    }
+
+    .settings-toggle:active {
+      background: var(--figma-color-bg-pressed);
+      color: var(--figma-color-text);
+    }
+
+    .settings-content {
+      padding: 0 12px 12px; /* Keep horizontal padding consistent */
+    }
+
+    .setting-item {
+      margin-bottom: 8px;
+    }
+
+    .setting-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .toggle-label-content {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .info-badge {
+      color: var(--figma-color-text-secondary);
+      font-size: 11px;
+      cursor: help;
+    }
+
+    /* Add these styles */
+    .color-preview {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      background: var(--figma-color-bg);
+      border-radius: 2px;
+      max-width: fit-content;
+      border: 1px solid var(--figma-color-border);
+      transition: all 0.2s ease;
+    }
+
+    .color-preview:hover {
+      border-color: var(--figma-color-border-brand);
+      transform: scale(1.02);
+    }
+
+    .color-swatch-container {
+      width: 20px;
+      height: 20px;
+      padding: 0;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 3px;
+      overflow: hidden;
+      border: 1px solid var(--figma-color-border);
+    }
+
+    .color-swatch {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    .color-info {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-family: var(--font-stack);
+      color: var(--figma-color-text);
+    }
+
+    .color-hex {
+      font-family: var(--font-stack);
+      font-weight: 400;
+    }
+
+    .color-opacity {
+      color: var(--figma-color-text-secondary);
+      padding-left: 4px;
+      border-left: 1px solid var(--figma-color-border);
+      font-family: var(--font-stack);
+      font-weight: 400;
+    }
+
+    /* Update color preview styles for results */
+    .value-group-header .color-preview {
+      background: transparent;
+      padding: 4px 8px;
+      font-family: var(--font-stack);
+      border: none;
+    }
+
+    /* Resize handle styles */
+    .resize-handle {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      width: 16px;
+      height: 16px;
+      cursor: nwse-resize;
+      z-index: 1000;
+      touch-action: none; /* Prevent touch scrolling while resizing */
+    }
+
+    .resize-handle::after {
+      content: '';
+      position: absolute;
+      right: 4px;
+      bottom: 4px;
+      width: 8px;
+      height: 8px;
+      border-right: 2px solid var(--figma-color-border);
+      border-bottom: 2px solid var(--figma-color-border);
+      pointer-events: none; /* Ensure handle doesn't interfere with resize */
+    }
+
+    /* Add visual feedback on hover */
+    .resize-handle:hover::after {
+      border-color: var(--figma-color-border-brand);
+    }
+
+    .icon {
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .icon svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* Add specific styles for the scan card icons */
+    .scan-card-icon .icon {
+      opacity: 0.8;
+    }
+
+    .scan-card:hover .icon,
+    .scan-card.selected .icon {
+      opacity: 1;
+    }
+
+    /* Add these styles */
+    .step-title-with-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .results-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 20px;
+      height: 20px;
+      padding: 0 6px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--figma-color-text);
+    }
+
+    /* Update typography styles */
+    .typography-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .typography-tags {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    .typography-tag {
+      padding: 2px 6px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 4px;
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex-shrink: 0;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      transition: all 0.2s ease;
+    }
+
+    .typography-tag.font-family {
+      background: var(--figma-color-bg-brand-tertiary);
+      color: var(--figma-color-text-brand);
+      font-weight: 600;
+    }
+
+    .typography-tag.weight {
+      background: var(--figma-color-bg-secondary);
+    }
+
+    .typography-tag.size {
+      background: var(--figma-color-bg-secondary);
+      min-width: 35px;
+      justify-content: center;
+    }
+
+    .typography-details {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex: 1;
+    }
+
+    .typography-preview {
+      font-family: var(--font-stack);
+      color: var(--figma-color-text);
+      opacity: 0.8;
+      font-size: 11px;
+      line-height: 16px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .typography-specs {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    /* Update reference item styles for typography */
+    .reference-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      margin-bottom: 4px;
+    }
+
+    .reference-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .token-section {
+      margin-top: 16px;
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px;
+      background: var(--figma-color-bg);
+    }
+
+    .section-header.warning {
+      background: var(--figma-color-bg-warning);
+      color: white;
+    }
+
+    .token-count {
+      background: var(--figma-color-bg-tertiary);
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .token-list {
+      padding: 8px;
+    }
+
+    .token-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      background: var(--figma-color-bg);
+      border-radius: 4px;
+      margin-bottom: 4px;
+      transition: all 0.2s ease;
+    }
+
+    .token-item:hover {
+      background: var(--figma-color-bg-hover);
+      transform: translateX(4px);
+    }
+
+    .token-item.inactive {
+      border: 1px solid var(--figma-color-border-warning);
+    }
+
+    .token-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .token-name {
+      font-weight: 500;
+    }
+
+    .library-name {
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    /* Library Results Styles */
+    .library-results {
+      margin-top: 24px;
+    }
+
+    .results-summary {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 16px;
+      padding: 12px;
+      background: var(--figma-color-bg);
+      border-radius: 6px;
+    }
+
+    .summary-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .summary-item.warning .summary-value {
+      color: var(--figma-color-text-danger);
+    }
+
+    .summary-label {
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    .summary-value {
+      font-size: 16px;
+      font-weight: 500;
+    }
+
+    .library-group {
+      margin-bottom: 16px;
+    }
+
+    .library-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+
+    .library-name {
+      font-weight: 500;
+    }
+
+    .library-status {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .library-status.enabled {
+      background: var(--figma-color-bg-success);
+      color: var(--figma-color-text-onbrand);
+    }
+
+    .library-status.disabled {
+      background: var(--figma-color-bg-disabled);
+      color: var(--figma-color-text-secondary);
+    }
+
+    .library-details {
+      font-size: 11px;
+      color: var(--figma-color-text-secondary);
+    }
+
+    .analysis-loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      padding: 16px;
+      margin: 0;
+      color: var(--figma-color-text-secondary);
+    }
+
+    .loading-spinner {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      border-top-color: var(--figma-color-bg-brand);
+      border-right-color: var(--figma-color-bg-brand);
+      animation: spinner 0.6s linear infinite;
+    }
+    
+    @keyframes spinner {
+      from {
+        transform: rotate(0deg);
+      }
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    /* Add specific styles for button loading spinner */
+    .select-button .loading-spinner {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      margin: auto;
+      width: 12px;
+      height: 12px;
+      border-width: 2px;
+      border-top-color: var(--figma-color-text-onbrand);
+      border-right-color: var(--figma-color-text-onbrand);
+    }
+
+    /* Add specific styles for analysis loading spinner */
+    .analysis-loading .loading-spinner {
+      width: 24px;
+      height: 24px;
+      border-width: 2.5px;
+      margin: 8px auto;
+    }
+
+    /* Container for select button spinner */
+    .select-button.loading {
+      position: relative;
+      color: transparent;
+    }
+
+    .button.button-disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      pointer-events: none;
+      background: var(--figma-color-bg-disabled);
+      color: var(--figma-color-text-disabled);
+    }
+
+    .sticky-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 16px;
+      background: var(--figma-color-bg);
+      border-top: 1px solid var(--figma-color-border);
+      height: 32px;
+      z-index: 100;
+      position: relative; /* For resize handle positioning */
+    }
+
+    .version-info {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--figma-color-text-secondary);
+      font-size: 11px;
+    }
+
+    .version-number {
+      color: var(--figma-color-text-tertiary);
+    }
+
+    .donate-button {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      border: none;
+      border-radius: 4px;
+      background: var(--figma-color-bg-secondary);
+      color: var(--figma-color-text-tertiary);
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-weight: 500;
+      margin-right: 12px; /* Adjust donate button margin */
+    }
+
+    .donate-button:hover {
+      background: var(--figma-color-bg-hover);
+      color: var(--figma-color-text);
+      transform: scale(1.02);
+    }
+
+    .cat-icon {
+      font-size: 12px;
+      transition: transform 0.2s ease;
+    }
+
+    .donate-button:hover .cat-icon {
+      transform: scale(1.1);
+    }
+
+    /* Add these styles */
+    .scan-settings {
+      margin-top: 4px; /* Reduce top margin */
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      overflow: hidden;
+      padding: 0; /* Remove default padding */
+    }
+
+
+
+
+
+
+
+
 
     [v-cloak] { display: none; }
     
@@ -8382,692 +13671,8 @@
       background: var(--figma-color-bg-hover);
     }
 
-<!DOCTYPE html>
-<html>
-<head>
-  <!-- Replace the mock Vue implementation with the actual Vue.js library -->
-  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
-</head>
-<body>
-  <!-- Loading indicator -->
-  <div id="loading" style="display: flex; justify-content: center; align-items: center; height: 100vh;">
-    Loading...
-  </div>
 
-  <!-- Main app -->
-  <div id="app">
-    <div v-cloak class="plugin-container">
-      <div class="content-section">
-        <!-- First section content (selection and settings) -->
-        <div class="scan-section">
-          <div class="step-container">
-            <div class="step-content">
-              <!-- 1. Title and Watch button -->
-              <div class="step-header">
-                <h3 class="step-title">Select frames or components</h3>
-                <button 
-                  class="watch-toggle" 
-                  :class="{ 
-                    active: isWatching,
-                    disabled: !scanEntirePage 
-                  }"
-                  @click="toggleWatch"
-                  :disabled="!scanEntirePage"
-                  :title="watchButtonTitle"
-                >
-                  <div class="watch-toggle-content">
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                      <path v-if="isWatching && scanEntirePage" d="M8 3.33333C11.3333 3.33333 14.1667 5.33333 15.3333 8C14.1667 10.6667 11.3333 12.6667 8 12.6667C4.66667 12.6667 1.83333 10.6667 0.666667 8C1.83333 5.33333 4.66667 3.33333 8 3.33333Z" fill="currentColor"/>
-                      <g v-else>
-                        <path d="M2.66667 2L13.3333 14" stroke="currentColor" stroke-width="1.5"/>
-                        <path d="M8 3.33333C11.3333 3.33333 14.1667 5.33333 15.3333 8C14.1667 10.6667 11.3333 12.6667 8 12.6667C4.66667 12.6667 1.83333 10.6667 0.666667 8C1.83333 5.33333 4.66667 3.33333 8 3.33333Z" fill="currentColor" fill-opacity="0.5"/>
-                      </g>
-                    </svg>
-                    <span class="watch-toggle-text">{{ isWatching && scanEntirePage ? 'Watching' : 'Watch changes' }}</span>
-                  </div>
-                </button>
-              </div>
 
-              <!-- 2. Scan Settings dropdown (move this before selection status) -->
-              <div class="scan-settings">
-                <div class="settings-header">
-                  <h4 class="settings-title">Scan Settings</h4>
-                  <button 
-                    class="settings-toggle"
-                    @click="showSettings = !showSettings"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                      <path 
-                        :d="showSettings 
-                          ? 'M4 10L8 6L12 10' 
-                          : 'M4 6L8 10L12 6'" 
-                        stroke="currentColor" 
-                        stroke-width="1.5" 
-                        stroke-linecap="round" 
-                        stroke-linejoin="round"
-                      />
-                    </svg>
-                  </button>
-                </div>
-                
-                <div class="settings-content" v-show="showSettings">
-                  <!-- Move Scan Entire Page here -->
-                  <div class="setting-item">
-                    <label class="toggle-label">
-                      <div class="toggle-label-content">
-                        <span>Scan Entire Page</span>
-                        <span v-if="scanEntirePage" class="slow-badge">slow</span>
-                        <span class="info-badge" title="Scan the entire page instead of selected frames">ⓘ</span>
-                      </div>
-                      <div class="toggle-wrapper">
-                        <input 
-                          type="checkbox" 
-                          v-model="scanEntirePage"
-                          class="toggle-input"
-                          @change="handleScanScopeChange"
-                        >
-                        <div class="toggle-slider"></div>
-                      </div>
-                    </label>
-                  </div>
-
-                  <!-- Existing Ignore Hidden Layers setting -->
-                  <div class="setting-item">
-                    <label class="toggle-label">
-                      <div class="toggle-label-content">
-                        <span>Ignore Hidden Layers</span>
-                        <span class="beta-badge">Beta</span>
-                        <span class="info-badge" title="Hidden layers will be excluded from the scan">ⓘ</span>
-                      </div>
-                      <div class="toggle-wrapper">
-                        <input 
-                          type="checkbox" 
-                          v-model="ignoreHiddenLayers"
-                          class="toggle-input"
-                        >
-                        <div class="toggle-slider"></div>
-                      </div>
-                    </label>
-                  </div>
-                </div>
-              </div>
-
-              <!-- 3. Selection status -->
-              <div class="selection-container">
-                <!-- Warning for instances -->
-                <div v-if="hasInstances" class="toast warning">
-                  <div class="toast-icon">
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                      <path fill-rule="evenodd" clip-rule="evenodd" d="M8 1.33337L14.6667 13.3334H1.33334L8 1.33337ZM8 4.00004L3.73334 12H12.2667L8 4.00004ZM7.33334 6.66671H8.66668V9.33337H7.33334V6.66671ZM7.33334 10.6667H8.66668V12H7.33334V10.6667Z" fill="currentColor"/>
-                    </svg>
-                  </div>
-                  <span class="toast-message">Instances cannot be scanned. Please select frames, components, or sections instead.</span>
-                </div>
-                <!-- Existing selection messages -->
-                <div v-else-if="!hasSelection && !scanEntirePage" class="toast warning">
-                  <div class="toast-icon">
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                      <path fill-rule="evenodd" clip-rule="evenodd" d="M8 1.33337L14.6667 13.3334H1.33334L8 1.33337ZM8 4.00004L3.73334 12H12.2667L8 4.00004ZM7.33334 6.66671H8.66668V9.33337H7.33334V6.66671ZM7.33334 10.6667H8.66668V12H7.33334V10.6667Z" fill="currentColor"/>
-                    </svg>
-                  </div>
-                  <span class="toast-message">Select frames or sections to start scanning</span>
-                </div>
-                <div v-else-if="hasSelection && !scanEntirePage" class="toast success">
-                  <div class="toast-icon">
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                      <path fill-rule="evenodd" clip-rule="evenodd" d="M8 1.33334C4.31811 1.33334 1.33334 4.31811 1.33334 8C1.33334 11.6819 4.31811 14.6667 8 14.6667C11.6819 14.6667 14.6667 11.6819 14.6667 8C14.6667 4.31811 11.6819 1.33334 8 1.33334ZM11.0607 6.27274L7.39401 9.93941L5.27274 7.81814L6.06069 7.03019L7.39401 8.36351L10.2727 5.48479L11.0607 6.27274Z" fill="currentColor"/>
-                    </svg>
-                  </div>
-                  <span class="toast-message">{{ selectedCount }} {{ selectedCount === 1 ? 'item' : 'items' }} selected</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="divider"></div>
-
-        <!-- Results section -->
-        <div class="results-section">
-          <!-- Design Tokens Tab -->
-          <div v-if="activeTab === 'tokens'" class="tab-content">
-            <!-- Scan Type Selection -->
-            <div class="step-container">
-              <div class="step-content">
-                <!-- 1. Title -->
-                <h3 class="step-title">Choose what to scan for</h3>
-
-          <!-- Tab Navigation without icons -->
-          <div class="tab-navigation">
-            <button 
-              class="tab-button" 
-              :class="{ 
-                'active': activeTab === 'tokens',
-                'inactive': activeTab !== 'tokens'
-              }"
-              @click="switchTab('tokens')"
-            >
-              <span>Values</span>
-            </button>
-            <button 
-              class="tab-button" 
-              :class="{ 
-                'active': activeTab === 'library-tokens',
-                'inactive': activeTab !== 'library-tokens'
-              }"
-              @click="switchTab('library-tokens')"
-            >
-              <div class="tab-label">
-                <span>Variables</span>
-                <span class="beta-badge">Beta</span>
-              </div>
-              <span v-if="inactiveLibraryTokens.length" class="tab-badge">
-                {{ inactiveLibraryTokens.length }}
-              </span>
-            </button>
-          </div>
-
-                <!-- 2. Scan Selection cards -->
-                <div class="scan-cards">
-                  <div v-for="option in tokenScanOptions"
-                       :key="option.value"
-                       class="scan-card"
-                       :class="{ 
-                         'selected': selectedScanType === option.value,
-                         'interactive': true
-                       }"
-                       role="option"
-                       :aria-selected="selectedScanType === option.value"
-                       tabindex="0"
-                       @click="selectScanType(option.value)"
-                  >
-                    <div class="scan-card-icon">
-                      <div class="icon" v-html="icons[option.icon]"></div>
-                    </div>
-                    
-                    <div class="scan-card-content">
-                      <div class="scan-card-text">
-                        <div class="scan-card-title">{{ option.label }}</div>
-                        <div class="scan-card-description">{{ option.description }}</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Scan Controls -->
-            <div class="divider"></div>
-
-            <!-- Scanning Section - Following Hierarchy -->
-            <div class="step-container">
-              <div class="step-content">
-                <!-- 1. Title -->
-                <h3 class="step-title">Start scanning</h3>
-
-                <!-- 2. Progress Bar -->
-                <div class="progress-container">
-                  <div class="progress-bar">
-                    <!-- Remove progress track -->
-                    <div class="progress-fill" 
-                         :style="{ 
-                           width: `${scanProgress}%`,
-                           background: getProgressBarColor()
-                         }"
-                    ></div>
-                    <span class="progress-text" v-if="canStartScan || isScanning">{{ getProgressStatus() }}</span>
-                  </div>
-                </div>
-
-                <!-- 3. Buttons -->
-                <div class="scan-buttons">
-                  <!-- Start/Rescan button -->
-                  <button 
-                    v-if="!isScanning"
-                    @click="startScan(showRescanButton)" 
-                    class="button"
-                    :class="{
-                      'primary-button': !showRescanButton,
-                      'secondary-button rescan': showRescanButton
-                    }"
-                    :disabled="!canStartScan"
-                    :title="getStartScanButtonTitle()"
-                  >
-                    {{ showRescanButton ? 'Rescan' : 'Start Scan' }}
-                  </button>
-                  
-                  <!-- Stop button - only show when actively scanning -->
-                  <button 
-                    v-if="showStopButton"
-                    @click="stopScan()" 
-                    class="button warning-button"
-                  >
-                    Stop
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <!-- Add a new section for scan results with consistent styling -->
-            <template v-if="showScanResults">
-              <div class="divider"></div>
-              
-              <div class="step-container">
-                <div class="step-content">
-                  <!-- Results Header -->
-                  <div class="results-header">
-                    <div class="step-title-with-badge">
-                      <h3 class="step-title">Scan results</h3>
-                      <span class="results-badge">{{ getTotalResultsCount() }}</span>
-                    </div>
-                    <div class="results-actions">
-                      <button 
-                        class="button secondary-button"
-                        @click="clearResults"
-                      >
-                        Clear
-                      </button>
-                    </div>
-                  </div>
-
-                  <!-- Results Container -->
-                  <div class="results-container">
-                    <div v-for="(group, groupKey) in groupedByValue" 
-                         :key="groupKey" 
-                         class="value-group"
-                    >
-                      <!-- Group Header -->
-                      <div class="value-group-header" 
-                           @click="toggleGroup(groupKey)"
-                           :class="{ 'expanded': isGroupExpanded(groupKey) }"
-                      >
-                        <div class="group-info">
-                          <span class="expand-icon">
-                            {{ isGroupExpanded(groupKey) ? '▼' : '▶' }}
-                          </span>
-                          <!-- Add typography-specific template -->
-                          <template v-if="group.refs[0]?.type === 'typography'">
-                            <div class="typography-labels">
-                              <span class="label font-family" v-if="group.value.fontFamily">
-                                {{ group.value.fontFamily }}
-                              </span>
-                              <span class="label font-weight" v-if="group.value.fontWeight">
-                                {{ group.value.fontWeight }}
-                              </span>
-                              <span class="label font-size" v-if="group.value.fontSize">
-                                {{ group.value.fontSize }}px
-                              </span>
-                            </div>
-                          </template>
-                          <!-- Keep existing templates for other types -->
-                          <template v-else-if="group.refs[0]?.type === 'fill' || group.refs[0]?.type === 'stroke'">
-                            <color-preview :color="group.value" />
-                          </template>
-                          <template v-else>
-                            <span class="value-label">{{ formatValue(group.value) }}</span>
-                          </template>
-                        </div>
-                        <div class="group-actions">
-                          <span class="label instance-count">{{ group.refs.length }}×</span>
-                          <button 
-                            class="button secondary-button"
-                            @click.stop="selectGroup(group.refs, $event)"
-                          >
-                            Select All
-                          </button>
-                        </div>
-                      </div>
-
-                      <!-- Group Details -->
-                      <div v-if="isGroupExpanded(groupKey)" 
-                           class="value-group-details"
-                           @click.stop
-                      >
-                        <div v-for="ref in group.refs" 
-                             :key="ref.nodeId" 
-                             class="reference-item"
-                        >
-                          <div class="reference-info">
-                            <div class="reference-name">{{ ref.nodeName }}</div>
-                            <div class="reference-location">{{ ref.location }}</div>
-                          </div>
-                          <button 
-                            class="button secondary-button small"
-                            @click="selectNode(ref.nodeId, $event)"
-                          >
-                            Select
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </template>
-          </div>
-
-          <!-- Unlinked Library Tab -->
-          <div v-if="activeTab === 'library-tokens'" class="tab-content">
-            <div class="step-container">
-              <div class="step-content">
-                <!-- Scan Type Selection -->
-                <h3 class="step-title">Choose what to scan for</h3>
-                <!-- Restore icons in scan cards for Unlinked Tokens -->
-                <div class="scan-cards library-scan-cards" 
-                     role="listbox" 
-                     tabindex="0"
-                     @keydown="handleLibraryScanCardKeydown"
-                >
-                  <div v-for="(option, index) in libraryTokenScanOptions"
-                       :key="option.value"
-                       class="scan-card"
-                       role="option"
-                       :aria-selected="selectedLibraryTokenScanType === option.value"
-                       :tabindex="selectedLibraryTokenScanType === option.value ? 0 : -1"
-                       @click="selectLibraryScanType(option.value)"
-                  >
-                    <div class="scan-card-icon" v-html="icons[option.icon]"></div>
-                    <div class="scan-card-content">
-                      <span v-if="isLoadingOption === option.value" class="loading-spinner"></span>
-                      <template v-else>
-                        <div class="scan-card-title">{{ option.label }}</div>
-                        <div class="scan-card-description">{{ option.description }}</div>
-                      </template>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="divider"></div>
-
-                <!-- Scan Controls Section with improved UI -->
-                <div class="scan-section">
-                  <!-- Progress Bar - Always Visible -->
-                  <div class="progress-container">
-                    <div class="progress-bar">
-                      <div class="progress-track"></div>
-                      <div class="progress-fill" :style="{ width: getProgressWidth() }"></div>
-                      <div class="progress-text">{{ getProgressStatus() }}</div>
-                    </div>
-                  </div>
-
-                  <!-- Scan Buttons with improved layout -->
-                  <div class="scan-buttons-wrapper">
-                    <!-- Primary Action Buttons -->
-                    <div class="primary-actions" v-if="!isLibraryScanning">
-                      <button 
-                        v-if="!isScanning"
-                        @click="scanLibraryTokens" 
-                        class="button primary-button"
-                        :disabled="!canStartScan"
-                        :title="getStartScanButtonTitle()"
-                      >
-                        Start Scan
-                      </button>
-                      <button 
-                        v-if="hasLibraryResults"
-                        @click="scanLibraryTokens" 
-                        class="button secondary-button"
-                      >
-                        Rescan
-                      </button>
-                    </div>
-
-                    <!-- Control Buttons -->
-                    <div class="control-buttons" v-else>
-                      <button 
-                        v-if="!isPaused"
-                        @click="pauseLibraryScan" 
-                        class="button secondary-button"
-                      >
-                        <span class="button-icon">⏸</span>
-                        Pause
-                      </button>
-                      <button 
-                        v-else
-                        @click="resumeLibraryScan" 
-                        class="button primary-button"
-                      >
-                        <span class="button-icon">▶️</span>
-                        Resume
-                      </button>
-                      <button 
-                        @click="stopLibraryScan" 
-                        class="button warning-button"
-                      >
-                        <span class="button-icon">⏹</span>
-                        Stop
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Add scan results summary -->
-                <div v-if="scanSummary" class="scan-summary">
-                  <div class="summary-header">
-                    <h4>Scan Summary</h4>
-                    <span class="timestamp">{{ scanSummary.timestamp }}</span>
-                  </div>
-                  <div class="summary-stats">
-                    <div class="stat-item">
-                      <span class="stat-label">Nodes Scanned</span>
-                      <span class="stat-value">{{ scanSummary.totalNodes }}</span>
-                    </div>
-                    <div class="stat-item">
-                      <span class="stat-label">Variables Found</span>
-                      <span class="stat-value">{{ scanSummary.totalTokens }}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Results Section -->
-                <div v-if="hasLibraryResults" class="library-results">
-                  <!-- Summary -->
-                  <div class="results-summary">
-                    <div class="summary-item">
-                      <span class="summary-label">Total Variables</span>
-                      <span class="summary-value">{{ activeLibraryTokens.length + inactiveLibraryTokens.length }}</span>
-                    </div>
-                    <div class="summary-item warning" v-if="inactiveLibraryTokens.length">
-                      <span class="summary-label">Inactive Libraries</span>
-                      <span class="summary-value">{{ getUniqueLibraries(inactiveLibraryTokens).length }}</span>
-                    </div>
-                  </div>
-
-                  <!-- Inactive Libraries Section -->
-                  <div v-if="inactiveLibraryTokens.length > 0" class="token-section">
-                    <div class="section-header warning">
-                      <div class="header-content">
-                        <h4 class="section-title">Inactive Library Tokens</h4>
-                        <span class="token-count">{{ inactiveLibraryTokens.length }}</span>
-                      </div>
-                    </div>
-                    
-                    <!-- Group by Library -->
-                    <div v-for="library in getUniqueLibraries(inactiveLibraryTokens)" 
-                         :key="library"
-                         class="library-group">
-                      <div class="library-header">
-                        <span class="library-name">{{ library }}</span>
-                        <button class="button secondary-button"
-                                @click="activateLibrary(library)">
-                          Activate Library
-                        </button>
-                      </div>
-                      
-                      <div class="token-list">
-                        <div v-for="token in getTokensByLibrary(inactiveLibraryTokens, library)" 
-                             :key="token.id" 
-                             class="token-item inactive">
-                          <div class="token-info">
-                            <span class="token-name">{{ token.name }}</span>
-                            <div class="token-details">
-                              <span class="token-type">{{ formatTokenType(token.type) }}</span>
-                              <span class="token-usage">Used in {{ token.usages.length }} {{ token.usages.length === 1 ? 'place' : 'places' }}</span>
-                            </div>
-                          </div>
-                          <button 
-                            class="button text-button"
-                            @click="showTokenUsages(token)"
-                            :title="'Show where this token is used'"
-                          >
-                            <span class="button-icon">👁</span>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- No Results State -->
-                <div v-else-if="!isLibraryScanning" class="no-results">
-                  <div class="no-results-icon">
-                    <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-                      <path d="M16 5.33334C22.6667 5.33334 28.3333 9.33334 30.6667 14.6667C28.3333 20 22.6667 24 16 24C9.33334 24 3.66668 20 1.33334 14.6667C3.66668 9.33334 9.33334 5.33334 16 5.33334Z" fill="currentColor" fill-opacity="0.3"/>
-                    </svg>
-                  </div>
-                  <span class="no-results-text">No tokens found</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Inside library-tokens tab content -->
-            <div v-if="activeTab === 'library-tokens'" class="tab-content">
-              <!-- ... existing scan controls ... -->
-
-              <!-- Variables Analysis Section -->
-              <div v-if="hasLibraryResults" class="library-analysis">
-                <!-- Collections Overview -->
-                <div class="analysis-section">
-                  <h3 class="section-title">Variable Collections</h3>
-                  <div class="collections-list">
-                    <div v-for="collection in variableCollections" 
-                         :key="collection.id" 
-                         class="collection-item"
-                         :class="{ 'inactive': !collection.isActive }">
-                      <div class="collection-header">
-                        <div class="collection-info">
-                          <span class="collection-name">{{ collection.name }}</span>
-                          <span class="collection-status" :class="{ 'warning': !collection.isActive }">
-                            {{ collection.isActive ? 'Active' : 'Inactive' }}
-                          </span>
-                        </div>
-                        <span class="variable-count">
-                          {{ collection.variablesCount }} variables
-                        </span>
-                      </div>
-                      
-                      <!-- Variables in Collection -->
-                      <div class="variables-list">
-                        <div v-for="variable in collection.variables" 
-                             :key="variable.id" 
-                             class="variable-item">
-                          <div class="variable-header">
-                            <span class="variable-name">{{ variable.name }}</span>
-                            <span class="variable-type">{{ formatTokenType(variable.type) }}</span>
-                          </div>
-                          
-                          <!-- Mode Information -->
-                          <div class="mode-info">
-                            <span class="mode-label">Current Mode:</span>
-                            <span class="mode-value">{{ variable.currentMode }}</span>
-                          </div>
-                          
-                          <!-- Usage Information -->
-                          <div class="usage-info">
-                            <div class="usage-header" @click="toggleUsageDetails(variable.id)">
-                              <span>Used in {{ variable.usages.length }} {{ variable.usages.length === 1 ? 'place' : 'places' }}</span>
-                              <span class="expand-icon">{{ isUsageExpanded(variable.id) ? '▼' : '▶' }}</span>
-                            </div>
-                            
-                            <!-- Usage Details (Expandable) -->
-                            <div v-if="isUsageExpanded(variable.id)" class="usage-details">
-                              <div v-for="usage in variable.usages" 
-                                   :key="`${usage.nodeId}-${usage.property}`" 
-                                   class="usage-item">
-                                <div class="usage-node-info">
-                                  <span class="node-name">{{ usage.nodeName }}</span>
-                                  <span class="property-name">{{ usage.property }}</span>
-                                </div>
-                                <button class="button text-button"
-                                        @click="selectNode(usage.nodeId)"
-                                        title="Select this instance">
-                                  <span class="button-icon">👁</span>
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Sticky footer -->
-      <div class="sticky-footer">
-        <div class="version-info">
-          <span>v</span>
-          <span class="version-number">1.0.0</span>
-        </div>
-        <button class="donate-button" @click="openStripePayment">
-          <span class="cat-icon">🐱</span>
-          <span>Feed my cats</span>
-        </button>
-        <div class="resize-handle"></div>
-      </div>
-    </div>
-
-    <!-- Success Toast -->
-    <div 
-      class="success-toast" 
-      :class="{ 
-        visible: showSuccessToast,
-        warning: successMessage === 'Scanning the entire page may take longer'
-      }"
-      v-if="showSuccessToast"
-    >
-      <div class="success-toast-content">
-        <div class="success-toast-icon">
-          <svg v-if="successMessage !== 'Scanning the entire page may take longer'" 
-            width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path fill-rule="evenodd" clip-rule="evenodd" d="M8 1.33334C4.31811 1.33334 1.33334 4.31811 1.33334 8C1.33334 11.6819 4.31811 14.6667 8 14.6667C11.6819 14.6667 14.6667 11.6819 14.6667 8C14.6667 4.31811 11.6819 1.33334 8 1.33334ZM11.0607 6.27274L7.39401 9.93941L5.27274 7.81814L6.06069 7.03019L7.39401 8.36351L10.2727 5.48479L11.0607 6.27274Z" fill="currentColor"/>
-          </svg>
-          <svg v-else width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path fill-rule="evenodd" clip-rule="evenodd" d="M8 1L14.6667 13H1.33334L8 1ZM8 3.66667L3.73334 11.6667H12.2667L8 3.66667ZM7.33334 6H8.66668V8.66667H7.33334V6ZM7.33334 10H8.66668V11.3333H7.33334V10Z" fill="currentColor"/>
-        </svg>
-        </div>
-        <span class="success-toast-message">{{ successMessage }}</span>
-        <button class="success-toast-close" @click="dismissToast">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M12.6667 4.27337L11.7267 3.33337L8.00001 7.06004L4.27334 3.33337L3.33334 4.27337L7.06001 8.00004L3.33334 11.7267L4.27334 12.6667L8.00001 8.94004L12.6667 4.27337Z" fill="currentColor"/>
-        </svg>
-        </button>
-      </div>
-    </div>
-
-    <!-- Add error toast component -->
-    <div class="error-toast" v-if="showErrorToast">
-      <div class="error-toast-content">
-        <div class="error-toast-icon">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path fill-rule="evenodd" clip-rule="evenodd" d="M8 1.33337L14.6667 13.3334H1.33334L8 1.33337ZM7.33334 6.66671H8.66668V9.33337H7.33334V6.66671ZM7.33334 10.6667H8.66668V12H7.33334V10.6667Z" fill="currentColor"/>
-          </svg>
-        </div>
-        <span class="error-toast-message">{{ errorMessage }}</span>
-        <button class="error-toast-close" @click="dismissErrorToast">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M12.6667 4.27337L11.7267 3.33337L8.00001 7.06004L4.27334 3.33337L3.33334 4.27337L7.06001 8.00004L3.33334 11.7267L4.27334 12.6667L8.00001 8.94004L12.6667 4.27337Z" fill="currentColor"/>
-          </svg>
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <style>
     /* Add Figma's font stack at the top of your styles */
     :root {
       --font-stack: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen-Sans, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
@@ -9207,14 +13812,6 @@
         gap: 4px; /* Reduce gap between elements */
         padding: 0; /* Remove padding */
       }
-    }
-
-    /* Add root spacing variables */
-    :root {
-      --spacing-xxs: 2px;
-      --spacing-xs: 4px;
-      --spacing-sm: 8px;
-      --spacing-md: 12px;
     }
 
     .results-section {
@@ -12449,8 +17046,14 @@
     /* Adjust beta badge in tab */
     .tab-button .beta-badge {
       font-size: 8px;
-      padding: 0px 3px;
+      padding: 2px 4px;
       margin-left: 2px;
+    }
+    
+    .tab-button.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
     }
 
     .progress-bar {
@@ -13343,6 +17946,13 @@
     }
   </style>
 
+
+
+
+
+
+
+
   <!-- Add color preview template outside of style tag -->
   <template id="color-preview">
     <div class="color-preview">
@@ -13360,6 +17970,13 @@
       </div>
     </div>
   </template>
+
+
+
+
+
+
+
 
   <script>
     function initializeApp() {
