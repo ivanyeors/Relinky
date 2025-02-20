@@ -15,7 +15,7 @@
   <div id="app">
     <div v-cloak class="plugin-container">
       <div class="content-section">
-        <!-- Tab Navigation - Move this outside of tab content -->
+        <!-- Tab Navigation -->
         <div class="tab-navigation">
           <button 
             class="tab-button" 
@@ -31,9 +31,10 @@
             class="tab-button" 
             :class="{ 
               'active': activeTab === 'library-tokens',
-              'inactive': activeTab !== 'library-tokens'
+              'inactive': activeTab !== 'library-tokens',
+              'disabled': true
             }"
-            @click="switchTab('library-tokens')"
+            disabled
           >
             <div class="tab-label">
               <span>Variables</span>
@@ -43,10 +44,10 @@
               {{ inactiveLibraryTokens.length }}
             </span>
           </button>
-        </div>
+      </div>
 
-        <!-- First section content (selection and settings) -->
-        <div class="scan-section">
+      <!-- First section content (selection and settings) -->
+      <div class="scan-section">
           <div class="step-container">
             <div class="step-content">
               <!-- 1. Title and Watch button -->
@@ -170,12 +171,12 @@
               </div>
             </div>
           </div>
-        </div>
+      </div>
 
-        <div class="divider"></div>
+      <div class="divider"></div>
 
-        <!-- Results section -->
-        <div class="results-section">
+      <!-- Results section -->
+      <div class="results-section">
           <!-- Design Tokens Tab -->
           <div v-if="activeTab === 'tokens'" class="tab-content">
             <!-- Scan Type Selection -->
@@ -621,7 +622,7 @@
               </div>
             </div>
           </div>
-        </div>
+      </div>
       </div>
 
       <!-- Sticky footer -->
@@ -636,17 +637,15 @@
         </button>
         <div class="resize-handle"></div>
       </div>
-  </div>
-
-  <!-- Success Toast -->
-  <div 
-      class="success-toast" 
+    </div>
+    <!-- Success Toast -->
+    <div class="success-toast" 
       :class="{ 
         visible: showSuccessToast,
         warning: successMessage === 'Scanning the entire page may take longer'
       }"
-      v-if="showSuccessToast"
-    >
+      v-if="showSuccessToast">
+
       <div class="success-toast-content">
         <div class="success-toast-icon">
           <svg v-if="successMessage !== 'Scanning the entire page may take longer'" 
@@ -664,10 +663,9 @@
         </svg>
         </button>
       </div>
-  </div>
-
-  <!-- Add error toast component -->
-  <div class="error-toast" v-if="showErrorToast">
+    </div>
+    <!-- Add error toast component -->
+    <div class="error-toast" v-if="showErrorToast">
       <div class="error-toast-content">
         <div class="error-toast-icon">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -681,14 +679,8 @@
           </svg>
         </button>
       </div>
+    </div>
   </div>
-  </div>
-
-
-
-
-
-
 
 
   <style>
@@ -17947,12 +17939,6 @@
   </style>
 
 
-
-
-
-
-
-
   <!-- Add color preview template outside of style tag -->
   <template id="color-preview">
     <div class="color-preview">
@@ -17970,12 +17956,6 @@
       </div>
     </div>
   </template>
-
-
-
-
-
-
 
 
   <script>
