@@ -781,10 +781,55 @@
     color: var(--figma-color-text-warning);
 }
 
+/* Small variant for reference items */
+.button.secondary-button.small {
+    font-size: 11px;
+    min-height: 24px;
+    padding: 4px 8px;
+}
+
 /* Add loading state for buttons */
-    .button.secondary-button.loading {
-    color: transparent;
-    position: relative;
+.button.secondary-button.loading {
+color: transparent;
+position: relative;
+}
+/* Update button styles in results section */
+.button.secondary-button {
+background: var(--figma-color-bg-secondary);
+position: relative;
+border-radius: 6px;
+border: 1px solid var(--figma-color-border);
+color: var(--figma-color-text);
+cursor: pointer;
+font-size: 11px;
+font-weight: 500;
+padding: 5px 12px;
+transition: all 0.1s ease;
+z-index: 1;
+}
+
+/* Active/Pressed state */
+.button.secondary-button:active {
+background: var(--figma-color-bg-pressed);
+border-color: var(--figma-color-border-strong);
+color: var(--figma-color-text);
+}
+/* Disabled state */
+.button.secondary-button:disabled {
+cursor: not-allowed;
+opacity: 0.4;
+pointer-events: none;
+}
+/* Hover state */
+.button.secondary-button:hover {
+background: var(--figma-color-bg-hover);
+border-color: var(--figma-color-highlight);
+}
+
+/* Focus state */
+.button.secondary-button:focus {
+    box-shadow: 0 0 0 2px var(--figma-color-border-brand-strong);
+    outline: none;
 }
 
 /* Add loading state styles for scan cards */
@@ -1135,12 +1180,6 @@
     transform: translateY(-50%);
 }
 
-/* Small variant for reference items */
-    .button.secondary-button.small {
-    font-size: 11px;
-    min-height: 24px;
-    padding: 4px 8px;
-}
 
 /* Success state */
     .button.success {
@@ -1196,22 +1235,7 @@
     margin-top: 16px;
 }
 
-/* Update button styles in results section */
-    .button.secondary-button {
-    /* Base styles */
-    background: var(--figma-color-bg);
-    /* Ensure button stays above other elements */
-    position: relative;
-    border-radius: 6px;
-    border: 1px solid var(--figma-color-border);
-    color: var(--figma-color-text);
-    cursor: pointer;
-    font-size: 11px;
-    font-weight: 500;
-    padding: 5px 12px;
-    transition: all 0.1s ease;
-    z-index: 1;
-}
+
 
 /* Update button styles to match */
     .scan-buttons {
@@ -3051,13 +3075,6 @@ to {
 }
 
 
-/* PSEUDO */
-/* Active/Pressed state */
-    .button.secondary-button:active {
-    background: var(--figma-color-bg-pressed);
-    border-color: var(--figma-color-border-strong);
-    color: var(--figma-color-text);
-}
 
 
 /* Add empty state */
@@ -3107,12 +3124,7 @@ to {
 }
 
 
-/* Disabled state */
-    .button.secondary-button:disabled {
-    cursor: not-allowed;
-    opacity: 0.4;
-    pointer-events: none;
-}
+
 
 /* Disabled state */
     .button:disabled {
@@ -3121,11 +3133,6 @@ to {
     cursor: not-allowed;
 }
 
-/* Focus state */
-    .button.secondary-button:focus {
-    box-shadow: 0 0 0 2px var(--figma-color-border-brand-strong);
-    outline: none;
-}
 
 /* Focus state */
     .button:focus {
@@ -3139,11 +3146,7 @@ to {
     outline: none;
 }
 
-/* Hover state */
-    .button.secondary-button:hover {
-    background: var(--figma-color-bg-hover);
-    border-color: var(--figma-color-border-strong);
-}
+
 
 /* Hover state */
     .button:hover:not(:disabled) {
