@@ -33,6 +33,10 @@ interface MissingReference {
   variableName?: string;
   variableValue?: any;
   preview?: string;
+  isInactiveLibrary?: boolean;
+  isUnlinked?: boolean;
+  parentNodeId?: string;  // Add parent node ID for context
+  path?: string;          // Add node path for better location info
 }
 
 // Update ScanType to include new types
@@ -297,11 +301,29 @@ function isHiddenByParent(node: SceneNode): boolean {
   return false;
 }
 
-// Update scanForTextTokens to respect hidden layers setting
+// Add interface for text style variable bindings
+interface TextStyleBindings {
+  textStyleId?: {
+    type: 'VARIABLE';
+    id: string;
+  };
+}
+
+// Update the type guard for text nodes with variable bindings
+function hasTextStyleBindings(node: BaseNode): node is TextNode & { 
+  boundVariables: TextStyleBindings;
+} {
+  return node.type === 'TEXT' && 
+         'boundVariables' in node && 
+         node.boundVariables !== null &&
+         'textStyleId' in (node.boundVariables || {});
+}
+
+// Fix the scanForTextTokens function to use proper type checking
 async function scanForTextTokens(
   progressCallback: (progress: number) => void,
   nodesToScan?: SceneNode[],
-  ignoreHiddenLayers: boolean = false // Add parameter
+  ignoreHiddenLayers: boolean = false
 ): Promise<MissingReference[]> {
   const missingRefs: MissingReference[] = [];
   
@@ -325,21 +347,42 @@ async function scanForTextTokens(
       if (isScanCancelled) break;
       
       try {
-        // Now TypeScript knows this is a TextNode
-        if (!node.textStyleId) {
-          const fontName = node.fontName;
-          let fontFamily = '';
-          let fontWeight = '';
-          
-          if (typeof fontName === 'object' && 'family' in fontName) {
-            fontFamily = fontName.family;
-            fontWeight = fontName.style;
+        // Check for variable bindings using type guard
+        if (hasTextStyleBindings(node) && node.boundVariables.textStyleId?.type === 'VARIABLE') {
+          const binding = node.boundVariables.textStyleId;
+          try {
+            const variable = await figma.variables.getVariableByIdAsync(binding.id);
+            if (variable?.remote) {
+              try {
+                await figma.variables.importVariableByKeyAsync(variable.key);
+                continue; // Active library - skip
+              } catch {
+                // Inactive library - add to results
+                missingRefs.push({
+                  nodeId: node.id,
+                  nodeName: node.name,
+                  type: 'typography',
+                  property: 'textStyleId',
+                  currentValue: {
+                    variableId: binding.id,
+                    variableName: variable.name
+                  },
+                  location: 'Inactive Library Typography',
+                  isInactiveLibrary: true
+                });
+                continue;
+              }
+            }
+          } catch (err) {
+            console.warn(`Failed to check text variable: ${binding.id}`, err);
           }
+        }
 
-          // Structure the typography data
+        // Check for unlinked text styles
+        if (!node.textStyleId && (!hasTextStyleBindings(node) || !node.boundVariables.textStyleId)) {
           const typographyValue = {
-            fontFamily,
-            fontWeight,
+            fontFamily: typeof node.fontName === 'object' ? node.fontName.family : '',
+            fontWeight: typeof node.fontName === 'object' ? node.fontName.style : '',
             fontSize: node.fontSize,
             lineHeight: node.lineHeight === figma.mixed ? 'MIXED' :
                        typeof node.lineHeight === 'number' ? node.lineHeight :
@@ -361,8 +404,9 @@ async function scanForTextTokens(
             type: 'typography',
             property: 'textStyleId',
             currentValue: typographyValue,
-            location: 'Text Layer',
-            preview: formatTypographyValue(typographyValue)
+            location: 'Unlinked Typography',
+            preview: formatTypographyValue(typographyValue),
+            isUnlinked: true
           });
         }
       } catch (err) {
@@ -387,7 +431,7 @@ async function scanForTextTokens(
   return missingRefs;
 }
 
-// Update scanForColorTokens to respect hidden layers setting
+// Update scanForColorTokens to properly distinguish between linked and unlinked values
 async function scanForColorTokens(
   progressCallback: (progress: number) => void,
   nodesToScan?: SceneNode[],
@@ -414,7 +458,12 @@ async function scanForColorTokens(
       if (isScanCancelled) break;
       
       const node = nodes[i];
+      
       try {
+        // Get node path and parent info
+        const nodePath = getNodePath(node);
+        const parentNodeId = node.parent?.id;
+
         // Check for bound variables
         if ('boundVariables' in node) {
           const boundVars = (node as any).boundVariables;
@@ -448,20 +497,23 @@ async function scanForColorTokens(
                   currentValue: binding.id,
                   location: `Missing Library Variable`,
                   variableName: binding.name || 'Unknown Variable',
-                  variableValue: binding.value || null
+                  variableValue: binding.value || null,
+                  parentNodeId,
+                  path: nodePath
                 });
               }
             }
           }
         }
 
-        // Check fills
+        // Check fills for unlinked values
         if ('fills' in node) {
           const fills = node.fills;
           if (Array.isArray(fills)) {
             fills.forEach((fill: Paint, index) => {
               // Only add if there's no variable binding for this fill
               if (fill.type === 'SOLID' && 
+                  !node.fillStyleId && 
                   (!node.boundVariables?.fills?.[index] || 
                    !node.boundVariables?.fills?.[index]?.type)) {
                 missingRefs.push({
@@ -470,20 +522,24 @@ async function scanForColorTokens(
                   type: 'fill',
                   property: `fills[${index}]`,
                   currentValue: fill.color,
-                  location: 'Fill'
+                  location: 'Unlinked Fill',
+                  isUnlinked: true, // Flag for unlinked values
+                  parentNodeId,
+                  path: nodePath
                 });
               }
             });
           }
         }
-    
-        // Check strokes
+
+        // Check strokes similarly
         if ('strokes' in node) {
           const strokes = node.strokes;
           if (Array.isArray(strokes)) {
             strokes.forEach((stroke: Paint, index) => {
               // Only add if there's no variable binding for this stroke
               if (stroke.type === 'SOLID' && 
+                  !node.strokeStyleId && 
                   (!node.boundVariables?.strokes?.[index] || 
                    !node.boundVariables?.strokes?.[index]?.type)) {
                 missingRefs.push({
@@ -492,7 +548,10 @@ async function scanForColorTokens(
                   type: 'stroke',
                   property: `strokes[${index}]`,
                   currentValue: stroke.color,
-                  location: 'Stroke'
+                  location: 'Unlinked Stroke',
+                  isUnlinked: true, // Flag for unlinked values
+                  parentNodeId,
+                  path: nodePath
                 });
               }
             });
@@ -509,7 +568,7 @@ async function scanForColorTokens(
           await new Promise(resolve => setTimeout(resolve, 0));
         }
       } catch (err) {
-        console.warn(`Error checking node ${node.name}:`, err);
+        console.warn(`Error processing node ${nodes[i].name}:`, err);
       }
     }
 
@@ -1228,6 +1287,31 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
     isScanPaused = false;
     figma.ui.postMessage({ type: 'library-scan-stopped' });
   }
+
+  if (msg.type === 'select-node') {
+    try {
+      // Check if nodeId exists before calling selectNode
+      if (!msg.nodeId) {
+        throw new Error('No node ID provided');
+      }
+      await selectNode(msg.nodeId);
+    } catch (err) {
+      console.error('Error in node selection:', err);
+      figma.ui.postMessage({
+        type: 'selection-error',
+        message: err instanceof Error ? err.message : 'Failed to select node'
+      });
+    }
+  } else if (msg.type === 'select-nodes') {
+    if (Array.isArray(msg.nodeIds) && msg.nodeIds.length > 0) {
+      await selectNodes(msg.nodeIds);
+    } else {
+      figma.ui.postMessage({
+        type: 'selection-error',
+        message: 'Invalid node IDs provided'
+      });
+    }
+  }
 };
 
 // At the start of the file, after the UI setup
@@ -1551,7 +1635,8 @@ async function scanForInactiveTokens(
                     },
                     location: 'Inactive Library Token',
                     variableName: variable.name,
-                    preview: `${groupKey} (${group?.variables.length || 0} tokens)`
+                    preview: `${groupKey} (${group?.variables.length || 0} tokens)`,
+                    isInactiveLibrary: true
                   });
                 }
               }
@@ -1577,7 +1662,8 @@ async function scanForInactiveTokens(
                 },
                 location: 'Inaccessible Library Token',
                 variableName: 'Unknown Variable',
-                preview: `${groupKey}`
+                preview: `${groupKey}`,
+                isInactiveLibrary: true
               });
             }
           }
@@ -1655,7 +1741,8 @@ async function scanForFillVariables(
                   },
                   location: 'Fill Color Variable',
                   variableName: variable?.name || 'Unknown Variable',
-                  preview: `Variable: ${variable?.name || 'Unknown'}`
+                  preview: `Variable: ${variable?.name || 'Unknown'}`,
+                  isInactiveLibrary: false
                 });
               }
             }
@@ -1677,7 +1764,8 @@ async function scanForFillVariables(
               },
               location: 'Fill Color Variable',
               variableName: variable?.name || 'Unknown Variable',
-              preview: `Variable: ${variable?.name || 'Unknown'}`
+              preview: `Variable: ${variable?.name || 'Unknown'}`,
+              isInactiveLibrary: false
             });
           }
         }
@@ -2031,5 +2119,249 @@ function completeProgress() {
     progress: 100,
     isScanning: false
   });
+}
+
+// Update selectNodes function to better handle single node selection
+async function selectNodes(nodeIds: string[]) {
+  try {
+    // Clear current selection
+    figma.currentPage.selection = [];
+    
+    // For single node selection, use direct node selection
+    if (nodeIds.length === 1) {
+      const node = await figma.getNodeByIdAsync(nodeIds[0]);
+      if (node && 'visible' in node) {
+        const sceneNode = node as SceneNode;
+        
+        // Ensure node is visible in viewport
+        const nodeRect = {
+          x: sceneNode.x,
+          y: sceneNode.y,
+          width: sceneNode.width,
+          height: sceneNode.height
+        };
+
+        // Select the node
+        figma.currentPage.selection = [sceneNode];
+        
+        // Zoom to fit the node with some padding
+        const padding = 100; // pixels of padding around node
+        figma.viewport.scrollAndZoomIntoView([sceneNode]);
+        
+        // Additional viewport adjustment for better visibility
+        const zoom = figma.viewport.zoom;
+        figma.viewport.center = {
+          x: nodeRect.x + (nodeRect.width / 2),
+          y: nodeRect.y + (nodeRect.height / 2)
+        };
+        
+        // Notify UI of successful selection
+        figma.ui.postMessage({
+          type: 'selection-updated',
+          count: 1,
+          selectedNodeIds: [sceneNode.id],
+          nodeName: sceneNode.name,
+          nodeType: sceneNode.type
+        });
+        
+        return;
+      } else {
+        console.warn('Node not found or not selectable:', nodeIds[0]);
+        figma.ui.postMessage({
+          type: 'selection-error',
+          message: 'Selected node no longer exists or is not selectable'
+        });
+        return;
+      }
+    }
+    
+    // For multiple nodes, use existing group selection logic
+    const nodes = await Promise.all(
+      nodeIds.map(id => figma.getNodeByIdAsync(id))
+    );
+    const validNodes = nodes.filter((node): node is SceneNode => 
+      node !== null && 'visible' in node
+    );
+
+    if (validNodes.length > 0) {
+      // Select nodes and scroll into view
+      figma.currentPage.selection = validNodes;
+      figma.viewport.scrollAndZoomIntoView(validNodes);
+      
+      // Notify UI of selection
+      figma.ui.postMessage({
+        type: 'selection-updated',
+        count: validNodes.length,
+        selectedNodeIds: validNodes.map(node => node.id)
+      });
+    } else {
+      console.warn('No valid nodes found to select');
+      figma.ui.postMessage({
+        type: 'selection-error',
+        message: 'Selected nodes no longer exist in the document'
+      });
+    }
+  } catch (err) {
+    console.error('Error selecting nodes:', err);
+    figma.ui.postMessage({
+      type: 'selection-error',
+      message: 'Failed to select nodes'
+    });
+  }
+}
+
+// Add new function specifically for single node selection
+async function selectNode(nodeId: string) {
+  try {
+    // Get the node
+    const node = await figma.getNodeByIdAsync(nodeId);
+    
+    if (!node) {
+      throw new Error('Node not found');
+    }
+
+    // Ensure the node is a SceneNode (has visual properties)
+    if (!('visible' in node)) {
+      throw new Error('Node is not selectable');
+    }
+
+    const sceneNode = node as SceneNode;
+
+    // Make sure node is visible
+    ensureNodeIsVisible(sceneNode);
+
+    // Select the node
+    figma.currentPage.selection = [sceneNode];
+
+    // Calculate viewport adjustments
+    const zoom = Math.min(2, figma.viewport.zoom * 1.5); // Limit max zoom
+    const bounds = sceneNode.absoluteBoundingBox;
+    
+    if (!bounds) {
+      throw new Error('Cannot determine node bounds');
+    }
+
+    // Center on node with padding
+    const padding = 100;
+    const centerX = bounds.x + bounds.width / 2;
+    const centerY = bounds.y + bounds.height / 2;
+
+    // Set viewport
+    figma.viewport.center = { x: centerX, y: centerY };
+    figma.viewport.zoom = zoom;
+
+    // Notify UI of successful selection
+    figma.ui.postMessage({
+      type: 'selection-updated',
+      count: 1,
+      selectedNodeIds: [sceneNode.id],
+      nodeName: sceneNode.name,
+      nodeType: sceneNode.type,
+      bounds: bounds
+    });
+
+    console.log('Node selected:', {
+      id: sceneNode.id,
+      name: sceneNode.name,
+      type: sceneNode.type,
+      bounds: bounds
+    });
+
+  } catch (err) {
+    console.error('Error selecting node:', err);
+    figma.ui.postMessage({
+      type: 'selection-error',
+      message: err instanceof Error ? err.message : 'Failed to select node'
+    });
+  }
+}
+
+// Update ensureNodeIsVisible to be more thorough
+function ensureNodeIsVisible(node: SceneNode) {
+  try {
+    let current: BaseNode | null = node;
+    
+    while (current && current.parent) {
+      // Handle different node types
+      if ('visible' in current) {
+        (current as SceneNode).visible = true;
+      }
+
+      // Expand groups/frames
+      if ('expanded' in current.parent) {
+        const parent = current.parent as FrameNode | GroupNode | ComponentNode | ComponentSetNode;
+        parent.expanded = true;
+      }
+
+      // Handle auto-layout frames
+      if ('layoutMode' in current.parent && 'clipsContent' in current.parent) {
+        const parent = current.parent as FrameNode;
+        if (parent.clipsContent) {
+          parent.clipsContent = false;
+        }
+      }
+
+      current = current.parent;
+    }
+  } catch (err) {
+    console.warn('Error ensuring node visibility:', err);
+  }
+}
+
+// Helper function to get node path
+function getNodePath(node: BaseNode): string {
+  const path: string[] = [];
+  let current: BaseNode | null = node;
+  
+  while (current) {
+    if ('name' in current) {
+      path.unshift(current.name);
+    }
+    current = current.parent;
+  }
+  
+  return path.join(' / ');
+}
+
+// Add function to check if node is still valid
+async function isNodeValid(nodeId: string): Promise<boolean> {
+  try {
+    const node = await figma.getNodeByIdAsync(nodeId);
+    return node !== null && !node.removed;
+  } catch {
+    return false;
+  }
+}
+
+// Add function to handle group selection
+async function selectNodeGroup(refs: MissingReference[]) {
+  try {
+    // Filter out invalid nodes first
+    const validRefs = await Promise.all(
+      refs.map(async ref => {
+        const isValid = await isNodeValid(ref.nodeId);
+        return isValid ? ref : null;
+      })
+    );
+
+    const nodeIds = validRefs
+      .filter((ref): ref is MissingReference => ref !== null)
+      .map(ref => ref.nodeId);
+
+    if (nodeIds.length > 0) {
+      await selectNodes(nodeIds);
+    } else {
+      figma.ui.postMessage({
+        type: 'selection-error',
+        message: 'No valid nodes found in this group'
+      });
+    }
+  } catch (err) {
+    console.error('Error selecting node group:', err);
+    figma.ui.postMessage({
+      type: 'selection-error',
+      message: 'Failed to select node group'
+    });
+  }
 }
 
