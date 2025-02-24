@@ -633,12 +633,22 @@
       <div class="sticky-footer">
         <div class="version-info">
           <span>v</span>
-          <span class="version-number">1.0.0</span>
+          <span class="version-number">1.2.15</span>
         </div>
-        <button class="donate-button" @click="openStripePayment">
-          <span class="cat-icon">🐱</span>
-          <span>Feed my cats</span>
-        </button>
+        <!-- Add the new feedback button -->
+        <div style="display: flex">
+          <button 
+            class="donate-button" 
+            @click="openFeedbackForm" 
+            title="feedback"
+          >
+            <span>📝</span>
+          </button>
+          <button class="donate-button" @click="openStripePayment">
+            <span class="cat-icon">🐱</span>
+            <span>Feed my cats</span>
+          </button>
+        </div>
         <div class="resize-handle"></div>
       </div>
     </div>
@@ -4904,6 +4914,9 @@
             } else {
               this.selectedLibraryTokenScanType = value;
             }
+          },
+          openFeedbackForm() {
+            window.open('https://ivanyeo.atlassian.net/jira/core/projects/REL/form/2', '_blank');
           },
         },
         watch: {
