@@ -151,7 +151,7 @@
                   <span class="toast-message">Instances cannot be scanned. Please select frames, components, or sections instead.</span>
                 </div>
                 <!-- Existing selection messages -->
-                <div v-else-if="!hasSelection && !scanEntirePage" class="toast warning">
+                <div v-else-if="!hasSelection && !scanEntirePage" class="toast">
                   <div class="toast-icon">
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                       <path fill-rule="evenodd" clip-rule="evenodd" d="M8 1.33337L14.6667 13.3334H1.33334L8 1.33337ZM8 4.00004L3.73334 12H12.2667L8 4.00004ZM7.33334 6.66671H8.66668V9.33337H7.33334V6.66671ZM7.33334 10.6667H8.66668V12H7.33334V10.6667Z" fill="currentColor"/>
@@ -854,7 +854,6 @@
     display: flex;
     align-items: center;
     padding: 6px 8px;
-    margin: 4px 0;
     border-radius: 6px;
     background-color: var(--figma-color-bg-warning-tertiary);
     color: var(--figma-color-text-onwarning-secondary);
@@ -3435,7 +3434,7 @@
     }
 
     .warning {
-        background: var(--figma-color-bg-warning);
+        background: var(--figma-color-bg-warning-tertiary);
         border: 1px solid var(--figma-color-border-warning);
     }
 
