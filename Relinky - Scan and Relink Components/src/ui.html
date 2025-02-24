@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html>
   <head>
@@ -11,7 +10,6 @@
   <div id="loading" style="display: flex; justify-content: center; align-items: center; height: 100vh;">
     Loading...
   </div>
-
   <!-- Main app -->
   <div id="app">
     <div v-cloak class="plugin-container">
@@ -322,7 +320,13 @@
                             <color-preview :color="group.value" />
                           </template>
                           <template v-else>
-                            <span class="value-label">{{ formatValue(group.value) }}</span>
+                            <div class="typography-labels">
+                              <span class="label value">{{ formatValue(group.value) }}</span>
+                              <span v-if="group.refs[0]?.type === 'gap'" class="label gap">{{ group.value }}px</span>
+                              <span v-if="group.refs[0]?.type === 'verticalGap'" class="label vertical-gap">{{ group.value }}px</span>
+                              <span v-if="group.refs[0]?.type === 'horizontalPadding'" class="label horizontal-padding">{{ group.value }}px</span>
+                              <span v-if="group.refs[0]?.type === 'verticalPadding'" class="label vertical-padding">{{ group.value }}px</span>
+                            </div>
                           </template>
                         </div>
                         <div class="group-actions">
@@ -741,6 +745,33 @@
     overflow: hidden;
     }
     
+    /* Scrollbar styling */
+    ::-webkit-scrollbar {
+    width: 6px;
+    }
+    
+    ::-webkit-scrollbar-track {
+    background: transparent;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+    background: var(--figma-color-bg-tertiary);
+    border-radius: 3px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+    background: var(--figma-color-bg-secondary);
+    }
+        
+    @keyframes spinner {
+    from {transform: rotate(0deg);}
+    to {transform: rotate(360deg);}
+    }
+
+    @keyframes spin {
+    to { transform: rotate(360deg);}
+    }
+    
     /* Allow text selection in specific areas if needed */
     .code {
     user-select: text;
@@ -895,19 +926,7 @@
     padding: 4px 6px;
     margin: -2px;
     }
-    
-    /* Update first section specific styles */
-    .first-section {
-    background: var(--figma-color-bg);
-    padding: 0;
-    
-    & .step-content {
-          gap: 4px;
-          padding: 0;
-    }
-    
-    }
-    
+  
     .results-section {
     padding-bottom: 16px;
     }
@@ -917,25 +936,25 @@
     padding: 16px;
     border-bottom: 1px solid var(--figma-color-border);
     }
+        
+    .header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    }
     
+    .header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    }
+
     .header h2 {
     font-family: var(--font-stack);
     font-weight: 600;
-    font-size: 13px;
-    line-height: 24px;
-    margin: 0;
-    }
-    
-    .scan-type-selector {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    }
-    
-    .scan-type-selector label {
-    font-size: 11px;
-    color: var(--figma-color-text-secondary);
-    margin-bottom: 4px;
+    font-size: 12px;
+    line-height: 16px;
+    margin: var(--spacing-2xs);
     }
     
     .select-input {
@@ -976,25 +995,6 @@
     padding: 0 var(--spacing-md);
     width: auto;
     }
-    /* Use the same loading style for all buttons */
-    .button.loading {
-    position: relative;
-    color: transparent !important;
-    }
-    
-    .button.loading .loading-spinner {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
-    }
-    
-    
-    /* Active state */
-    .button.active {
-    background: var(--figma-color-bg-brand);
-    color: white;
-    }
     
     /* Hover state */
     .button:hover:not(:disabled) {
@@ -1014,50 +1014,33 @@
     cursor: not-allowed;
     }
     
-    /* Error state */
-    .button.error {
-    background: var(--figma-color-bg-danger);
-    color: white;
+    /* Use the same loading style for all buttons */
+    .button.loading {
+    position: relative;
+    color: transparent !important;
     }
     
-    /* Success state */
-    .button.success {
-    background: var(--figma-color-bg-success);
-    color: white;
+    .loading-spinner {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
     }
-    
-    /* Button styles */
-    .button.primary-button:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
+      
+    .loading-spinner {
+    width: 16px;
+    height: 16px;
+    margin: auto;
+    position: absolute;
+    border: 2px solid var(--figma-color-bg-brand);
+    border-top-color: transparent;
+    animation: spinner 0.6s linear infinite;
+    border-width: 2px;
+    border-radius: 50%;
+    border-right-color: var(--figma-color-bg-brand);
+    border-top-color: var(--figma-color-bg-brand);
     }
-    
-    .button.button-disabled {
-    cursor: not-allowed;
-    background: var(--figma-color-bg-disabled);
-    pointer-events: none;
-    color: var(--figma-color-text-disabled);
-    opacity: 0.4;
-    }
-    
-    .select-button {
-    transition: all 0.2s ease;
-    cursor: pointer;
-    border-radius: 6px;
-    padding: 5px 12px;
-    color: var(--figma-color-text-onbrand);
-    height: 32px;
-    padding: 4px 8px;
-    opacity: 0.9;
-    background: var(--figma-color-bg-brand);
-    min-width: 64px;
-    font-size: 11px;
-    }
-    .select-button:hover {
-    opacity: 1;
-    transform: scale(1.05);
-    border: var(--figma-color-border);
-    }
+
     /* Loading styles */
     .select-button.loading {
     position: relative;
@@ -1067,22 +1050,11 @@
     justify-content: center;
     pointer-events: none;
     }
-    .select-button .loading-spinner {
-    width: 12px;
-    height: 12px;
-    border-width: 2px;
-    border-top-color: var(--figma-color-text-onbrand);
-    border-right-color: var(--figma-color-text-onbrand);
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 0;
-    bottom: 0;
-    margin: auto;
-    }
-
-
     
+    .primary-buttons {
+    display: flex;
+    gap: 8px;
+    }
     
     .primary-button {
     background: var(--figma-color-bg-brand);
@@ -1094,12 +1066,17 @@
     background: var(--figma-color-bg-brand);
     filter: brightness(1.1);
     }
+    /* Button styles */
+    .primary-button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    }
     
     .secondary-button {
     color: var(--figma-color-text);
     background: var(--figma-color-bg-secondary);
     }
-    
+
     .secondary-button.rescan {
     background: var(--figma-color-bg-brand-tertiary);
     color: var(--figma-color-text-brand);
@@ -1112,13 +1089,64 @@
     border-color: var(--figma-color-border-brand-strong);
     }
 
+    /* Small variant for reference items */
+    .button.secondary-button.small {
+    font-size: 11px;
+    min-height: 24px;
+    padding: 4px 8px;
+    }
+
+    /* Add loading state for buttons */
+    .button.secondary-button.loading {
+    color: transparent;
+    position: relative;
+    }
+    /* Update button styles in results section */
+    .button.secondary-button {
+    background: var(--figma-color-bg-secondary);
+    position: relative;
+    border-radius: 6px;
+    border: 1px solid var(--figma-color-border);
+    color: var(--figma-color-text);
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 5px 12px;
+    transition: all 0.1s ease;
+    z-index: 1;
+    }
+
+    /* Active/Pressed state */
+    .button.secondary-button:active {
+    background: var(--figma-color-bg-pressed);
+    border-color: var(--figma-color-border-strong);
+    color: var(--figma-color-text);
+    }
+    /* Disabled state */
+    .button.secondary-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+    pointer-events: none;
+    }
+    /* Hover state */
+    .button.secondary-button:hover {
+    background: var(--figma-color-bg-hover);
+    border-color: var(--figma-color-highlight);
+    }
+
+    /* Focus state */
+    .button.secondary-button:focus {
+        box-shadow: 0 0 0 2px var(--figma-color-border-brand-strong);
+        outline: none;
+    }
+
     /* Progress Bar Styles */
     .progress-container {
     background: var(--figma-color-bg);
     }
     
     .progress-bar {
-    height: 14px;
+    height: 16px;
     position: relative;
     width: 100%;
     overflow: hidden;
@@ -1139,7 +1167,6 @@
     align-items: center;
     font-weight: 500;
     justify-content: center;
-    font-weight: 500;
     width: 100%;
     z-index: 1;
     }
@@ -1249,12 +1276,7 @@
     user-select: none;
     padding: 4px 0;
     }
-    
-    .header-left {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    }
+
     
     .expand-icon {
     color: var(--figma-color-text-secondary);
@@ -1358,12 +1380,7 @@
     .value-group-header:hover {
     background: var(--figma-color-bg-hover);
     }
-    
-    .header-right {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    }
+
     
     .reference-item {
     display: flex;
@@ -1380,8 +1397,6 @@
     background: var(--figma-color-bg-hover);
     transform: translateX(4px);
     }
-    
-
     
     .scan-scope-selector {
     padding: 2px 0;
@@ -1508,6 +1523,8 @@
     color: var(--figma-color-text-secondary);
     }
     
+
+    /* icons states */
     .warning-icon,
     .info-icon {
     width: 12px;
@@ -1523,7 +1540,32 @@
     .icon-info {
     color: var(--figma-color-text-secondary);
     }
+      
+    /* Icon styles */
+    .icon {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    }
     
+    .icon svg {
+    height: 100%;
+    display: block;
+    width: 100%;
+    }
+    
+    .scan-card-icon .icon {
+    opacity: 0.8;
+    }
+    
+    .scan-card:hover .icon,
+    .scan-card.selected .icon {
+    opacity: 1;
+    }
+
+
     /* Toggle label styles */
     .toggle-label {
     display: flex;
@@ -1644,9 +1686,6 @@
     .scan-card.selected .scan-card-description {
     color: var(--figma-color-text-brand);
     }
-    
-
-    
    
     /* Divider */
     .divider {
@@ -1656,17 +1695,6 @@
     margin: var(--spacing-lg) 0;
     margin: 8px 0;
     background-color: var(--figma-color-border);
-    }
-    
-    /* Step styles */
-    .first-section {
-    background: var(--figma-color-bg);
-    padding: 0;
-    }
-    
-    .first-section .step-content {
-    gap: 4px;
-    padding: 0;
     }
     
 
@@ -1727,25 +1755,21 @@
     
     .results-actions {
     display: flex;
-    gap: 8px;
-    }
-    
-    .results-actions {
     min-width: unset;
     padding: 5px 12px;
     height: 28px;
+    gap: 8px;
     }
     
     .results-badge {
     justify-content: center;
     font-weight: 500;
     border-radius: 10px;
-    padding: 2px 6px;
+    padding: 2px 4px;
     min-width: 20px;
     align-items: center;
     height: 20px;
     background: var(--figma-color-bg-secondary);
-    background: var(--figma-color-bg-brand);
     display: inline-flex;
     color: white;
     color: var(--figma-color-text);
@@ -1765,55 +1789,7 @@
     font-size: 11px;
     font-weight: 500;
     }
-    
-
-    /* Scrollbar styling */
-    ::-webkit-scrollbar {
-    width: 6px;
-    }
-    
-    ::-webkit-scrollbar-track {
-    background: transparent;
-    }
-    
-    ::-webkit-scrollbar-thumb {
-    background: var(--figma-color-bg-tertiary);
-    border-radius: 3px;
-    }
-    
-    ::-webkit-scrollbar-thumb:hover {
-    background: var(--figma-color-bg-secondary);
-    }
-    
-
-    
-    .loading-spinner {
-    width: 16px;
-    height: 16px;
-    margin: auto;
-    position: absolute;
-    border: 2px solid var(--figma-color-bg-brand);
-    border-top-color: transparent;
-    animation: spinner 0.6s linear infinite;
-    border-width: 2px;
-    border-radius: 50%;
-    border-right-color: var(--figma-color-bg-brand);
-    border-top-color: var(--figma-color-bg-brand);
-    }
-
-        
-    @keyframes spinner {
-    from {transform: rotate(0deg);}
-    to {transform: rotate(360deg);}
-    }
-
-    @keyframes spin {
-    to { transform: rotate(360deg);}
-    }
-    
-    
-
-    
+     
     .analysis-loading {
     margin: 0;
     align-items: center;
@@ -1824,7 +1800,7 @@
     display: flex;
     }
     
-    .analysis-loading .loading-spinner {
+    .analysis-loading {
     width: 24px;
     height: 24px;
     border-width: 2.5px;
@@ -1905,34 +1881,7 @@
     }
 
 
-    /* Icon styles */
-    .icon {
-    width: 24px;
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    }
-    
-    .icon svg {
-    height: 100%;
-    display: block;
-    width: 100%;
-    }
-    
-    .scan-card-icon .icon {
-    opacity: 0.8;
-    }
-    
-    .scan-card:hover .icon,
-    .scan-card.selected .icon {
-    opacity: 1;
-    }
-    
-    .lock-icon {
-    opacity: 0.7;
-    }
-    
+  
     /* Description */
     .description {
     color: var(--figma-color-text-secondary);
@@ -2277,6 +2226,22 @@
     justify-content: center;
     background: var(--figma-color-bg-secondary);
     }
+        
+    /* Update typography styles */
+    .typography-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    }
+    
+    .typography-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    min-width: 0;
+    }
+    
     
     .typography-details {
     display: flex;
@@ -2420,7 +2385,7 @@
     
 
     /* Add specific styles for analysis loading spinner */
-    .analysis-loading .loading-spinner {
+    .analysis-loading {
     width: 24px;
     border-width: 2.5px;
     margin: 8px auto;
@@ -2493,34 +2458,8 @@
     border-color: var(--figma-color-border-brand);
     }
     
-    .icon {
-    justify-content: center;
-    display: flex;
-    align-items: center;
-    width: 24px;
-    height: 24px;
-    }
-    
-    /* Add specific styles for the scan card icons */
-    .scan-card-icon .icon {
-    opacity: 0.8;
-    }
 
-    /* Update typography styles */
-    .typography-info {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-    }
-    
-    .typography-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    min-width: 0;
-    }
-    
+
     .library-header:hover {
     background: var(--figma-color-bg-hover);
     }
@@ -2791,11 +2730,6 @@
     }
     
 
-    .primary-buttons {
-    display: flex;
-    gap: 8px;
-    }
-    
     .control-buttons {
     display: flex;
     gap: 8px;
@@ -2894,7 +2828,7 @@
     position: relative;
     }
     
-    .scan-card.loading .loading-spinner {
+    .scan-card.loading {
     position: absolute;
     left: 50%;
     top: 50%;
@@ -3009,13 +2943,6 @@
         pointer-events: none !important;
         position: relative !important;
     }
-
-
-    .icon {
-        opacity: 1;
-    }
-
-   
 
     .color-preview {
         background: transparent;
@@ -3162,10 +3089,6 @@
         overflow: hidden;
     }
 
-    .secondary-button {
-        background: var(--figma-color-bg-secondary);
-        color: var(--figma-color-text);
-    }
 
     .content-section {
         /* Remove padding */
@@ -3186,13 +3109,7 @@
         width: 100%;
     }
 
-    .first-section {
-        & .step-content {
-            gap: 4px;
-            background: var(--figma-color-bg);
-            padding: 0;
-        }
-    }
+
 
     .group-actions {
         align-items: center;
@@ -3333,25 +3250,6 @@
     }
 
     .group-info {
-        align-items: center;
-        display: flex;
-        gap: 8px;
-    }
-
-    .header {
-        border-bottom: 1px solid var(--figma-color-border);
-        flex-shrink: 0;
-        padding: 16px;
-    }
-
-    .header-left {
-        align-items: center;
-        display: flex;
-        flex: 1;
-        gap: 8px;
-    }
-
-    .header-right {
         align-items: center;
         display: flex;
         gap: 8px;
@@ -3573,26 +3471,7 @@
         padding: 0 12px 12px;
     }
 
-    .settings-title {
-        color: var(--figma-color-text);
-        font-size: 11px;
-        font-weight: 500;
-        margin: 0;
-    }
 
-    .settings-toggle {
-        align-items: center;
-        background: none;
-        border-radius: 6px;
-        border: none;
-        color: var(--figma-color-text-secondary);
-        cursor: pointer;
-        display: flex;
-        justify-content: center;
-        margin: -4px;
-        padding: 8px;
-        transition: all 0.1s ease;
-    }
 
     .stat-label {
         color: var(--figma-color-text-secondary);
@@ -3844,6 +3723,94 @@
         user-select: none;
     }
 
+    .version-info {
+        align-items: center;
+        color: var(--figma-color-text-secondary);
+        display: flex;
+        font-size: 11px;
+        gap: 4px;
+    }
+
+    .info-icon {
+        color: white;
+        flex-shrink: 0;
+        height: 12px;
+        width: 12px;
+    }
+
+    .warning-message {
+        background: var(--figma-color-bg-warning);
+        background-color: var(--figma-color-bg-warning-secondary);
+        border: 1px solid var(--figma-color-border-warning);
+        color: white;
+    }
+
+    .watch-toggle-content {
+        align-items: center;
+        display: flex;
+        gap: 6px;
+    }
+
+    .typography-labels {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-wrap: wrap;
+    }
+
+    .label {
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: var(--figma-color-bg-secondary);
+      color: var(--figma-color-text);
+    }
+
+    .label.font-family {
+      background: var(--figma-color-bg-brand-tertiary);
+      color: var(--figma-color-text-brand);
+      font-weight: 500;
+    }
+
+    .label.font-weight {
+      background: var(--figma-color-bg-tertiary);
+    }
+
+    .label.font-size {
+      min-width: 24px;
+      text-align: center;
+      background: var(--figma-color-bg-tertiary);
+    }
+    /* Add new label variants for other types */
+    .label.gap {
+      background: var(--figma-color-bg-tertiary);
+    }
+
+    .label.vertical-gap {
+      background: var(--figma-color-bg-tertiary);
+    }
+
+    .label.horizontal-padding {
+      background: var(--figma-color-bg-tertiary);
+    }
+
+    .label.vertical-padding {
+      background: var(--figma-color-bg-tertiary);
+    }
+
+    .label.value {
+      min-width: 24px;
+      text-align: center;
+      background: var(--figma-color-bg-tertiary);
+    }
+
+
+
+
+
+
+    /* variable styles */
+
     .variable-details {
         border-top: 1px solid var(--figma-color-border);
         margin-top: 8px;
@@ -3880,34 +3847,7 @@
         padding: 2px 6px;
     }
 
-    .version-info {
-        align-items: center;
-        color: var(--figma-color-text-secondary);
-        display: flex;
-        font-size: 11px;
-        gap: 4px;
-    }
 
-    .info-icon {
-        color: white;
-        flex-shrink: 0;
-        height: 12px;
-        width: 12px;
-    }
-
-    .warning-message {
-        background: var(--figma-color-bg-warning);
-        background-color: var(--figma-color-bg-warning-secondary);
-        border: 1px solid var(--figma-color-border-warning);
-        color: white;
-    }
-
-    .watch-toggle-content {
-        align-items: center;
-        display: flex;
-        gap: 6px;
-    }
-        
     </style>
 
 
