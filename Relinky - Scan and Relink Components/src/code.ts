@@ -175,7 +175,12 @@ function hasConstraints(node: BaseNode): node is SceneNode & { constraints: Cons
 // Update the isNodeVisible function to use these type guards
 function isNodeVisible(node: BaseNode): boolean {
   try {
-    // 1. Check if node itself is visible
+    // Skip instance children as they inherit visibility
+    if (node.parent?.type === 'INSTANCE') {
+      return false;
+    }
+
+    // Check if node itself is visible
     if ('visible' in node && !(node as SceneNode).visible) {
       return false;
     }
@@ -183,8 +188,23 @@ function isNodeVisible(node: BaseNode): boolean {
     // 2. Check if node is inside a collapsed group/frame/component
     let current: BaseNode | null = node;
     while (current && current.parent) {
-      const parent: BaseNode = current.parent;
+      const parent = current.parent;
+
+    // 1. Check objects hidden in frames
+    if (parent.type === 'FRAME') {
+      const frame = parent as FrameNode;
       
+    // Check if hidden by clipping
+    if (frame.clipsContent) {
+      const currentNode = current as SceneNode;
+      if (currentNode.x < 0 || 
+          currentNode.y < 0 || 
+          currentNode.x + currentNode.width > frame.width || 
+          currentNode.y + currentNode.height > frame.height) {
+        return false;
+      }
+    }
+
       // Check parent visibility
       if ('visible' in parent && !(parent as SceneNode).visible) {
         return false;
@@ -201,6 +221,47 @@ function isNodeVisible(node: BaseNode): boolean {
         }
       }
 
+        // Check if hidden in auto-layout
+        if (frame.layoutMode !== 'NONE') {
+          const currentNode = current as SceneNode;
+          if ('layoutAlign' in currentNode && currentNode.layoutAlign === 'NONE') {
+            return false;
+          }
+          // Check if hidden by auto-layout overflow
+          if (frame.layoutMode === 'VERTICAL' && frame.clipsContent) {
+            if (currentNode.y < 0 || currentNode.y + currentNode.height > frame.height) {
+              return false;
+            }
+          }
+          if (frame.layoutMode === 'HORIZONTAL' && frame.clipsContent) {
+            if (currentNode.x < 0 || currentNode.x + currentNode.width > frame.width) {
+              return false;
+            }
+          }
+        }
+      }
+            
+
+      // 2. Check objects hidden in groups
+      if (parent.type === 'GROUP') {
+        const group = parent as GroupNode;
+        if (!group.expanded) {
+          return false;
+        }
+        // Check if hidden by group bounds
+        const currentNode = current as SceneNode;
+        const groupBounds = group.absoluteBoundingBox;
+        const nodeBounds = currentNode.absoluteBoundingBox;
+        if (groupBounds && nodeBounds) {
+          if (nodeBounds.x < groupBounds.x || 
+              nodeBounds.y < groupBounds.y ||
+              nodeBounds.x + nodeBounds.width > groupBounds.x + groupBounds.width ||
+              nodeBounds.y + nodeBounds.height > groupBounds.y + groupBounds.height) {
+            return false;
+          }
+        }
+      }
+            
       // 3. Check if parent is clipped
       if ('clipsContent' in parent && (parent as FrameNode).clipsContent) {
         // Check if node is outside parent bounds
@@ -235,6 +296,14 @@ function isNodeVisible(node: BaseNode): boolean {
         const parentOpacity = 'opacity' in parent ? 
           (parent as SceneNode & { opacity: number }).opacity : 1;
         if (parentOpacity === 0) {
+      // 3. Check objects hidden in sections
+      if (parent.type === 'SECTION') {
+        const section = parent as SectionNode;
+        if (!section.expanded) {
+          return false;
+        }
+        // Check if hidden by section collapse
+        if ('visible' in section && !section.visible) {
           return false;
         }
       }
@@ -250,16 +319,51 @@ function isNodeVisible(node: BaseNode): boolean {
           }
         }
       }
+            
+      // Check if parent is collapsed
+      if ('expanded' in parent) {
+        const expandableParent = parent as FrameNode | GroupNode | ComponentNode | ComponentSetNode;
+        if (!expandableParent.expanded) {
+          return false;
+        }
+      }
+      // 4. General visibility checks
+      if ('visible' in parent && !(parent as SceneNode).visible) {
+        return false;
+      }
 
-      current = current.parent;
+      // Check opacity
+      if ('opacity' in parent && (parent as SceneNode).opacity === 0) {
+        return false;
+      }
+
+      // Check if hidden by mask
+      if (parent.type === 'FRAME' && (parent as FrameNode).isMask) {
+        const parentFrame = parent as FrameNode;
+        const nodeIndex = parentFrame.children.indexOf(current as SceneNode);
+        if (nodeIndex > 0) { // Not the mask itself
+          return false;
+        }
+      }
+
+      // Check blend mode visibility
+      if ('blendMode' in current) {
+        const currentNode = current as SceneNode & { blendMode: BlendMode };
+        if (currentNode.blendMode === 'PASS_THROUGH') {
+          const parentOpacity = 'opacity' in parent ? (parent as SceneNode).opacity : 1;
+          if (parentOpacity === 0) {
+            return false;
+          }
+        }
+      }
+
+      current = parent;
     }
-
 
     return true;
   } catch (err) {
     console.warn('Error checking node visibility:', err);
-    // Default to visible if there's an error
-    return true;
+    return false; 
   }
 }
 
@@ -356,7 +460,14 @@ async function scanForTextTokens(
         if (node.type !== 'TEXT') return false;
         
         // Use the enhanced visibility check
-        if (ignoreHiddenLayers && !shouldIncludeNode(node, true)) {
+        if (ignoreHiddenLayers && !shouldIncludeNode(node, true))
+        // Skip instance children
+        if (node.parent?.type === 'INSTANCE') {
+          return false;
+        }
+        
+        // Use enhanced visibility check
+        if (ignoreHiddenLayers && !isNodeVisible(node)) {
           return false;
         }
         
@@ -470,7 +581,23 @@ async function scanForColorTokens(
       if (ignoreHiddenLayers && !isNodeVisible(node)) {
         return false;
       }
-      
+        // Skip instance children
+        const nodes = (nodesToScan || figma.currentPage.findAll())
+        .filter(node => {
+          // Skip instance children
+          if (node.parent?.type === 'INSTANCE') {
+            return false;
+          }
+  
+          if (!node || node.removed) return false;
+          
+          // Use enhanced visibility check
+          if (ignoreHiddenLayers && !isNodeVisible(node)) {
+            return false;
+          }
+          
+          return 'fills' in node || 'strokes' in node;
+        });
       return 'fills' in node || 'strokes' in node || 'backgroundColor' in node;
     });
 
