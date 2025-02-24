@@ -270,7 +270,29 @@ function shouldIncludeNode(node: BaseNode, ignoreHiddenLayers: boolean): boolean
     return true;
   }
 
-  return isNodeVisible(node);
+  let current: BaseNode | null = node;
+  
+  while (current) {
+    if ('visible' in current) {
+      const sceneNode = current as SceneNode;
+      if (!sceneNode.visible) {
+        return false;
+      }
+    }
+    current = current.parent;
+  }
+  
+  return true;
+
+  // Update shouldIncludeNode to use the enhanced visibility check
+  function shouldIncludeNode(node: BaseNode, ignoreHiddenLayers: boolean): boolean {
+    // If we're not ignoring hidden layers, include all nodes
+    if (!ignoreHiddenLayers) {
+      return true;
+    }
+
+    return isNodeVisible(node);
+  }
 }
 
 // Add this helper to check if a node is effectively hidden by its parent's properties
@@ -440,11 +462,12 @@ async function scanForColorTokens(
   const missingRefs: MissingReference[] = [];
   
   try {
+    // Update the filter to strictly check visibility
     const nodes = (nodesToScan || figma.currentPage.findAll()).filter(node => {
       if (!node || node.removed) return false;
       
-      // Use the enhanced visibility check
-      if (ignoreHiddenLayers && !shouldIncludeNode(node, true)) {
+      // Strict visibility check
+      if (ignoreHiddenLayers && !isNodeVisible(node)) {
         return false;
       }
       
@@ -2220,21 +2243,18 @@ async function selectNode(nodeId: string) {
       throw new Error('Node not found');
     }
 
-    // Ensure the node is a SceneNode (has visual properties)
+    // Ensure the node is a SceneNode
     if (!('visible' in node)) {
       throw new Error('Node is not selectable');
     }
 
     const sceneNode = node as SceneNode;
 
-    // Make sure node is visible
-    ensureNodeIsVisible(sceneNode);
-
-    // Select the node
+    // Don't modify visibility, just select the node
     figma.currentPage.selection = [sceneNode];
 
     // Calculate viewport adjustments
-    const zoom = Math.min(2, figma.viewport.zoom * 1.5); // Limit max zoom
+    const zoom = Math.min(2, figma.viewport.zoom * 1.5);
     const bounds = sceneNode.absoluteBoundingBox;
     
     if (!bounds) {
@@ -2257,14 +2277,16 @@ async function selectNode(nodeId: string) {
       selectedNodeIds: [sceneNode.id],
       nodeName: sceneNode.name,
       nodeType: sceneNode.type,
-      bounds: bounds
+      bounds: bounds,
+      isVisible: sceneNode.visible
     });
 
     console.log('Node selected:', {
       id: sceneNode.id,
       name: sceneNode.name,
       type: sceneNode.type,
-      bounds: bounds
+      bounds: bounds,
+      isVisible: sceneNode.visible
     });
 
   } catch (err) {
