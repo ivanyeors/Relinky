@@ -37,6 +37,7 @@ interface MissingReference {
   isUnlinked?: boolean;
   parentNodeId?: string;  // Add parent node ID for context
   path?: string;          // Add node path for better location info
+  isVisible: boolean;  // Add this property
 }
 
 // Update ScanType to include new types
@@ -185,46 +186,35 @@ function isNodeVisible(node: BaseNode): boolean {
       return false;
     }
 
-    // 2. Check if node is inside a collapsed group/frame/component
+    // Check if node is inside a collapsed group/frame/component
     let current: BaseNode | null = node;
     while (current && current.parent) {
-      const parent = current.parent;
+      const parent = current.parent as BaseNode & { type: NodeType };
 
-    // 1. Check objects hidden in frames
-    if (parent.type === 'FRAME') {
-      const frame = parent as FrameNode;
-      
-    // Check if hidden by clipping
-    if (frame.clipsContent) {
-      const currentNode = current as SceneNode;
-      if (currentNode.x < 0 || 
-          currentNode.y < 0 || 
-          currentNode.x + currentNode.width > frame.width || 
-          currentNode.y + currentNode.height > frame.height) {
-        return false;
-      }
-    }
-
-      // Check parent visibility
+      // 1. Check parent visibility
       if ('visible' in parent && !(parent as SceneNode).visible) {
         return false;
       }
 
-      // Check if parent is collapsed
-      if (parent.type === 'GROUP' || 
-          parent.type === 'FRAME' || 
-          parent.type === 'COMPONENT' || 
-          parent.type === 'COMPONENT_SET') {
-        const parentNode = parent as FrameNode | GroupNode | ComponentNode | ComponentSetNode;
-        if (!parentNode.expanded) {
-          return false;
+      // 2. Check if hidden in frames
+      if (parent.type === 'FRAME') {
+        const frame = parent as FrameNode;
+        const currentNode = current as SceneNode;
+
+        // Check if hidden by clipping
+        if (frame.clipsContent) {
+          if (currentNode.x < 0 || 
+              currentNode.y < 0 || 
+              currentNode.x + currentNode.width > frame.width || 
+              currentNode.y + currentNode.height > frame.height) {
+            return false;
+          }
         }
-      }
 
         // Check if hidden in auto-layout
         if (frame.layoutMode !== 'NONE') {
           const currentNode = current as SceneNode;
-          if ('layoutAlign' in currentNode && currentNode.layoutAlign === 'NONE') {
+          if ('layoutPositioning' in currentNode && currentNode.layoutPositioning === 'ABSOLUTE') {
             return false;
           }
           // Check if hidden by auto-layout overflow
@@ -240,66 +230,24 @@ function isNodeVisible(node: BaseNode): boolean {
           }
         }
       }
-            
 
-      // 2. Check objects hidden in groups
+      // 3. Check if hidden in groups
       if (parent.type === 'GROUP') {
         const group = parent as GroupNode;
+        // Check if group is collapsed
         if (!group.expanded) {
           return false;
         }
-        // Check if hidden by group bounds
-        const currentNode = current as SceneNode;
-        const groupBounds = group.absoluteBoundingBox;
-        const nodeBounds = currentNode.absoluteBoundingBox;
-        if (groupBounds && nodeBounds) {
-          if (nodeBounds.x < groupBounds.x || 
-              nodeBounds.y < groupBounds.y ||
-              nodeBounds.x + nodeBounds.width > groupBounds.x + groupBounds.width ||
-              nodeBounds.y + nodeBounds.height > groupBounds.y + groupBounds.height) {
-            return false;
-          }
-        }
-      }
-            
-      // 3. Check if parent is clipped
-      if ('clipsContent' in parent && (parent as FrameNode).clipsContent) {
-        // Check if node is outside parent bounds
-        const parentFrame = parent as FrameNode;
-        const node = current as SceneNode;
-        
-        if (node.x < 0 || 
-            node.y < 0 || 
-            node.x + node.width > parentFrame.width || 
-            node.y + node.height > parentFrame.height) {
+        // Check if node is actually in the group
+        if (!group.children.includes(current as SceneNode)) {
           return false;
         }
       }
 
-      // 4. Check opacity
-      if ('opacity' in parent && (parent as SceneNode & { opacity: number }).opacity === 0) {
-        return false;
-      }
-
-      // 5. Check if inside mask and is not the mask itself
-      if (parent.type === 'FRAME' && (parent as FrameNode).isMask) {
-        const parentNode = parent as FrameNode;
-        const nodeIndex = parentNode.children.indexOf(current as SceneNode);
-        // If not the first child (mask), then it's hidden by mask
-        if (nodeIndex > 0) {
-          return false;
-        }
-      }
-
-      // 6. Check blend mode
-      if ('blendMode' in current && (current as SceneNode & { blendMode: BlendMode }).blendMode === 'PASS_THROUGH') {
-        const parentOpacity = 'opacity' in parent ? 
-          (parent as SceneNode & { opacity: number }).opacity : 1;
-        if (parentOpacity === 0) {
-      // 3. Check objects hidden in sections
+      // Check objects hidden in sections
       if (parent.type === 'SECTION') {
         const section = parent as SectionNode;
-        if (!section.expanded) {
+        if (!section.visible) {
           return false;
         }
         // Check if hidden by section collapse
@@ -307,16 +255,26 @@ function isNodeVisible(node: BaseNode): boolean {
           return false;
         }
       }
+      // 4. Check if hidden in components
+      if (parent.type === 'COMPONENT' || parent.type === 'COMPONENT_SET') {
+        const component = parent as ComponentNode | ComponentSetNode;
+        if (!component.expanded) {
+          return false;
+        }
+      }
+      // 5. Check if hidden in sections
+      if (parent.type === 'SECTION') {
+        const section = parent as SectionNode;
+        if (!section.visible) {
+          return false;
+        }
+      }
 
-      // 7. Check constraints
-      if ('constraints' in current) {
-        const constraints = (current as SceneNode & { constraints: Constraints }).constraints;
-        // Check if node is constrained outside visible bounds
-        if (constraints.horizontal === 'SCALE' || constraints.vertical === 'SCALE') {
-          const parent = current.parent as FrameNode;
-          if (parent.width === 0 || parent.height === 0) {
-            return false;
-          }
+      // 6. Check opacity (fully transparent is considered hidden)
+      if ('opacity' in parent && hasOpacity(parent)) {
+        const nodeWithOpacity = parent as SceneNode & { opacity: number };
+        if (nodeWithOpacity.opacity === 0) {
+          return false;
         }
       }
             
@@ -331,9 +289,7 @@ function isNodeVisible(node: BaseNode): boolean {
       if ('visible' in parent && !(parent as SceneNode).visible) {
         return false;
       }
-
-      // Check opacity
-      if ('opacity' in parent && (parent as SceneNode).opacity === 0) {
+      if ('opacity' in parent && (parent as SceneNode & { opacity: number }).opacity === 0) {
         return false;
       }
 
@@ -350,20 +306,27 @@ function isNodeVisible(node: BaseNode): boolean {
       if ('blendMode' in current) {
         const currentNode = current as SceneNode & { blendMode: BlendMode };
         if (currentNode.blendMode === 'PASS_THROUGH') {
-          const parentOpacity = 'opacity' in parent ? (parent as SceneNode).opacity : 1;
+          const parentOpacity = 'opacity' in parent ? 
+            (parent as SceneNode & { opacity: number }).opacity : 1;
           if (parentOpacity === 0) {
             return false;
           }
         }
       }
-
+      // 6. Check opacity (fully transparent is considered hidden)
+      if ('opacity' in parent && hasOpacity(parent)) {
+        const nodeWithOpacity = parent as SceneNode & { opacity: number };
+        if (nodeWithOpacity.opacity === 0) {
+          return false;
+        }
+      }
       current = parent;
     }
 
     return true;
   } catch (err) {
     console.warn('Error checking node visibility:', err);
-    return false; 
+    return false;
   }
 }
 
@@ -501,7 +464,8 @@ async function scanForTextTokens(
                     variableName: variable.name
                   },
                   location: 'Inactive Library Typography',
-                  isInactiveLibrary: true
+                  isInactiveLibrary: true,
+                  isVisible: 'visible' in node ? node.visible : true  // Add this line
                 });
                 continue;
               }
@@ -539,7 +503,8 @@ async function scanForTextTokens(
             currentValue: typographyValue,
             location: 'Unlinked Typography',
             preview: formatTypographyValue(typographyValue),
-            isUnlinked: true
+            isUnlinked: true,
+            isVisible: 'visible' in node ? node.visible : true  // Add this line
           });
         }
       } catch (err) {
@@ -574,32 +539,24 @@ async function scanForColorTokens(
   
   try {
     // Update the filter to strictly check visibility
-    const nodes = (nodesToScan || figma.currentPage.findAll()).filter(node => {
-      if (!node || node.removed) return false;
-      
-      // Strict visibility check
-      if (ignoreHiddenLayers && !isNodeVisible(node)) {
-        return false;
-      }
+    const nodes = (nodesToScan || figma.currentPage.findAll())
+      .filter(node => {
+        // Skip removed nodes
+        if (!node || node.removed) return false;
+        
         // Skip instance children
-        const nodes = (nodesToScan || figma.currentPage.findAll())
-        .filter(node => {
-          // Skip instance children
-          if (node.parent?.type === 'INSTANCE') {
-            return false;
-          }
-  
-          if (!node || node.removed) return false;
-          
-          // Use enhanced visibility check
-          if (ignoreHiddenLayers && !isNodeVisible(node)) {
-            return false;
-          }
-          
-          return 'fills' in node || 'strokes' in node;
-        });
-      return 'fills' in node || 'strokes' in node || 'backgroundColor' in node;
-    });
+        if (node.parent?.type === 'INSTANCE') return false;
+
+        // Skip invisible nodes
+        if ('visible' in node && !node.visible) return false;
+        
+        // Skip if ignoring hidden layers and node is hidden
+        if (ignoreHiddenLayers && !isNodeVisible(node)) return false;
+        
+        // Check for fills/strokes/etc
+        return 'fills' in node || 'strokes' in node;
+      });
+        
 
     const totalNodes = nodes.length;
     let processedNodes = 0;
@@ -649,7 +606,8 @@ async function scanForColorTokens(
                   variableName: binding.name || 'Unknown Variable',
                   variableValue: binding.value || null,
                   parentNodeId,
-                  path: nodePath
+                  path: nodePath,
+                  isVisible: 'visible' in node ? node.visible : true
                 });
               }
             }
@@ -675,7 +633,8 @@ async function scanForColorTokens(
                   location: 'Unlinked Fill',
                   isUnlinked: true, // Flag for unlinked values
                   parentNodeId,
-                  path: nodePath
+                  path: nodePath,
+                  isVisible: 'visible' in node ? node.visible : true
                 });
               }
             });
@@ -701,7 +660,8 @@ async function scanForColorTokens(
                   location: 'Unlinked Stroke',
                   isUnlinked: true, // Flag for unlinked values
                   parentNodeId,
-                  path: nodePath
+                  path: nodePath,
+                  isVisible: 'visible' in node ? node.visible : true
                 });
               }
             });
@@ -710,7 +670,7 @@ async function scanForColorTokens(
 
         // Update progress
         processedNodes++;
-        const progress = Math.round((processedNodes / totalNodes) * 100);
+        const progress = Math.round((processedNodes / nodes.length) * 100);
         progressCallback(progress);
 
         // Add a small delay every few nodes to prevent UI freezing
@@ -1518,7 +1478,8 @@ async function scanForVerticalGap(
         type: 'vertical-gap',
         property: 'itemSpacing',
         currentValue: node.itemSpacing,
-        location: 'Vertical Gap'
+        location: 'Vertical Gap',
+        isVisible: 'visible' in node ? node.visible : true  // Add this line
       });
 
       // Calculate and report progress
@@ -1570,7 +1531,8 @@ async function scanForPadding(
             type: 'horizontal-padding',
             property: 'paddingLeft',
             currentValue: node.paddingLeft,
-            location: 'Left Padding'
+            location: 'Left Padding',
+            isVisible: 'visible' in node ? node.visible : true  // Add this line
           });
         }
         if (node.paddingRight > 0 && !boundVars.paddingRight) {
@@ -1580,7 +1542,8 @@ async function scanForPadding(
             type: 'horizontal-padding',
             property: 'paddingRight',
             currentValue: node.paddingRight,
-            location: 'Right Padding'
+            location: 'Right Padding',
+            isVisible: 'visible' in node ? node.visible : true  // Add this line
           });
         }
       } else {
@@ -1591,7 +1554,8 @@ async function scanForPadding(
             type: 'vertical-padding',
             property: 'paddingTop',
             currentValue: node.paddingTop,
-            location: 'Top Padding'
+            location: 'Top Padding',
+            isVisible: 'visible' in node ? node.visible : true  // Add this line
           });
         }
         if (node.paddingBottom > 0 && !boundVars.paddingBottom) {
@@ -1601,7 +1565,8 @@ async function scanForPadding(
             type: 'vertical-padding',
             property: 'paddingBottom',
             currentValue: node.paddingBottom,
-            location: 'Bottom Padding'
+            location: 'Bottom Padding',
+            isVisible: 'visible' in node ? node.visible : true  // Add this line
           });
         }
       }
@@ -1653,7 +1618,8 @@ async function scanForCornerRadius(
           type: 'corner-radius',
           property: 'cornerRadius',
           currentValue: node.cornerRadius,
-          location: 'Shape'
+          location: 'Shape',
+          isVisible: 'visible' in node ? node.visible : true  // Add this line
         });
       }
 
@@ -1786,7 +1752,8 @@ async function scanForInactiveTokens(
                     location: 'Inactive Library Token',
                     variableName: variable.name,
                     preview: `${groupKey} (${group?.variables.length || 0} tokens)`,
-                    isInactiveLibrary: true
+                    isInactiveLibrary: true,
+                    isVisible: 'visible' in node ? node.visible : true  // Add this line
                   });
                 }
               }
@@ -1813,7 +1780,8 @@ async function scanForInactiveTokens(
                 location: 'Inaccessible Library Token',
                 variableName: 'Unknown Variable',
                 preview: `${groupKey}`,
-                isInactiveLibrary: true
+                isInactiveLibrary: true,
+                isVisible: 'visible' in node ? node.visible : true  // Add this line
               });
             }
           }
@@ -1892,7 +1860,8 @@ async function scanForFillVariables(
                   location: 'Fill Color Variable',
                   variableName: variable?.name || 'Unknown Variable',
                   preview: `Variable: ${variable?.name || 'Unknown'}`,
-                  isInactiveLibrary: false
+                  isInactiveLibrary: false,
+                  isVisible: 'visible' in node ? node.visible : true  // Add this line
                 });
               }
             }
@@ -1915,7 +1884,8 @@ async function scanForFillVariables(
               location: 'Fill Color Variable',
               variableName: variable?.name || 'Unknown Variable',
               preview: `Variable: ${variable?.name || 'Unknown'}`,
-              isInactiveLibrary: false
+              isInactiveLibrary: false,
+              isVisible: 'visible' in node ? node.visible : true  // Add this line
             });
           }
         }
@@ -2513,4 +2483,5 @@ async function selectNodeGroup(refs: MissingReference[]) {
     });
   }
 }
+
 
