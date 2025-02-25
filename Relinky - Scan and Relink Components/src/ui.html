@@ -117,25 +117,6 @@
                       </div>
                     </label>
                 </div>
-
-              <!-- Existing Ignore Hidden Layers setting -->
-                <div class="setting-item">
-                    <label class="toggle-label">
-                      <div class="toggle-label-content">
-                        <span>Ignore Hidden Layers</span>
-                        <span class="beta-badge">Beta</span>
-                        <span class="info-badge" title="Hidden layers will be excluded from the scan">ⓘ</span>
-                      </div>
-                      <div class="toggle-wrapper">
-                        <input 
-                          type="checkbox" 
-                          v-model="ignoreHiddenLayers"
-                          class="toggle-input"
-                        >
-                        <div class="toggle-slider"></div>
-                      </div>
-                    </label>
-                </div>
                 </div>
               </div>
 
@@ -285,7 +266,13 @@
                         title="Show hidden layers only"
                       >
                         Hidden
-                        <span v-if="showHiddenOnly" class="icon-check"></span>
+                        <span v-if="showHiddenOnly" class="icon-check">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <g id="check">
+                              <path d="M20 6L9 17L4 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </g>
+                          </svg>
+                        </span>
                       </button>
                       <button 
                         class="button secondary-button"
@@ -643,7 +630,7 @@
       <div class="sticky-footer">
         <div class="version-info">
           <span>v</span>
-          <span class="version-number">1.2.16</span>
+          <span class="version-number">1.3.0</span>
         </div>
         <!-- Add the new feedback button -->
         <div style="display: flex">
