@@ -277,6 +277,16 @@
                       <span class="results-badge">{{ getTotalResultsCount() }}</span>
                     </div>
                     <div class="results-actions">
+                      <!-- Add Hidden filter toggle -->
+                      <button 
+                        class="button secondary-button"
+                        :class="{ 'active': showHiddenOnly }"
+                        @click="toggleHiddenFilter"
+                        title="Show hidden layers only"
+                      >
+                        Hidden
+                        <span v-if="showHiddenOnly" class="icon-check"></span>
+                      </button>
                       <button 
                         class="button secondary-button"
                         @click="clearResults"
@@ -288,7 +298,7 @@
 
                   <!-- Results Container -->
                   <div class="results-container">
-                    <div v-for="(group, groupKey) in groupedByValue" 
+                    <div v-for="(group, groupKey) in filteredResults" 
                          :key="groupKey" 
                          class="value-group"
                     >
@@ -993,7 +1003,6 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 0 16px;
     font-size: 11px;
     min-width: 90px;
     justify-content: center;
@@ -4248,6 +4257,7 @@
               }
             ],
             lastScannedType: null, // Add this to track the last scan type
+            showHiddenOnly: false,
           }
         },
         computed: {
@@ -4333,6 +4343,24 @@
           showRescanButton() {
             // Only show rescan if we have results AND the scan type hasn't changed
             return this.hasResults && this.selectedScanType === this.lastScannedType;
+          },
+          filteredResults() {
+            if (!this.showHiddenOnly) {
+              return this.groupedByValue;
+            }
+            
+            // Filter to show only groups with hidden layers
+            const filtered = {};
+            for (const [key, group] of Object.entries(this.groupedByValue)) {
+              const hiddenRefs = group.refs.filter(ref => !ref.isVisible);
+              if (hiddenRefs.length > 0) {
+                filtered[key] = {
+                  ...group,
+                  refs: hiddenRefs
+                };
+              }
+            }
+            return filtered;
           }
         },
         methods: {
@@ -4917,6 +4945,9 @@
           },
           openFeedbackForm() {
             window.open('https://ivanyeo.atlassian.net/jira/core/projects/REL/form/2', '_blank');
+          },
+          toggleHiddenFilter() {
+            this.showHiddenOnly = !this.showHiddenOnly;
           },
         },
         watch: {
