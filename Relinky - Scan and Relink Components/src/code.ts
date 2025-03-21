@@ -2,8 +2,8 @@
 // Handles initialization, UI events, and plugin lifecycle
 
 import * as common from './common';
-import * as valuesScanner from './values';
-import * as variablesScanner from './variables';
+import * as valuesScanner from '@relink';
+import * as variablesScanner from '@unlink';
 
 // Clear previous logs
 console.clear();

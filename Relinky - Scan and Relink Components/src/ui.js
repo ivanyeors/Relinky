@@ -315,6 +315,12 @@ function initializeApp() {
         
         Object.entries(this.groupedReferences).forEach(([key, refs]) => {
           try {
+            // Filter out references from inactive libraries
+            const filteredRefs = refs.filter(ref => !ref.isInactiveLibrary);
+            
+            // Skip if no references left after filtering
+            if (filteredRefs.length === 0) return;
+            
             // Split the key safely
             const [property, ...valueParts] = key.split(':');
             const valueStr = valueParts.join(':'); // Rejoin in case value contains colons
@@ -338,7 +344,7 @@ function initializeApp() {
             }
             
             valueGroups[groupKey].properties.add(property);
-            valueGroups[groupKey].refs.push(...refs);
+            valueGroups[groupKey].refs.push(...filteredRefs);
           } catch (err) {
             console.warn('Error processing group:', key, err);
           }
@@ -426,6 +432,11 @@ function initializeApp() {
         
         // Apply filters directly instead of using filteredVariables to avoid circular reference
         this.linkedVariables.forEach(variable => {
+          // Only include inactive library variables and exclude unlinked raw values
+          if (!variable.isInactiveLibrary || variable.isUnlinked) {
+            return;
+          }
+          
           // Apply filters directly
           // Filter by type
           if (this.variableFilters.type !== 'all' && 
@@ -914,7 +925,7 @@ function initializeApp() {
       selectNode(nodeId) {
         parent.postMessage({
           pluginMessage: { 
-            type: 'SELECT_NODE', 
+            type: 'select-node', 
             nodeId
           }
         }, '*');
