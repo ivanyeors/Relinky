@@ -10,7 +10,7 @@ module.exports = (env, argv) => ({
 
   entry: {
     code: path.resolve(__dirname, 'src/code.ts'),
-    ui: path.resolve(__dirname, 'src/ui.html'),
+    ui: path.resolve(__dirname, 'src/ui.js'),
   },
 
   module: {
@@ -53,13 +53,13 @@ module.exports = (env, argv) => ({
     publicPath: '',
   },
 
-  // Tells Webpack to generate "ui.html" and to inline "ui.ts" into it
+  // Tells Webpack to generate "ui.html" and to inline "ui.js" into it
   plugins: [
     new HtmlWebpackPlugin({
       template: path.resolve(__dirname, 'src/ui.html'),
       filename: 'ui.html',
-      inject: false,
-      chunks: []
+      inject: 'body',
+      chunks: ['ui']
     }),
     new InlineChunkHtmlPlugin(HtmlWebpackPlugin, [/ui/])
   ],

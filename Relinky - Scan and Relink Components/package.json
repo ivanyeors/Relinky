@@ -8,7 +8,9 @@
     "dev": "cross-env NODE_ENV=development webpack --mode=development --watch",
     "lint": "eslint --ext .ts,.tsx --ignore-pattern node_modules .",
     "lint:fix": "eslint --ext .ts,.tsx --ignore-pattern node_modules --fix .",
-    "watch": "webpack --watch"
+    "watch": "webpack --watch",
+    "figma-mcp": "npx figma-developer-mcp --figma-api-key=figd_-jtwgF4MgC7CCEhgaePUAkZgphuxLYcPsSDh_Glq",
+    "start": "concurrently \"npm run dev\" \"npm run figma-mcp\""
   },
   "author": "",
   "license": "",
@@ -17,6 +19,7 @@
     "@figma/plugin-typings": "^1.107.0-beta.2",
     "@typescript-eslint/eslint-plugin": "^6.12.0",
     "@typescript-eslint/parser": "^6.12.0",
+    "concurrently": "^9.1.2",
     "cross-env": "^7.0.3",
     "css-loader": "^6.11.0",
     "eslint": "^8.54.0",

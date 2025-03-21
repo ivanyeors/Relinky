@@ -1,0 +1,3 @@
+@echo off
+echo Starting Figma Server...
+npx figma-developer-mcp --figma-api-key=figd_-jtwgF4MgC7CCEhgaePUAkZgphuxLYcPsSDh_Glq 
