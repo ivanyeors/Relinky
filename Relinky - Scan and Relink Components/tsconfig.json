@@ -3,14 +3,19 @@
     "target": "es6",
     "lib": ["es6", "dom"],
     "moduleResolution": "node",
-    "typeRoots": [
-      "./node_modules/@figma",
-      "./node_modules/@types"
-    ],
+    "typeRoots": ["./node_modules/@types", "./node_modules/@figma"],
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "outDir": "dist"
+    "outDir": "dist",
+    "noImplicitAny": true,
+    "baseUrl": ".",
+    "paths": {
+      "@relink": ["src/relink"],
+      "@relink/*": ["src/relink/*"],
+      "@unlink": ["src/unlink"],
+      "@unlink/*": ["src/unlink/*"]
+    }
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
