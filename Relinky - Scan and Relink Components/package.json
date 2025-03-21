@@ -9,8 +9,7 @@
     "lint": "eslint --ext .ts,.tsx --ignore-pattern node_modules .",
     "lint:fix": "eslint --ext .ts,.tsx --ignore-pattern node_modules --fix .",
     "watch": "webpack --watch",
-    "figma-mcp": "npx figma-developer-mcp --figma-api-key=figd_-jtwgF4MgC7CCEhgaePUAkZgphuxLYcPsSDh_Glq",
-    "start": "concurrently \"npm run dev\" \"npm run figma-mcp\""
+    "start": "concurrently \"npm run dev\""
   },
   "author": "",
   "license": "",
