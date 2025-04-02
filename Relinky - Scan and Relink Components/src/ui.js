@@ -168,34 +168,34 @@ function initializeApp() {
           
           'radius': `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <g id="corner">
-              <path id="Vector 1" d="M2.62552 8.80389V6.99321C2.62552 4.78407 4.41638 2.99321 6.62552 2.99321H8.86661" stroke="currentColor" stroke-linecap="round"/>
-              <path id="Vector 3" d="M21.3745 15.1961L21.3745 17.0068C21.3745 19.2159 19.5836 21.0068 17.3745 21.0068L15.1334 21.0068" stroke="currentColor" stroke-linecap="round"/>
-              <path id="Vector 2" d="M15.5638 2.99321L17.3745 2.99321C19.5836 2.99321 21.3745 4.78407 21.3745 6.99321V9.23431" stroke="currentColor" stroke-linecap="round"/>
-              <path id="Vector 4" d="M8.4362 21.0068L6.62552 21.0068C4.41638 21.0068 2.62552 19.2159 2.62552 17.0068L2.62552 14.7657" stroke="currentColor" stroke-linecap="round"/>
+              <path id="Vector 1" d="M2.62552 8.80389V6.99321C2.62552 4.78407 4.41638 2.99321 6.62552 2.99321H8.86661" stroke="white" stroke-linecap="round"/>
+              <path id="Vector 3" d="M21.3745 15.1961L21.3745 17.0068C21.3745 19.2159 19.5836 21.0068 17.3745 21.0068L15.1334 21.0068" stroke="white" stroke-linecap="round"/>
+              <path id="Vector 2" d="M15.5638 2.99321L17.3745 2.99321C19.5836 2.99321 21.3745 4.78407 21.3745 6.99321V9.23431" stroke="white" stroke-linecap="round"/>
+              <path id="Vector 4" d="M8.4362 21.0068L6.62552 21.0068C4.41638 21.0068 2.62552 19.2159 2.62552 17.0068L2.62552 14.7657" stroke="white" stroke-linecap="round"/>
             </g>
           </svg>`,
           
           'radius-top-left': `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <g id="corner-top-left">
-              <path d="M3.34302 20.8875V10.1124C3.34302 6.24643 6.47703 3.11243 10.343 3.11243H22.4347" stroke="currentColor"/>
+            <g id="top-left">
+              <path id="Vector 1" d="M4 19V10C4 6 7 3 11 3H20" stroke="white" stroke-linecap="round"/>
             </g>
           </svg>`,
           
           'radius-top-right': `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <g id="corner-top-right">
-              <path d="M20.657 3.11243H8.56526C4.69929 3.11243 1.56528 6.24643 1.56528 10.1124V20.8875" stroke="currentColor"/>
+            <g id="top-right">
+              <path id="Vector 1" d="M4 3H13C17 3 20 6 20 10V19" stroke="white" stroke-linecap="round"/>
             </g>
           </svg>`,
           
           'radius-bottom-left': `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <g id="corner-bottom-left">
-              <path d="M22.4347 3.11243V13.8875C22.4347 17.7535 19.3007 20.8875 15.4347 20.8875H3.34302" stroke="currentColor"/>
+            <g id="bottom-left">
+              <path id="Vector 1" d="M20 3V12C20 16 17 19 13 19H4" stroke="white" stroke-linecap="round"/>
             </g>
           </svg>`,
           
           'radius-bottom-right': `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <g id="corner-bottom-right">
-              <path d="M1.56528 3.11243V13.8875C1.56528 17.7535 4.69929 20.8875 8.56526 20.8875H20.657" stroke="currentColor"/>
+            <g id="bottom-right">
+              <path id="Vector 1" d="M4 3V12C4 16 7 19 11 19H20" stroke="white" stroke-linecap="round"/>
             </g>
           </svg>`,
           
