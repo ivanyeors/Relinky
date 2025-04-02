@@ -91,6 +91,7 @@ function initializeApp() {
         hasInstances: false,
         isWatching: false,
         paddingFilterType: 'all', // Filter type for padding (all, top, bottom, left, right)
+        radiusFilterType: 'all', // Filter type for corner radius (all, top-left, top-right, bottom-left, bottom-right)
         tokenScanOptions: [
           {
             value: 'typography',
@@ -167,7 +168,34 @@ function initializeApp() {
           
           'radius': `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <g id="corner">
+              <path id="Vector 1" d="M2.62552 8.80389V6.99321C2.62552 4.78407 4.41638 2.99321 6.62552 2.99321H8.86661" stroke="currentColor" stroke-linecap="round"/>
+              <path id="Vector 3" d="M21.3745 15.1961L21.3745 17.0068C21.3745 19.2159 19.5836 21.0068 17.3745 21.0068L15.1334 21.0068" stroke="currentColor" stroke-linecap="round"/>
+              <path id="Vector 2" d="M15.5638 2.99321L17.3745 2.99321C19.5836 2.99321 21.3745 4.78407 21.3745 6.99321V9.23431" stroke="currentColor" stroke-linecap="round"/>
+              <path id="Vector 4" d="M8.4362 21.0068L6.62552 21.0068C4.41638 21.0068 2.62552 19.2159 2.62552 17.0068L2.62552 14.7657" stroke="currentColor" stroke-linecap="round"/>
+            </g>
+          </svg>`,
+          
+          'radius-top-left': `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <g id="corner-top-left">
               <path d="M3.34302 20.8875V10.1124C3.34302 6.24643 6.47703 3.11243 10.343 3.11243H22.4347" stroke="currentColor"/>
+            </g>
+          </svg>`,
+          
+          'radius-top-right': `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <g id="corner-top-right">
+              <path d="M20.657 3.11243H8.56526C4.69929 3.11243 1.56528 6.24643 1.56528 10.1124V20.8875" stroke="currentColor"/>
+            </g>
+          </svg>`,
+          
+          'radius-bottom-left': `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <g id="corner-bottom-left">
+              <path d="M22.4347 3.11243V13.8875C22.4347 17.7535 19.3007 20.8875 15.4347 20.8875H3.34302" stroke="currentColor"/>
+            </g>
+          </svg>`,
+          
+          'radius-bottom-right': `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <g id="corner-bottom-right">
+              <path d="M1.56528 3.11243V13.8875C1.56528 17.7535 4.69929 20.8875 8.56526 20.8875H20.657" stroke="currentColor"/>
             </g>
           </svg>`,
           
@@ -431,7 +459,28 @@ function initializeApp() {
                 refs: paddingRefs
               };
             }
-          } else if (refs.length > 0) {
+          }
+          // For corner radius, apply additional filtering based on corner type
+          else if (this.selectedScanType === 'corner-radius' && this.radiusFilterType !== 'all') {
+            // Filter based on corner type
+            const cornerRefs = refs.filter(ref => {
+              return ref.cornerType === this.radiusFilterType || 
+                     ref.property === `${this.radiusFilterType}Radius` ||
+                     (this.radiusFilterType === 'top-left' && ref.property === 'cornerRadius[0]') ||
+                     (this.radiusFilterType === 'top-right' && ref.property === 'cornerRadius[1]') ||
+                     (this.radiusFilterType === 'bottom-right' && ref.property === 'cornerRadius[2]') ||
+                     (this.radiusFilterType === 'bottom-left' && ref.property === 'cornerRadius[3]');
+            });
+            
+            // Only include this group if it has refs after filtering
+            if (cornerRefs.length > 0) {
+              filtered[key] = {
+                ...group,
+                refs: cornerRefs
+              };
+            }
+          }
+          else if (refs.length > 0) {
             // For other types or when showing all padding, include if has refs
             filtered[key] = {
               ...group,
@@ -630,6 +679,28 @@ function initializeApp() {
                 } else {
                   // For backwards compatibility
                   result.paddingType = 'all';
+                }
+              });
+            }
+          } else if (msg.scanType === 'corner-radius') {
+            // For corner radius, identify corner types
+            if (msg.results && Array.isArray(msg.results)) {
+              msg.results.forEach(result => {
+                // Check the property to identify which corner it is
+                if (result.property === 'topLeftRadius' || result.property === 'cornerRadius[0]') {
+                  result.cornerType = 'top-left';
+                } else if (result.property === 'topRightRadius' || result.property === 'cornerRadius[1]') {
+                  result.cornerType = 'top-right';
+                } else if (result.property === 'bottomRightRadius' || result.property === 'cornerRadius[2]') {
+                  result.cornerType = 'bottom-right';
+                } else if (result.property === 'bottomLeftRadius' || result.property === 'cornerRadius[3]') {
+                  result.cornerType = 'bottom-left';
+                } else if (result.property === 'cornerRadius') {
+                  // All corners have the same radius
+                  result.cornerType = 'all';
+                } else {
+                  // For backwards compatibility
+                  result.cornerType = 'all';
                 }
               });
             }
@@ -1099,6 +1170,9 @@ function initializeApp() {
           if (value === 'vertical-padding' || value === 'horizontal-padding') {
             this.paddingFilterType = 'all';
           }
+          if (value === 'corner-radius') {
+            this.radiusFilterType = 'all';
+          }
         }
         
         // Reset lastScannedType if selecting a different type
@@ -1416,6 +1490,9 @@ function initializeApp() {
       },
       setPaddingFilter(type) {
         this.paddingFilterType = type;
+      },
+      setRadiusFilter(type) {
+        this.radiusFilterType = type;
       },
     },
     watch: {

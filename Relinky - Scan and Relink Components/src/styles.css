@@ -929,7 +929,7 @@ height: 24px;
 display: flex;
 align-items: center;
 justify-content: center;
-color: var(--figma-color-text);
+color: white;
 flex-shrink: 0;
 pointer-events: none;
 }
@@ -2250,36 +2250,86 @@ gap: var(--spacing-xs);
 /* Padding Filter
    ------------------------------------------------------------------------- */
 .padding-filter {
-  margin: var(--spacing-xs) 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
 }
 
-.padding-filter .tab-navigation {
-  margin-top: var(--spacing-xs);
-  margin-bottom: var(--spacing-xs);
-  background: var(--figma-color-bg);
+.filter-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--figma-color-bg-secondary);
   border: 1px solid var(--figma-color-border);
-  border-radius: var(--border-radius-sm);
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-/* Update the existing tab-button styles for the padding filter */
-.padding-filter .tab-button {
+.filter-btn:hover {
+  background: var(--figma-color-bg-hover);
+}
+
+.filter-btn.active {
+  background: var(--figma-color-bg-brand);
+  color: white;
+  border-color: var(--figma-color-bg-brand);
+}
+
+.filter-btn .icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: var(--spacing-xs);
-  transition: all 0.2s ease;
-  flex: 1;
+  width: 16px;
+  height: 16px;
 }
 
-.padding-filter .tab-button.active {
-  background: var(--figma-color-bg-brand-tertiary);
-  color: var(--figma-color-text-brand);
-  font-weight: 500;
+.filter-btn .icon svg {
+  width: 16px;
+  height: 16px;
 }
 
-.padding-filter .tab-button:hover:not(.active) {
-  background: var(--figma-color-bg-hover);
-  color: var(--figma-color-text);
+/* Corner radius filter specific */
+#radius-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+#radius-filter .filter-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 8px;
+  min-width: 36px;
+}
+
+#radius-filter .icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+
+#radius-filter .icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Ensure SVG icons use the correct colors */
+.filter-btn.active svg {
+  stroke: white;
+}
+
+.filter-btn svg {
+  stroke: var(--figma-color-text);
 }
 
 /* Results Section
