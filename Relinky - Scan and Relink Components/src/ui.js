@@ -92,6 +92,7 @@ function initializeApp() {
         isWatching: false,
         paddingFilterType: 'all', // Filter type for padding (all, top, bottom, left, right)
         radiusFilterType: 'all', // Filter type for corner radius (all, top-left, top-right, bottom-left, bottom-right)
+        gapFilterType: 'all', // Filter type for gap (all, vertical, horizontal)
         tokenScanOptions: [
           {
             value: 'typography',
@@ -457,6 +458,26 @@ function initializeApp() {
               filtered[key] = {
                 ...group,
                 refs: paddingRefs
+              };
+            }
+          }
+          // For vertical gap, apply additional filtering based on gap type
+          else if (this.selectedScanType === 'vertical-gap' && this.gapFilterType !== 'all') {
+            // Filter based on gap type (vertical or horizontal)
+            const gapRefs = refs.filter(ref => {
+              if (this.gapFilterType === 'vertical') {
+                return ref.gapType === 'vertical' || ref.property === 'itemSpacing' || ref.property === 'verticalGap';
+              } else if (this.gapFilterType === 'horizontal') {
+                return ref.gapType === 'horizontal' || ref.property === 'counterAxisSpacing' || ref.property === 'horizontalGap';
+              }
+              return true;
+            });
+            
+            // Only include this group if it has refs after filtering
+            if (gapRefs.length > 0) {
+              filtered[key] = {
+                ...group,
+                refs: gapRefs
               };
             }
           }
@@ -1493,6 +1514,9 @@ function initializeApp() {
       },
       setRadiusFilter(type) {
         this.radiusFilterType = type;
+      },
+      setGapFilter(type) {
+        this.gapFilterType = type;
       },
     },
     watch: {

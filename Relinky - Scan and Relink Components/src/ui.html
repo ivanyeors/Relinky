@@ -298,6 +298,13 @@
                     <button class="filter-btn" :class="{ active: paddingFilterType === 'right' }" @click="setPaddingFilter('right')">Right Padding</button>
                   </div>
 
+                  <!-- Gap Filter (Only shows with vertical-gap scan type) -->
+                  <div id="gap-filter" v-if="selectedScanType === 'vertical-gap'" class="padding-filter">
+                    <button class="filter-btn" :class="{ active: gapFilterType === 'all' }" @click="setGapFilter('all')">All Gaps</button>
+                    <button class="filter-btn" :class="{ active: gapFilterType === 'vertical' }" @click="setGapFilter('vertical')">Vertical Gaps</button>
+                    <button class="filter-btn" :class="{ active: gapFilterType === 'horizontal' }" @click="setGapFilter('horizontal')">Horizontal Gaps</button>
+                  </div>
+
                   <!-- Corner Radius Filter (Only shows with corner-radius scan type) -->
                   <div id="radius-filter" v-if="selectedScanType === 'corner-radius'" class="padding-filter">
                     <button class="filter-btn" :class="{ active: radiusFilterType === 'all' }" @click="setRadiusFilter('all')">
