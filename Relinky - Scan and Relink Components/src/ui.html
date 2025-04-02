@@ -284,58 +284,37 @@
                     </div>
                   </div>
 
-                  <!-- Padding Filter - only shown for padding scan results -->
-                  <div v-if="selectedScanType === 'vertical-padding'" class="padding-filter">
-                    <div class="tab-navigation">
-                      <button 
-                        class="tab-button" 
-                        :class="{ 'active': paddingFilterType === 'all' }"
-                        @click="setPaddingFilter('all')"
-                      >
-                        <span>All Padding</span>
-                      </button>
-                      <button 
-                        class="tab-button" 
-                        :class="{ 'active': paddingFilterType === 'top' }"
-                        @click="setPaddingFilter('top')"
-                      >
-                        <span>Top Padding</span>
-                      </button>
-                      <button 
-                        class="tab-button" 
-                        :class="{ 'active': paddingFilterType === 'bottom' }"
-                        @click="setPaddingFilter('bottom')"
-                      >
-                        <span>Bottom Padding</span>
-                      </button>
-                    </div>
+                  <!-- Padding Filter (Only shows with vertical-padding scan type) -->
+                  <div id="padding-filter" v-if="selectedScanType === 'vertical-padding'" class="padding-filter">
+                    <button class="filter-btn" :class="{ active: paddingFilterType === 'all' }" @click="setPaddingFilter('all')">All Padding</button>
+                    <button class="filter-btn" :class="{ active: paddingFilterType === 'top' }" @click="setPaddingFilter('top')">Top Padding</button>
+                    <button class="filter-btn" :class="{ active: paddingFilterType === 'bottom' }" @click="setPaddingFilter('bottom')">Bottom Padding</button>
                   </div>
 
-                  <!-- Horizontal Padding Filter -->
-                  <div v-if="selectedScanType === 'horizontal-padding'" class="padding-filter">
-                    <div class="tab-navigation">
-                      <button 
-                        class="tab-button" 
-                        :class="{ 'active': paddingFilterType === 'all' }"
-                        @click="setPaddingFilter('all')"
-                      >
-                        <span>All Padding</span>
-                      </button>
-                      <button 
-                        class="tab-button" 
-                        :class="{ 'active': paddingFilterType === 'left' }"
-                        @click="setPaddingFilter('left')"
-                      >
-                        <span>Left Padding</span>
-                      </button>
-                      <button 
-                        class="tab-button" 
-                        :class="{ 'active': paddingFilterType === 'right' }"
-                        @click="setPaddingFilter('right')"
-                      >
-                        <span>Right Padding</span>
-                      </button>
-                    </div>
+                  <!-- Horizontal Padding Filter (Only shows with horizontal-padding scan type) -->
+                  <div id="horizontal-padding-filter" v-if="selectedScanType === 'horizontal-padding'" class="padding-filter">
+                    <button class="filter-btn" :class="{ active: paddingFilterType === 'all' }" @click="setPaddingFilter('all')">All Padding</button>
+                    <button class="filter-btn" :class="{ active: paddingFilterType === 'left' }" @click="setPaddingFilter('left')">Left Padding</button>
+                    <button class="filter-btn" :class="{ active: paddingFilterType === 'right' }" @click="setPaddingFilter('right')">Right Padding</button>
+                  </div>
+
+                  <!-- Corner Radius Filter (Only shows with corner-radius scan type) -->
+                  <div id="radius-filter" v-if="selectedScanType === 'corner-radius'" class="padding-filter">
+                    <button class="filter-btn" :class="{ active: radiusFilterType === 'all' }" @click="setRadiusFilter('all')">
+                      <span class="icon" v-html="icons['radius']"></span>
+                    </button>
+                    <button class="filter-btn" :class="{ active: radiusFilterType === 'top-left' }" @click="setRadiusFilter('top-left')">
+                      <span class="icon" v-html="icons['radius-top-left']"></span>
+                    </button>
+                    <button class="filter-btn" :class="{ active: radiusFilterType === 'top-right' }" @click="setRadiusFilter('top-right')">
+                      <span class="icon" v-html="icons['radius-top-right']"></span>
+                    </button>
+                    <button class="filter-btn" :class="{ active: radiusFilterType === 'bottom-left' }" @click="setRadiusFilter('bottom-left')">
+                      <span class="icon" v-html="icons['radius-bottom-left']"></span>
+                    </button>
+                    <button class="filter-btn" :class="{ active: radiusFilterType === 'bottom-right' }" @click="setRadiusFilter('bottom-right')">
+                      <span class="icon" v-html="icons['radius-bottom-right']"></span>
+                    </button>
                   </div>
 
                   <!-- Results Container -->
