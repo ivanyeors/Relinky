@@ -499,6 +499,15 @@
                               <span class="label variable-group-name">{{ group.collectionName }}</span>
                               <span class="label variable-type">{{ formatVariableType(group.type) }}</span>
                             </div>
+                            <!-- Add color preview for color type -->
+                            <template v-if="group.type === 'color' && group.variables.length > 0">
+                              <div class="color-preview-list">
+                                <div v-for="(variable, index) in group.variables.slice(0, 3)" :key="index" class="group-color-preview">
+                                  <color-preview :color="variable.value" />
+                                </div>
+                                <span v-if="group.variables.length > 3" class="more-colors-indicator">+{{ group.variables.length - 3 }}</span>
+                              </div>
+                            </template>
                           </div>
                           <div class="group-actions">
                             <span class="label instance-count">{{ group.variables.length }}×</span>
