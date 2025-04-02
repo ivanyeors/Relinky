@@ -90,6 +90,7 @@ function initializeApp() {
         selectedCount: 0,
         hasInstances: false,
         isWatching: false,
+        paddingFilterType: 'all', // Filter type for vertical padding (all, top, bottom)
         tokenScanOptions: [
           {
             value: 'typography',
@@ -379,21 +380,46 @@ function initializeApp() {
         return this.hasResults && this.selectedScanType === this.lastScannedType;
       },
       filteredResults() {
-        if (!this.showHiddenOnly) {
-          return this.groupedByValue;
-        }
+        // If no results, return empty object
+        if (!this.groupedByValue) return {};
         
-        // Filter to show only groups with hidden layers
+        // Apply filter based on hidden layers if needed
         const filtered = {};
-        for (const [key, group] of Object.entries(this.groupedByValue)) {
-          const hiddenRefs = group.refs.filter(ref => !ref.isVisible);
-          if (hiddenRefs.length > 0) {
+        
+        Object.entries(this.groupedByValue).forEach(([key, group]) => {
+          // Filter by hidden status if showHiddenOnly is true
+          const refs = this.showHiddenOnly 
+            ? group.refs.filter(ref => !ref.isVisible)
+            : group.refs;
+            
+          // For vertical padding, apply additional filtering based on padding type
+          if (this.selectedScanType === 'vertical-padding' && this.paddingFilterType !== 'all') {
+            // Filter based on padding type (top or bottom)
+            const paddingRefs = refs.filter(ref => {
+              if (this.paddingFilterType === 'top') {
+                return ref.paddingType === 'top' || ref.property === 'paddingTop';
+              } else if (this.paddingFilterType === 'bottom') {
+                return ref.paddingType === 'bottom' || ref.property === 'paddingBottom';
+              }
+              return true;
+            });
+            
+            // Only include this group if it has refs after filtering
+            if (paddingRefs.length > 0) {
+              filtered[key] = {
+                ...group,
+                refs: paddingRefs
+              };
+            }
+          } else if (refs.length > 0) {
+            // For other types or when showing all padding, include if has refs
             filtered[key] = {
               ...group,
-              refs: hiddenRefs
+              refs: refs
             };
           }
-        }
+        });
+        
         return filtered;
       },
       filteredVariables() {
@@ -550,10 +576,39 @@ function initializeApp() {
       handleScanComplete(msg) {
         // Log scan completion
         console.log('Scan complete:', msg);
-        
+         
         // Update states
         this.isScanning = false;
         this.scanComplete = true;
+        
+        // Process the results to ensure padding types are identified
+        if (msg.type === 'scan-complete' && msg.scanType === 'vertical-padding') {
+          // For vertical padding, identify top vs bottom padding if not already set
+          if (msg.results && Array.isArray(msg.results)) {
+            msg.results.forEach(result => {
+              // Check if result has paddingTop or paddingBottom property
+              if (result.property === 'paddingTop') {
+                result.paddingType = 'top';
+              } else if (result.property === 'paddingBottom') {
+                result.paddingType = 'bottom';
+              } else {
+                // For backwards compatibility
+                result.paddingType = 'all';
+              }
+            });
+          }
+        }
+        
+        this.groupedReferences = this.groupByValue(msg.results);
+        
+        if (this.isWatching) {
+          this.successMessage = 'Scan complete! Watching for changes...';
+        } else {
+          this.successMessage = 'Scan complete!';
+        }
+        
+        this.showSuccessToast = true;
+        setTimeout(() => { this.showSuccessToast = false; }, 3000);
       },
       handleScanError(error) {
         this.isScanning = false;
@@ -1002,7 +1057,13 @@ function initializeApp() {
           this.selectedScanType = null;
         } else {
           this.selectedScanType = value;
+          
+          // Reset any specific filters when changing scan type
+          if (value === 'vertical-padding') {
+            this.paddingFilterType = 'all';
+          }
         }
+        
         // Reset lastScannedType if selecting a different type
         if (this.lastScannedType !== value) {
           this.lastScannedType = null;
@@ -1315,6 +1376,9 @@ function initializeApp() {
             variableId
           }
         }, '*');
+      },
+      setPaddingFilter(type) {
+        this.paddingFilterType = type;
       },
     },
     watch: {

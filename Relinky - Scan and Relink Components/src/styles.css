@@ -2247,4 +2247,42 @@ gap: var(--spacing-xs);
    filter: brightness(0.95);
 }
 
+/* Padding Filter
+   ------------------------------------------------------------------------- */
+.padding-filter {
+  margin: var(--spacing-xs) 0;
+}
+
+.padding-filter .tab-navigation {
+  margin-top: var(--spacing-xs);
+  margin-bottom: var(--spacing-xs);
+  background: var(--figma-color-bg);
+  border: 1px solid var(--figma-color-border);
+  border-radius: var(--border-radius-sm);
+}
+
+/* Update the existing tab-button styles for the padding filter */
+.padding-filter .tab-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  transition: all 0.2s ease;
+  flex: 1;
+}
+
+.padding-filter .tab-button.active {
+  background: var(--figma-color-bg-brand-tertiary);
+  color: var(--figma-color-text-brand);
+  font-weight: 500;
+}
+
+.padding-filter .tab-button:hover:not(.active) {
+  background: var(--figma-color-bg-hover);
+  color: var(--figma-color-text);
+}
+
+/* Results Section
+   ------------------------------------------------------------------------- */
+
 

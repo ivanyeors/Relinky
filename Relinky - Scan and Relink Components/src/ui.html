@@ -284,6 +284,33 @@
                     </div>
                   </div>
 
+                  <!-- Padding Filter - only shown for vertical padding scan results -->
+                  <div v-if="selectedScanType === 'vertical-padding'" class="padding-filter">
+                    <div class="tab-navigation">
+                      <button 
+                        class="tab-button" 
+                        :class="{ 'active': paddingFilterType === 'all' }"
+                        @click="setPaddingFilter('all')"
+                      >
+                        <span>All Padding</span>
+                      </button>
+                      <button 
+                        class="tab-button" 
+                        :class="{ 'active': paddingFilterType === 'top' }"
+                        @click="setPaddingFilter('top')"
+                      >
+                        <span>Top Padding</span>
+                      </button>
+                      <button 
+                        class="tab-button" 
+                        :class="{ 'active': paddingFilterType === 'bottom' }"
+                        @click="setPaddingFilter('bottom')"
+                      >
+                        <span>Bottom Padding</span>
+                      </button>
+                    </div>
+                  </div>
+
                   <!-- Results Container -->
                   <div class="results-container">
                     <div v-for="(group, groupKey) in filteredResults" 
