@@ -1,4 +1,154 @@
-/* Missing or different styles */
+/* ==========================================================================
+   Relinky Plugin Styles
+   ========================================================================== */
+
+/* ==========================================================================
+   1. Layout & Container Components
+   ========================================================================== */
+
+.plugin-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+    padding: 0;
+}
+
+.content-section {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0;
+}
+
+.divider {
+    background-color: var(--figma-color-border);
+    height: 1px;
+    margin: var(--spacing-sm) 0;
+}
+
+.resize-handle {
+    bottom: 0;
+    cursor: nwse-resize;
+    height: 16px;
+    position: absolute;
+    right: 0;
+    touch-action: none;
+    width: 16px;
+    z-index: 1000;
+}
+
+.sticky-footer {
+    align-items: center;
+    background: var(--figma-color-bg);
+    border-top: 1px solid var(--figma-color-border);
+    bottom: 0;
+    display: flex;
+    height: 32px;
+    justify-content: space-between;
+    left: 0;
+    padding: 4px 16px;
+    position: relative;
+    right: 0;
+    z-index: 100;
+}
+
+/* ==========================================================================
+   2. Headers & Navigation
+   ========================================================================== */
+
+.header {
+    border-bottom: 1px solid var(--figma-color-border);
+    flex-shrink: 0;
+    padding: 16px;
+}
+
+.header-left {
+    align-items: center;
+    display: flex;
+    flex: 1;
+    gap: 8px;
+}
+
+.header-right {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+}
+
+.tab-navigation {
+    background: var(--figma-color-bg-secondary);
+    border-radius: 6px;
+    display: flex;
+    gap: 2px;
+    margin-bottom: 16px;
+    padding: 2px;
+}
+
+.tab-button {
+    align-items: center;
+    background: none;
+    border-radius: 4px;
+    border: none;
+    color: var(--figma-color-text-secondary);
+    cursor: pointer;
+    display: flex;
+    flex: 1;
+    font-size: 13px;
+    gap: 8px;
+    justify-content: center;
+    padding: 8px 16px;
+    transition: all 0.2s ease;
+}
+
+.tab-icon {
+    align-items: center;
+    display: flex;
+    height: 16px;
+    justify-content: center;
+    opacity: 0.8;
+    width: 16px;
+}
+
+.tab-label {
+    align-items: center;
+    display: flex;
+    gap: 4px;
+}
+
+.tab-badge {
+    background: var(--figma-color-bg-danger);
+    border-radius: 10px;
+    color: white;
+    font-size: 11px;
+    margin-left: 4px;
+    padding: 2px 6px;
+}
+
+/* ==========================================================================
+   3. Section Headers & Titles
+   ========================================================================== */
+
+.section-title {
+    color: var(--figma-color-text);
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
+.section-subtitle {
+    color: var(--figma-color-text);
+    font-size: 12px;
+    font-weight: 600;
+    margin: 0 0 12px 0;
+}
+
+.section-header {
+    align-items: center;
+    background: var(--figma-color-bg);
+    display: flex;
+    justify-content: space-between;
+    padding: 12px;
+}
 
 .step-title {
     font-size: 13px;
@@ -7,28 +157,284 @@
     padding: var(--spacing-xxs);
 }
 
-.debug-info {
+.step-title-with-badge {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+}
+
+.step-header {
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+    margin: 0;
+}
+
+.step-content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-lg);
+}
+
+.first-section {
+    & .step-content {
+        gap: 4px;
+        background: var(--figma-color-bg);
+        padding: 0;
+    }
+}
+
+.settings-header {
+    cursor: pointer;
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 8px;
+}
+
+.settings-title {
+    color: var(--figma-color-text);
+    font-size: 11px;
+    font-weight: 500;
+    margin: 0;
+}
+
+.settings-content {
+    padding: 0 12px 12px;
+}
+
+/* ==========================================================================
+   4. Buttons & Interactive Elements
+   ========================================================================== */
+
+.button {
+    height: 28px;
+    min-width: unset;
+    padding: 5px 12px;
+}
+
+.small {
+    font-size: 11px;
+    min-height: 24px;
+    padding: 4px 8px;
+}
+
+.secondary-button {
+    background: var(--figma-color-bg-secondary);
+    color: var(--figma-color-text);
+}
+
+.warning-button {
+    background: var(--figma-color-bg-danger);
+    color: white;
+}
+
+.text-button {
+    background: none;
+    color: var(--figma-color-text-secondary);
+    padding: 4px 8px;
+}
+
+.select-button {
+    background: var(--figma-color-bg-brand);
+    border-radius: 4px;
+    border: none;
+    color: var(--figma-color-text-onbrand);
+    cursor: pointer;
+    font-size: 11px;
+    height: 32px;
+    min-width: 64px;
+    opacity: 0.9;
+    padding: 5px 12px;
+    transition: all 0.2s ease;
+}
+
+.donate-button {
+    align-items: center;
     background: var(--figma-color-bg-secondary);
     border-radius: 4px;
-    color: var(--figma-color-text);
-    font-family: monospace;
+    border: none;
+    color: var(--figma-color-text-tertiary);
+    cursor: pointer;
+    display: flex;
     font-size: 11px;
-    padding: 8px;
-    white-space: pre-wrap;
+    font-weight: 500;
+    gap: 6px;
+    margin-right: 12px;
+    padding: 4px 8px;
+    transition: all 0.2s ease;
 }
+
+.settings-toggle {
+    align-items: center;
+    background: none;
+    border-radius: 6px;
+    border: none;
+    color: var(--figma-color-text-secondary);
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    margin: -4px;
+    padding: 8px;
+    transition: all 0.1s ease;
+}
+
+.watch-toggle {
+    border-radius: 4px;
+    margin: -2px;
+    align-items: center;
+    background: none;
+    border: none;
+    color: var(--figma-color-text-secondary);
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    padding: 4px 6px;
+    transition: all 0.2s ease;
+}
+
+.watch-toggle-content {
+    align-items: center;
+    display: flex;
+    gap: 6px;
+}
+
+/* Toggle Controls */
+.toggle-container {
+    align-items: center;
+    display: flex;
+    padding: 2px 0;
+    width: 100%;
+}
+
+.toggle-input {
+    height: 0;
+    opacity: 0;
+    position: absolute;
+    width: 0;
+}
+
+.toggle-slider {
+    background-color: var(--figma-color-bg-disabled);
+    border-radius: 16px;
+    bottom: 0;
+    cursor: pointer;
+    left: 0;
+    position: absolute;
+    right: 0;
+    top: 0;
+    transition: .2s;
+}
+
+.toggle-wrapper {
+    flex-shrink: 0;
+    height: 16px;
+    position: relative;
+    width: 28px;
+}
+
+.toggle-label {
+    align-items: center;
+    color: var(--figma-color-text);
+    cursor: pointer;
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+    padding: 2px 0;
+    user-select: none;
+    width: 100%;
+}
+
+.toggle-label-content {
+    align-items: center;
+    display: flex;
+    flex: 1;
+    gap: 8px;
+}
+
+.select-input {
+    appearance: none;
+    background: var(--figma-color-bg);
+    border-radius: 2px;
+    border: 1px solid var(--figma-color-border);
+    color: var(--figma-color-text);
+    cursor: pointer;
+    font-family: var(--font-stack);
+    font-size: 11px;
+    height: 32px;
+    line-height: 16px;
+    padding: 8px 8px 8px 12px;
+}
+
+/* ==========================================================================
+   5. State & Status Indicators
+   ========================================================================== */
+
+.active {
+    background: var(--figma-color-bg);
+    color: var(--figma-color-text);
+    font-weight: 500;
+}
+
+.disabled {
+    background: var(--figma-color-bg-disabled);
+    color: var(--figma-color-text-disabled);
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.enabled {
+    background: var(--figma-color-bg-success);
+    color: var(--figma-color-text-onbrand);
+}
+
+.icon {
+    opacity: 1;
+}
+
+.expand-icon {
+    align-items: center;
+    color: var(--figma-color-text-secondary);
+    display: inline-flex;
+    height: 16px;
+    justify-content: center;
+    margin: -4px;
+    transition: all 0.1s ease;
+    width: 16px;
+}
+
+.info-icon {
+    color: white;
+    flex-shrink: 0;
+    height: 12px;
+    width: 12px;
+}
+
+.beta-badge {
+    font-size: 8px;
+    margin-left: 2px;
+    padding: 2px 4px;
+    border-radius: var(--border-radius-lg);
+    color: var(--figma-color-text-onbrand);
+    background-color: var(--figma-color-bg-brand);
+}
+
+.info-badge {
+    color: var(--figma-color-text-secondary);
+    cursor: help;
+    font-size: 11px;
+}
+
+
+
+/* ==========================================================================
+   6. Loading & Progress Indicators
+   ========================================================================== */
 
 .loading {
     color: transparent !important;
     pointer-events: none !important;
     position: relative !important;
-}
-
-.progress-bar {
-    background: var(--figma-color-bg-disabled);
-    border-radius: 6px;
-    height: 32px;
-    overflow: hidden;
-    position: relative;
 }
 
 .loading-spinner {
@@ -45,14 +451,37 @@
     width: 12px;
 }
 
-.icon {
-    opacity: 1;
+.progress-container {
+    margin: 12px 0;
 }
 
-.tab-label {
+.progress-track {
+    background: var(--figma-color-bg-secondary);
+    height: 100%;
+    left: 0;
+    position: absolute;
+    top: 0;
+    width: 100%;
+}
+
+
+
+.progress-info {
     align-items: center;
+    color: var(--figma-color-text-secondary);
     display: flex;
-    gap: 4px;
+    font-size: 11px;
+    justify-content: space-between;
+}
+
+.debug-info {
+    background: var(--figma-color-bg-secondary);
+    border-radius: 4px;
+    color: var(--figma-color-text);
+    font-family: monospace;
+    font-size: 11px;
+    padding: 8px;
+    white-space: pre-wrap;
 }
 
 .color-preview {
@@ -63,26 +492,11 @@
 }
 
 .scan-settings {
-    /* Reduce top margin */
     background: var(--figma-color-bg-secondary);
-    /* Remove default padding */
     border-radius: 6px;
     margin-top: 4px;
     overflow: hidden;
     padding: 0;
-}
-
-.section-title {
-    color: var(--figma-color-text);
-    font-size: 13px;
-    font-weight: 600;
-    margin-bottom: 12px;
-}
-
-.step-title-with-badge {
-    align-items: center;
-    display: flex;
-    gap: 8px;
 }
 
 .typography-details {
@@ -90,15 +504,6 @@
     flex-direction: column;
     flex: 1;
     gap: 8px;
-}
-
-.beta-badge {
-    font-size: 8px;
-    margin-left: 2px;
-    padding: 2px 4px;
-    border-radius: var(--border-radius-lg);
-    color: var(--figma-color-text-onbrand);
-    background-color: var(--figma-color-bg-brand);
 }
 
 .selectable-text {
@@ -113,24 +518,6 @@
     flex-wrap: wrap;
     gap: 8px;
     padding: var(--spacing-xxs);
-}
-
-.button {
-    height: 28px;
-    min-width: unset;
-    padding: 5px 12px;
-}
-
-.progress-container {
-    margin: 12px 0;
-}
-
-.divider {
-    /* Adjust margin */
-    background-color: var(--figma-color-border);
-    height: 1px;
-    margin: 8px 0;
-    margin: var(--spacing-sm) 0;
 }
 
 .value-group {
@@ -163,22 +550,6 @@
     margin-bottom: 8px;
 }
 
-.progress-fill {
-    filter: brightness(0.95);
-}
-
-.resize-handle {
-    /* Prevent touch scrolling while resizing */
-    bottom: 0;
-    cursor: nwse-resize;
-    height: 16px;
-    position: absolute;
-    right: 0;
-    touch-action: none;
-    width: 16px;
-    z-index: 1000;
-}
-
 .results-container {
     height: auto;
     background: var(--figma-color-bg);
@@ -206,30 +577,6 @@
     margin: 16px 0;
 }
 
-.progress-text {
-    align-items: center;
-    bottom: 0;
-    color: white;
-    display: flex;
-    font-size: 12px;
-    font-weight: 500;
-    height: 100%;
-    justify-content: center;
-    left: 0;
-    position: absolute;
-    right: 8px;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-    top: 0;
-    width: 100%;
-    z-index: 1;
-}
-
-.small {
-    font-size: 11px;
-    min-height: 24px;
-    padding: 4px 8px;
-}
-
 .success {
     background: var(--figma-color-bg-success-tertiary);
     border: 1px solid var(--figma-color-border-success);
@@ -241,18 +588,6 @@
     border-radius: 6px;
     margin-top: 16px;
     overflow: hidden;
-}
-
-.secondary-button {
-    background: var(--figma-color-bg-secondary);
-    color: var(--figma-color-text);
-}
-
-.content-section {
-    /* Remove padding */
-    flex: 1;
-    overflow-y: auto;
-    padding: 0;
 }
 
 .toggle-label {
@@ -267,27 +602,10 @@
     width: 100%;
 }
 
-.first-section {
-    & .step-content {
-        gap: 4px;
-        background: var(--figma-color-bg);
-        padding: 0;
-    }
-}
-
 .group-actions {
     align-items: center;
     display: flex;
     gap: 8px;
-}
-
-.plugin-container {
-    /* Remove any default padding */
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-    overflow: hidden;
-    padding: 0;
 }
 
 .reference-item {
@@ -313,27 +631,8 @@
     gap: 8px;
 }
 
-.settings-header {
-    /* Reduce padding */
-    cursor: pointer;
-    align-items: center;
-    display: flex;
-    justify-content: space-between;
-    padding: 6px 8px;
-}
-
-.step-header {
-    /* Remove any margin */
-    align-items: center;
-    display: flex;
-    justify-content: space-between;
-    margin: 0;
-}
-
 .toast {
-    /* Add minimal vertical margin */
     border-radius: 4px;
-    /* Adjust padding */
     margin: 4px 0;
     align-items: center;
     background-color: var(--figma-color-bg-warning-tertiary);
@@ -350,159 +649,11 @@
     width: 100%;
 }
 
-.warning-button {
-    background: var(--figma-color-bg-danger);
+.warning-message {
+    background: var(--figma-color-bg-warning);
+    background-color: var(--figma-color-bg-warning-secondary);
+    border: 1px solid var(--figma-color-border-warning);
     color: white;
-}
-
-.watch-toggle {
-    /* Add negative margin to align better */
-    border-radius: 4px;
-    /* Reduce padding */
-    margin: -2px;
-    align-items: center;
-    background: none;
-    border: none;
-    color: var(--figma-color-text-secondary);
-    cursor: pointer;
-    display: flex;
-    justify-content: center;
-    padding: 4px 6px;
-    transition: all 0.2s ease;
-}
-
-.tab-navigation {
-    background: var(--figma-color-bg-secondary);
-    border-radius: 6px;
-    display: flex;
-    gap: 2px;
-    margin-bottom: 16px;
-    padding: 2px;
-}
-
-.active {
-    background: var(--figma-color-bg);
-    color: var(--figma-color-text);
-    font-weight: 500;
-}
-
-.disabled {
-    background: var(--figma-color-bg-disabled);
-    color: var(--figma-color-text-disabled);
-    cursor: not-allowed;
-    opacity: 0.5;
-}
-
-.color-swatch {
-    border: none;
-    height: 100%;
-    width: 100%
-}
-
-.color-swatch-container {
-    background: var(--figma-color-bg-secondary);
-    border-radius: 3px;
-    border: 1px solid var(--figma-color-border);
-    height: 20px;
-    overflow: hidden;
-    padding: 0;
-    width: 20px;
-}
-
-.donate-button {
-    /* Adjust donate button margin */
-    align-items: center;
-    background: var(--figma-color-bg-secondary);
-    border-radius: 4px;
-    border: none;
-    color: var(--figma-color-text-tertiary);
-    cursor: pointer;
-    display: flex;
-    font-size: 11px;
-    font-weight: 500;
-    gap: 6px;
-    margin-right: 12px;
-    padding: 4px 8px;
-    transition: all 0.2s ease;
-}
-
-.empty-state {
-    color: var(--figma-color-text-secondary);
-    padding: 16px;
-    text-align: center;
-}
-
-.empty-state-steps {
-    display: inline-block;
-    line-height: 24px;
-    text-align: left;
-}
-
-.error-toast {
-    align-items: center;
-    background: var(--figma-color-bg-danger);
-    border-radius: 6px;
-    bottom: 16px;
-    color: white;
-    display: flex;
-    gap: 8px;
-    left: 50%;
-    padding: 8px 12px;
-    position: fixed;
-    transform: translateX(-50%);
-    z-index: 1000;
-}
-
-.expand-icon {
-    align-items: center;
-    color: var(--figma-color-text-secondary);
-    display: inline-flex;
-    height: 16px;
-    justify-content: center;
-    margin: -4px;
-    transition: all 0.1s ease;
-    width: 16px;
-}
-
-.group-info {
-    align-items: center;
-    display: flex;
-    gap: 8px;
-}
-
-.header {
-    border-bottom: 1px solid var(--figma-color-border);
-    flex-shrink: 0;
-    padding: 16px;
-}
-
-.header-left {
-    align-items: center;
-    display: flex;
-    flex: 1;
-    gap: 8px;
-}
-
-.header-right {
-    align-items: center;
-    display: flex;
-    gap: 8px;
-}
-
-.info-badge {
-    color: var(--figma-color-text-secondary);
-    cursor: help;
-    font-size: 11px;
-}
-
-.info-message {
-    align-items: center;
-    border-radius: 6px;
-    display: flex;
-    font-size: 11px;
-    gap: var(--spacing-xs);
-    margin: var(--spacing-xs);
-    padding: var(--spacing-sm);
 }
 
 .instance-count {
@@ -542,33 +693,6 @@
     border-radius: 4px;
     font-size: 10px;
     padding: 2px 6px;
-}
-
-.enabled {
-    background: var(--figma-color-bg-success);
-    color: var(--figma-color-text-onbrand);
-}
-
-.progress-info {
-    align-items: center;
-    color: var(--figma-color-text-secondary);
-    display: flex;
-    font-size: 11px;
-    justify-content: space-between;
-}
-
-.progress-track {
-    background: var(--figma-color-bg-secondary);
-    height: 100%;
-    left: 0;
-    position: absolute;
-    top: 0;
-    width: 100%;
-}
-
-.property-name {
-    color: var(--figma-color-text-secondary);
-    font-size: 11px;
 }
 
 .reference-card {
@@ -612,25 +736,7 @@
     color: var(--figma-color-text-brand);
 }
 
-.results-badge {
-    align-items: center;
-    background: var(--figma-color-bg-secondary);
-    border-radius: 10px;
-    color: var(--figma-color-text);
-    display: inline-flex;
-    font-size: 11px;
-    font-weight: 500;
-    height: 20px;
-    justify-content: center;
-    min-width: 20px;
-    padding: 0 6px;
-}
-.results-header {
-    align-items: center;
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 12px;
-}
+
 
 .results-summary {
     background: var(--figma-color-bg);
@@ -667,24 +773,9 @@
     transform: translateY(-50%);
 }
 
-.section-header {
-    align-items: center;
-    background: var(--figma-color-bg);
-    display: flex;
-    justify-content: space-between;
-    padding: 12px;
-}
-
 .warning {
     background: var(--figma-color-bg-warning);
     border: 1px solid var(--figma-color-border-warning);
-}
-
-.section-subtitle {
-    color: var(--figma-color-text);
-    font-size: 12px;
-    font-weight: 600;
-    margin: 0 0 12px 0;
 }
 
 .select-button {
@@ -701,77 +792,14 @@
     transition: all 0.2s ease;
 }
 
-.select-input {
-    appearance: none;
-    background: var(--figma-color-bg);
-    border-radius: 2px;
-    border: 1px solid var(--figma-color-border);
-    color: var(--figma-color-text);
-    cursor: pointer;
-    font-family: var(--font-stack);
-    font-size: 11px;
-    height: 32px;
-    line-height: 16px;
-    padding: 8px 8px 8px 12px;
-}
-
 .selection-count {
     color: var(--figma-color-text-secondary);
     font-size: 11px;
 }
 
-.settings-content {
-    /* Keep horizontal padding consistent */
-    padding: 0 12px 12px;
-}
-
-.settings-title {
-    color: var(--figma-color-text);
-    font-size: 11px;
-    font-weight: 500;
-    margin: 0;
-}
-
-.settings-toggle {
-    align-items: center;
-    background: none;
-    border-radius: 6px;
-    border: none;
-    color: var(--figma-color-text-secondary);
-    cursor: pointer;
-    display: flex;
-    justify-content: center;
-    margin: -4px;
-    padding: 8px;
-    transition: all 0.1s ease;
-}
-
 .stat-label {
     color: var(--figma-color-text-secondary);
     font-size: 11px;
-}
-
-.step-content {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-lg);
-}
-
-.sticky-footer {
-    /* For resize handle positioning */
-    align-items: center;
-    background: var(--figma-color-bg);
-    border-top: 1px solid var(--figma-color-border);
-    bottom: 0;
-    display: flex;
-    height: 32px;
-    justify-content: space-between;
-    left: 0;
-    padding: 4px 16px;
-    position: fixed;
-    right: 0;
-    z-index: 100;
-    position: relative;
 }
 
 .summary-header {
@@ -804,46 +832,6 @@
     grid-template-columns: repeat(2, 1fr);
 }
 
-.tab-badge {
-    background: var(--figma-color-bg-danger);
-    border-radius: 10px;
-    color: white;
-    font-size: 11px;
-    margin-left: 4px;
-    padding: 2px 6px;
-}
-
-.tab-button {
-    align-items: center;
-    background: none;
-    border-radius: 4px;
-    border: none;
-    color: var(--figma-color-text-secondary);
-    cursor: pointer;
-    display: flex;
-    flex: 1;
-    font-size: 13px;
-    gap: 8px;
-    justify-content: center;
-    padding: 8px 16px;
-    transition: all 0.2s ease;
-}
-
-.tab-icon {
-    align-items: center;
-    display: flex;
-    height: 16px;
-    justify-content: center;
-    opacity: 0.8;
-    width: 16px;
-}
-
-.text-button {
-    background: none;
-    color: var(--figma-color-text-secondary);
-    padding: 4px 8px;
-}
-
 .timestamp {
     color: var(--figma-color-text-secondary);
     font-size: 11px;
@@ -860,46 +848,6 @@
     font-size: 11px;
     font-weight: 500;
     opacity: 1;
-}
-
-.toggle-container {
-    align-items: center;
-    display: flex;
-    padding: 2px 0;
-    width: 100%;
-}
-
-.toggle-input {
-    height: 0;
-    opacity: 0;
-    position: absolute;
-    width: 0;
-}
-
-.toggle-slider {
-    background-color: var(--figma-color-bg-disabled);
-    border-radius: 16px;
-    bottom: 0;
-    cursor: pointer;
-    left: 0;
-    position: absolute;
-    right: 0;
-    top: 0;
-    transition: .2s;
-}
-
-.toggle-label-content {
-    align-items: center;
-    display: flex;
-    flex: 1;
-    gap: 8px;
-}
-
-.toggle-wrapper {
-    flex-shrink: 0;
-    height: 16px;
-    position: relative;
-    width: 28px;
 }
 
 .token-count {
@@ -1020,7 +968,6 @@
 }
 
 .value-group-details {
-    /* Ensure details are scrollable if needed */
     max-height: 300px;
     background: var(--figma-color-bg);
     border-top: 1px solid var(--figma-color-border);
@@ -1084,11 +1031,67 @@
     gap: 4px;
 }
 
-.info-icon {
+.info-message {
+    align-items: center;
+    border-radius: 6px;
+    display: flex;
+    font-size: 11px;
+    gap: var(--spacing-xs);
+    margin: var(--spacing-xs);
+    padding: var(--spacing-sm);
+}
+
+/* ==========================================================================
+   7. Messages, Notifications & Feedback
+   ========================================================================== */
+
+.toast {
+    border-radius: 4px;
+    margin: 4px 0;
+    align-items: center;
+    background-color: var(--figma-color-bg-warning-tertiary);
+    border: 1px solid var(--figma-color-border-warning);
+    color: var(--figma-color-text-onwarning-tertiary);
+    display: flex;
+    padding: 6px 8px;
+}
+
+.toast-icon {
     color: white;
-    flex-shrink: 0;
-    height: 12px;
-    width: 12px;
+    margin-right: 8px;
+    opacity: 1;
+}
+
+.toast-message {
+    color: white;
+    font-size: 11px;
+    font-weight: 500;
+    opacity: 1;
+}
+
+.error-toast {
+    align-items: center;
+    background: var(--figma-color-bg-danger);
+    border-radius: 6px;
+    bottom: 16px;
+    color: white;
+    display: flex;
+    gap: 8px;
+    left: 50%;
+    padding: 8px 12px;
+    position: fixed;
+    transform: translateX(-50%);
+    z-index: 1000;
+}
+
+.info-message {
+    align-items: center;
+    border-radius: 6px;
+    display: flex;
+    font-size: 11px;
+    gap: var(--spacing-xs);
+    margin: var(--spacing-xs);
+    padding: var(--spacing-sm);
 }
 
 .warning-message {
@@ -1098,9 +1101,575 @@
     color: white;
 }
 
-.watch-toggle-content {
+.error {
+    background: var(--figma-color-bg-danger);
+    color: white;
+}
+
+.success {
+    background: var(--figma-color-bg-success-tertiary);
+    border: 1px solid var(--figma-color-border-success);
+    color: white;
+}
+
+.warning {
+    background: var(--figma-color-bg-warning);
+    border: 1px solid var(--figma-color-border-warning);
+}
+
+.debug-info {
+    background: var(--figma-color-bg-secondary);
+    border-radius: 4px;
+    color: var(--figma-color-text);
+    font-family: monospace;
+    font-size: 11px;
+    padding: 8px;
+    white-space: pre-wrap;
+}
+
+/* ==========================================================================
+   8. Empty States
+   ========================================================================== */
+
+.empty-state {
+    color: var(--figma-color-text-secondary);
+    padding: 16px;
+    text-align: center;
+}
+
+.empty-state-steps {
+    display: inline-block;
+    line-height: 24px;
+    text-align: left;
+}
+
+/* ==========================================================================
+   9. Scan Related Components
+   ========================================================================== */
+
+.scan-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: var(--spacing-xxs);
+}
+
+.scan-card {
+    align-items: flex-start;
+    background: var(--figma-color-bg-secondary);
+    border-radius: 6px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    display: flex;
+    gap: 12px;
+    padding: 12px;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.scan-card-description {
+    color: white;
+}
+
+.scan-cards {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.scan-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin: 16px;
+}
+
+.scan-details {
+    color: var(--figma-color-text-secondary);
+    font-size: 11px;
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.scan-section {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin: 16px 0;
+}
+
+.scan-settings {
+    background: var(--figma-color-bg-secondary);
+    border-radius: 6px;
+    margin-top: 4px;
+    overflow: hidden;
+    padding: 0;
+}
+
+.rescan {
+    background: var(--figma-color-bg-brand-tertiary);
+    border: 1px solid var(--figma-color-border-brand-strong);
+    color: var(--figma-color-text-brand);
+}
+
+/* ==========================================================================
+   10. Results & Summary Components
+   ========================================================================== */
+
+.results-container {
+    height: auto;
+    background: var(--figma-color-bg);
+    border-radius: 6px;
+    border: 1px solid var(--figma-color-border);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 8px;
+    overflow: visible;
+    padding: 8px;
+}
+
+.results-header {
     align-items: center;
     display: flex;
-    gap: 6px;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.results-summary {
+    background: var(--figma-color-bg);
+    border-radius: 6px;
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+    padding: 12px;
+}
+
+.summary-header {
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.summary-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.summary-label {
+    color: var(--figma-color-text-secondary);
+    font-size: 11px;
+}
+
+.summary-stats {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.summary-value {
+    color: var(--figma-color-text);
+    font-size: 16px;
+    font-weight: 500;
+}
+
+/* ==========================================================================
+   11. Library Components
+   ========================================================================== */
+
+.library-details {
+    color: var(--figma-color-text-secondary);
+    font-size: 11px;
+}
+
+.library-group {
+    margin-bottom: 16px;
+}
+
+.library-header {
+    align-items: center;
+    background: var(--figma-color-bg-secondary);
+    border-radius: 6px 6px 0 0;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+    padding: var(--spacing-sm) var(--spacing-md);
+    transition: background-color 0.2s ease;
+}
+
+.library-item {
+    background: var(--figma-color-bg);
+    border-radius: 4px;
+    padding: 8px;
+}
+
+.library-name {
+    color: var(--figma-color-text-secondary);
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.library-results {
+    margin-top: 24px;
+}
+
+.library-status {
+    border-radius: 4px;
+    font-size: 10px;
+    padding: 2px 6px;
+}
+
+/* ==========================================================================
+   12. Reference Components
+   ========================================================================== */
+
+.reference-card {
+    align-items: flex-start;
+    background: var(--figma-color-bg-secondary);
+    border-radius: 2px;
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+    padding: 0;
+}
+
+.reference-header {
+    cursor: pointer;
+    padding: 4px 0;
+    user-select: none;
+}
+
+.reference-info {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    gap: 2px;
+    padding: 12px;
+}
+
+.reference-item {
+    align-items: center;
+    background: var(--figma-color-bg-secondary);
+    border-radius: 6px;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+    padding: 8px 12px;
+    transition: all 0.2s ease;
+}
+
+.reference-location {
+    color: var(--figma-color-text-secondary);
+    font-size: 11px;
+}
+
+.reference-name {
+    color: var(--figma-color-text);
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.group-actions {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+}
+
+
+
+/* ==========================================================================
+   13. Value & Token Components
+   ========================================================================== */
+
+.value-group {
+    background: var(--figma-color-bg-secondary);
+    border-radius: 6px;
+    border: 1px solid var(--figma-color-border);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 8px;
+    overflow: hidden;
+}
+
+.value-group-details {
+    max-height: 300px;
+    background: var(--figma-color-bg);
+    border-top: 1px solid var(--figma-color-border);
+    overflow-y: auto;
+    padding: 8px;
+}
+
+.value-group-header {
+    align-items: center;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    min-height: 40px;
+    padding: 8px 12px;
+    transition: background-color 0.2s ease;
+    user-select: none;
+}
+
+.token-count {
+    background: var(--figma-color-bg-tertiary);
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 8px;
+}
+
+.token-details {
+    color: var(--figma-color-text-secondary);
+    display: flex;
+    font-size: 11px;
+    gap: 8px;
+}
+
+.token-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.token-item {
+    align-items: center;
+    background: var(--figma-color-bg);
+    border-bottom: 1px solid var(--figma-color-border);
+    border-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: var(--spacing-xs);
+    padding: var(--spacing-xs);
+    transition: all 0.2s ease;
+}
+
+.token-list {
+    background: var(--figma-color-bg);
+    border-radius: 0 0 6px 6px;
+    overflow: hidden;
+    padding: var(--spacing-xs);
+}
+
+.token-section {
+    background: var(--figma-color-bg-secondary);
+    border-radius: 6px;
+    margin-top: 16px;
+    overflow: hidden;
+}
+
+.token-type {
+    background: var(--figma-color-bg-secondary);
+    border-radius: 4px;
+    padding: 2px 6px;
+}
+
+/* ==========================================================================
+   14. Variable Components
+   ========================================================================== */
+
+.variable-details {
+    border-top: 1px solid var(--figma-color-border);
+    margin-top: 8px;
+    padding-top: 8px;
+}
+
+.variable-header {
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.variable-item {
+    background: var(--figma-color-bg-tertiary);
+    border-radius: 4px;
+    margin-bottom: 8px;
+    padding: 8px 12px;
+}
+
+.variable-name {
+    font-weight: 500;
+}
+
+.variable-type {
+    background: var(--figma-color-bg-secondary);
+    border-radius: 4px;
+    font-size: 11px;
+    padding: 2px 6px;
+}
+
+/* ==========================================================================
+   15. Typography Components
+   ========================================================================== */
+
+.typography-details {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    gap: 8px;
+}
+
+.typography-info {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+    width: 100%;
+}
+
+.typography-preview {
+    color: var(--figma-color-text);
+    font-family: var(--font-stack);
+    font-size: 11px;
+    font-style: italic;
+    line-height: 16px;
+    opacity: 0.8;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.typography-specs {
+    color: var(--figma-color-text-secondary);
+    display: grid;
+    flex-direction: column;
+    font-size: 12px;
+    gap: 4px;
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.typography-tag {
+    align-items: center;
+    background: var(--figma-color-bg-secondary);
+    border-radius: 4px;
+    color: var(--figma-color-text-secondary);
+    display: flex;
+    flex-shrink: 0;
+    font-size: 11px;
+    font-weight: 500;
+    height: 20px;
+    overflow: hidden;
+    padding: 2px 6px;
+    text-overflow: ellipsis;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+/* ==========================================================================
+   16. Color Components
+   ========================================================================== */
+
+.color-preview {
+    background: transparent;
+    border: none;
+    font-family: var(--font-stack);
+    padding: 4px 8px;
+}
+
+.color-swatch {
+    border: none;
+    height: 100%;
+    width: 100%
+}
+
+.color-swatch-container {
+    background: var(--figma-color-bg-secondary);
+    border-radius: 3px;
+    border: 1px solid var(--figma-color-border);
+    height: 20px;
+    overflow: hidden;
+    padding: 0;
+    width: 20px;
+}
+
+/* ==========================================================================
+   17. Usage & Selection Components
+   ========================================================================== */
+
+.usage-header {
+    align-items: center;
+    color: var(--figma-color-text-secondary);
+    cursor: pointer;
+    display: flex;
+    font-size: 11px;
+    justify-content: space-between;
+    padding: 4px 0;
+}
+
+.usage-item {
+    align-items: center;
+    background: var(--figma-color-bg-secondary);
+    border-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+    padding: 6px;
+}
+
+.selection-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.selection-count {
+    color: var(--figma-color-text-secondary);
+    font-size: 11px;
+}
+
+/* ==========================================================================
+   18. Miscellaneous
+   ========================================================================== */
+
+.instance-count {
+    color: var(--figma-color-text-secondary);
+    font-size: 11px;
+}
+
+.mode-info {
+    color: var(--figma-color-text-secondary);
+    font-size: 11px;
+    margin-bottom: 8px;
+}
+
+.property-name {
+    color: var(--figma-color-text-secondary);
+    font-size: 11px;
+}
+
+.selectable-text {
+    -moz-user-select: text;
+    -ms-user-select: text;
+    -webkit-user-select: text;
+    user-select: text;
+}
+
+.size {
+    background: var(--figma-color-bg-secondary);
+    justify-content: center;
+    min-width: 35px;
+}
+
+.stat-label {
+    color: var(--figma-color-text-secondary);
+    font-size: 11px;
+}
+
+.timestamp {
+    color: var(--figma-color-text-secondary);
+    font-size: 11px;
+}
+
+.version-info {
+    align-items: center;
+    color: var(--figma-color-text-secondary);
+    display: flex;
+    font-size: 11px;
+    gap: 4px;
 }
 
