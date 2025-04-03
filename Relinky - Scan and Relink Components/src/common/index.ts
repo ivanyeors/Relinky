@@ -14,15 +14,20 @@ export interface MissingReference {
   variableName?: string;
   variableValue?: any;
   preview?: string;
-  isInactiveLibrary?: boolean;
-  isUnlinked?: boolean;
-  parentNodeId?: string;  // Add parent node ID for context
-  path?: string;          // Add node path for better location info
-  isVisible: boolean;     // Whether the node is visible
+  isInactiveLibrary?: boolean;  // From inactive library
+  isUnlinked?: boolean;         // Raw value (no variable/style)
+  isTeamLibrary?: boolean;      // From team/remote library
+  isLocalLibrary?: boolean;     // From local library
+  isMissingLibrary?: boolean;   // Variable from missing library
+  libraryName?: string;         // Name of the library if applicable
+  libraryKey?: string;          // Key of the library if applicable
+  parentNodeId?: string;        // Add parent node ID for context
+  path?: string;                // Add node path for better location info
+  isVisible: boolean;           // Whether the node is visible
 }
 
 // Update ScanType to include all scan types
-export type ScanType = 'inactive-tokens' | 'vertical-gap' | 'horizontal-padding' | 'vertical-padding' | 'corner-radius' | 'fill' | 'stroke' | 'typography';
+export type ScanType = 'inactive-tokens' | 'local-library' | 'team-library' | 'missing-library' | 'vertical-gap' | 'horizontal-padding' | 'vertical-padding' | 'corner-radius' | 'fill' | 'stroke' | 'typography';
 
 // Interface for tracking scan progress
 export interface ScanProgress {
@@ -87,9 +92,15 @@ export interface PluginMessage {
   message?: string;
   progress?: number;
   references?: Record<string, MissingReference[]>;
+  variables?: MissingReference[]; // For debug-results message
+  isDebugScan?: boolean; // Flag for debug scan results
+  status?: 'success' | 'error'; // For scan-complete message
   scanEntirePage?: boolean;
   isRescan?: boolean;
   ignoreHiddenLayers?: boolean;
+  isLibraryVariableScan?: boolean; // Whether this is a library variable scan
+  isScanning?: boolean; // Flag for scan-progress messages
+  sourceType?: 'raw-values' | 'team-library' | 'local-library' | 'missing-library'; // Source type for scan-for-tokens message
 }
 
 // Interface for document change tracking
@@ -106,16 +117,185 @@ export interface DocumentChangeHandler {
 // --- Type Guard Functions ---
 
 // Type guards to safely work with Figma's node types
-export function hasVariableBindings(node: BaseNode): node is SceneNode & { 
-  boundVariables: { 
-    [key: string]: {
-      type: 'VARIABLE';
-      id: string;
-      value?: any;
-    } 
-  } 
-} {
-  return 'boundVariables' in node;
+export function hasVariableBindings(node: BaseNode): boolean {
+  if (!('boundVariables' in node)) return false;
+  
+  // Get boundVariables with type assertion for safer access
+  const boundVars = (node as any).boundVariables;
+  
+  // Case 1: boundVariables exists and is not null/undefined
+  if (!boundVars) return false;
+  
+  // Case 2: boundVariables has at least one key/property
+  const keys = Object.keys(boundVars);
+  if (keys.length === 0) return false;
+  
+  // Case 3: Check that at least one binding contains variable data
+  for (const key of keys) {
+    const binding = boundVars[key];
+    
+    // Handle array of bindings (e.g. fills)
+    if (Array.isArray(binding)) {
+      for (const item of binding) {
+        if (isVariableBinding(item)) return true;
+      }
+      continue;
+    }
+    
+    // Handle single binding
+    if (isVariableBinding(binding)) return true;
+  }
+  
+  return false;
+}
+
+// New helper to check for variable type bindings
+export function isVariableBinding(binding: any): boolean {
+  if (!binding) return false;
+  
+  // Check for VARIABLE or VARIABLE_ALIAS type
+  if (binding.type === 'VARIABLE' || binding.type === 'VARIABLE_ALIAS') {
+    return 'id' in binding && !!binding.id;
+  }
+  
+  return false;
+}
+
+// Enhanced helper to detect team library variables
+export async function isTeamLibraryVariable(variableId: string): Promise<boolean> {
+  try {
+    const variable = await figma.variables.getVariableByIdAsync(variableId);
+    if (!variable) return false;
+    
+    // Must be remote variable
+    if (!variable.remote) return false;
+    
+    try {
+      // Try to import - if successful, it's an active team library variable
+      await figma.variables.importVariableByKeyAsync(variable.key);
+      return true;
+    } catch {
+      // If import fails, it's not accessible
+      return false;
+    }
+  } catch {
+    return false;
+  }
+}
+
+// Enhanced helper to detect local library variables
+export async function isLocalLibraryVariable(variableId: string): Promise<boolean> {
+  try {
+    const variable = await figma.variables.getVariableByIdAsync(variableId);
+    // Local variables are not remote
+    return variable !== null && !variable.remote;
+  } catch {
+    return false;
+  }
+}
+
+// Enhanced helper to detect missing library variables
+export async function isMissingLibraryVariable(variableId: string): Promise<boolean> {
+  try {
+    const variable = await figma.variables.getVariableByIdAsync(variableId);
+    if (!variable) return true; // Can't get variable, must be missing
+    
+    // Remote variable that can't be imported
+    if (variable.remote) {
+      try {
+        await figma.variables.importVariableByKeyAsync(variable.key);
+        return false; // Successfully imported, not missing
+      } catch {
+        return true; // Failed to import, it's missing
+      }
+    }
+    
+    return false; // Local variable, not missing
+  } catch {
+    return true; // Error getting variable, consider it missing
+  }
+}
+
+// Helper to extract binding details
+interface BindingDetails {
+  isVariable: boolean;
+  bindingType?: string;
+  variableId?: string;
+  name?: string;
+  value?: any;
+}
+
+function getBindingDetails(binding: any): BindingDetails {
+  if (!binding) return { isVariable: false };
+  
+  const details: BindingDetails = {
+    isVariable: false,
+  };
+  
+  if (typeof binding === 'object') {
+    details.bindingType = binding.type || 'unknown';
+    
+    if ((binding.type === 'VARIABLE' || binding.type === 'VARIABLE_ALIAS') && 'id' in binding) {
+      details.isVariable = true;
+      details.variableId = binding.id;
+      // Add other properties if they exist
+      if ('name' in binding) details.name = binding.name;
+      if ('value' in binding) details.value = binding.value;
+    }
+  }
+  
+  return details;
+}
+
+// Comprehensive function to examine boundVariables and detect all types
+export function debugNodeVariables(node: SceneNode): Record<string, any> {
+  const result: Record<string, any> = {
+    nodeId: node.id,
+    nodeName: node.name,
+    nodeType: node.type,
+    hasVariables: false,
+    variableBindings: {},
+  };
+  
+  if (!('boundVariables' in node) || !node.boundVariables) {
+    return result;
+  }
+  
+  const boundVars = node.boundVariables as Record<string, any>;
+  result.hasVariables = Object.keys(boundVars).length > 0;
+  
+  // Examine each binding
+  for (const prop in boundVars) {
+    const binding = boundVars[prop];
+    
+    // Handle array bindings (e.g. fills)
+    if (Array.isArray(binding)) {
+      const items: Array<{index: number} & BindingDetails> = [];
+      
+      for (let i = 0; i < binding.length; i++) {
+        const details = getBindingDetails(binding[i]);
+        if (details.isVariable) {
+          items.push({
+            index: i,
+            ...details
+          });
+        }
+      }
+      
+      result.variableBindings[prop] = {
+        type: 'array',
+        items
+      };
+      continue;
+    }
+    
+    // Handle single binding
+    if (binding && typeof binding === 'object') {
+      result.variableBindings[prop] = getBindingDetails(binding);
+    }
+  }
+  
+  return result;
 }
 
 export function hasAutoLayout(node: BaseNode): node is FrameNode {
@@ -444,19 +624,6 @@ export async function isNodeValid(nodeId: string): Promise<boolean> {
   }
 }
 
-// Helper to group missing references by type and value
-export function groupMissingReferences(missingRefs: MissingReference[]): Record<string, MissingReference[]> {
-  return missingRefs.reduce((groups, ref) => {
-    // Create a unique key combining property and value
-    const key = `${ref.property}:${JSON.stringify(ref.currentValue)}`;
-    if (!groups[key]) {
-      groups[key] = [];
-    }
-    groups[key].push(ref);
-    return groups;
-  }, {} as Record<string, MissingReference[]>);
-}
-
 // Progress tracking helpers
 export function updateProgress(progress: number) {
   figma.ui.postMessage({
@@ -665,4 +832,55 @@ export async function selectNodeGroup(refs: MissingReference[]) {
       message: 'Failed to select node group'
     });
   }
+}
+
+/**
+ * Group missing references by value for UI display
+ * Now with enhanced grouping to handle different reference types
+ */
+export function groupMissingReferences(missingRefs: MissingReference[]): Record<string, MissingReference[]> {
+  const grouped: Record<string, MissingReference[]> = {};
+  
+  missingRefs.forEach(ref => {
+    // Create a base group key combining value and type
+    let baseKey: string;
+    
+    // Define the category for this reference
+    let category = 'unlinked';
+    if (ref.isTeamLibrary) category = 'team-library';
+    else if (ref.isLocalLibrary) category = 'local-library';
+    else if (ref.isInactiveLibrary) category = 'inactive-library';
+    else if (ref.isMissingLibrary) category = 'missing-library';
+    
+    // Create a unique key based on the type of reference
+    if (ref.type === 'typography') {
+      const val = ref.currentValue;
+      // Format typography-specific key
+      baseKey = `typography-${category}-${val.fontFamily}-${val.fontWeight}-${val.fontSize}`;
+    } else if (ref.type === 'fill' || ref.type === 'stroke') {
+      const val = ref.currentValue;
+      // For colors
+      if (typeof val === 'object' && 'r' in val) {
+        // Raw color value
+        baseKey = `${ref.type}-${category}-${Math.round(val.r*255)}-${Math.round(val.g*255)}-${Math.round(val.b*255)}-${val.a || 1}`;
+      } else if (val && typeof val === 'object' && 'variableId' in val) {
+        // Variable reference
+        baseKey = `${ref.type}-${category}-${val.variableId}`;
+      } else {
+        // Handle other cases
+        baseKey = `${ref.type}-${category}-${JSON.stringify(val)}`;
+      }
+    } else {
+      // For all other types (padding, gap, corner radius, etc.)
+      baseKey = `${ref.type}-${category}-${ref.property}-${JSON.stringify(ref.currentValue)}`;
+    }
+    
+    // Add the ref to the group
+    if (!grouped[baseKey]) {
+      grouped[baseKey] = [];
+    }
+    grouped[baseKey].push(ref);
+  });
+  
+  return grouped;
 } 
