@@ -24,6 +24,7 @@ export interface MissingReference {
   parentNodeId?: string;        // Add parent node ID for context
   path?: string;                // Add node path for better location info
   isVisible: boolean;           // Whether the node is visible
+  groupKey?: string;            // Custom key for grouping references with similar properties
 }
 
 // Update ScanType to include all scan types
@@ -92,6 +93,7 @@ export interface PluginMessage {
   message?: string;
   progress?: number;
   references?: Record<string, MissingReference[]>;
+  results?: MissingReference[]; // For raw results that need grouping
   variables?: MissingReference[]; // For debug-results message
   isDebugScan?: boolean; // Flag for debug scan results
   status?: 'success' | 'error'; // For scan-complete message
@@ -100,6 +102,7 @@ export interface PluginMessage {
   ignoreHiddenLayers?: boolean;
   isLibraryVariableScan?: boolean; // Whether this is a library variable scan
   isScanning?: boolean; // Flag for scan-progress messages
+  isGrouped?: boolean; // Flag for grouped results
   sourceType?: 'raw-values' | 'team-library' | 'local-library' | 'missing-library'; // Source type for scan-for-tokens message
 }
 
@@ -842,6 +845,18 @@ export function groupMissingReferences(missingRefs: MissingReference[]): Record<
   const grouped: Record<string, MissingReference[]> = {};
   
   missingRefs.forEach(ref => {
+    // First check if the reference has a custom groupKey (for local library variables)
+    if (ref.groupKey) {
+      // Use the provided groupKey directly
+      const key = ref.groupKey;
+      
+      if (!grouped[key]) {
+        grouped[key] = [];
+      }
+      grouped[key].push(ref);
+      return; // Skip the rest of the processing for this reference
+    }
+    
     // Create a base group key combining value and type
     let baseKey: string;
     
