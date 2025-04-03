@@ -406,15 +406,24 @@ function initializeApp() {
         return hasSourceType && hasScanType && !this.isScanning;
       },
       hasResults() {
-        const hasRefs = this.groupedReferences && 
-                        typeof this.groupedReferences === 'object' && 
-                        Object.keys(this.groupedReferences).length > 0;
+        const hasRefs = Object.keys(this.groupedReferences).length > 0;
+        
+        // Ensure we properly count missing library results
+        // (the console shows missing library variables but the UI says "no issues found")
+        const hasMissingLibraryRefs = this.scanType === 'missing-library' && 
+          ((this.selectedSourceType === 'missing-library' && Object.keys(this.groupedReferences).length > 0) || 
+           (this.libraryResults && this.libraryResults.missing && this.libraryResults.missing.length > 0));
+        
         console.log('Has results?', {
           groupedReferences: this.groupedReferences,
-          count: this.groupedReferences ? Object.keys(this.groupedReferences).length : 0,
-          hasRefs
+          count: Object.keys(this.groupedReferences).length,
+          hasMissingLibraryRefs,
+          hasRefs: hasRefs || hasMissingLibraryRefs,
+          scanType: this.scanType,
+          selectedSourceType: this.selectedSourceType
         });
-        return hasRefs;
+        
+        return hasRefs || hasMissingLibraryRefs;
       },
       groupedByValue() {
         const valueGroups = {};
@@ -478,8 +487,15 @@ function initializeApp() {
         // Also check if there are any filtered results
         const hasFilteredResults = Object.keys(this.filteredResults || {}).length > 0;
         
+        // Special check for missing library variables
+        const hasMissingLibraryResults = 
+          this.scanType === 'missing-library' && 
+          this.libraryResults && 
+          this.libraryResults.missing && 
+          this.libraryResults.missing.length > 0;
+        
         // Temporarily force show if we have any results
-        const forceShow = hasGroupedRefs || hasFilteredResults;
+        const forceShow = hasGroupedRefs || hasFilteredResults || hasMissingLibraryResults;
         
         console.log('Show scan results?', {
           isScanning: this.isScanning,
@@ -488,9 +504,11 @@ function initializeApp() {
           shouldShow,
           hasGroupedRefs,
           hasFilteredResults,
+          hasMissingLibraryResults,
           forceShow,
           filteredResultsCount: Object.keys(this.filteredResults || {}).length,
-          activeTab: this.activeTab
+          activeTab: this.activeTab,
+          scanType: this.scanType
         });
         
         // Force show results if there are any, bypassing other conditions
@@ -512,25 +530,86 @@ function initializeApp() {
         }
         
         console.log('Raw groupedReferences keys:', Object.keys(this.groupedReferences));
-        console.log('Raw groupedReferences first few values:', Object.entries(this.groupedReferences).slice(0, 2).map(([k, v]) => ({
-          key: k,
-          refs: v.refs ? v.refs.length : (Array.isArray(v) ? v.length : 'not array'),
-          firstRef: v.refs ? v.refs[0] : (Array.isArray(v) ? v[0] : 'not available')
-        })));
+        
+        // Log a more detailed analysis of the first few groups
+        const sampleSize = Math.min(5, Object.keys(this.groupedReferences).length);
+        console.log(`Detailed analysis of first ${sampleSize} groups:`);
+        
+        Object.entries(this.groupedReferences).slice(0, sampleSize).forEach(([key, group]) => {
+          const refs = group.refs || (Array.isArray(group) ? group : []);
+          const firstRef = refs.length > 0 ? refs[0] : null;
+          
+          console.log(`Group key: ${key}`);
+          console.log(`Group has ${refs.length} references`);
+          
+          if (firstRef) {
+            console.log('First reference details:', {
+              nodeName: firstRef.nodeName,
+              type: firstRef.type,
+              property: firstRef.property,
+              isTeamLibrary: firstRef.isTeamLibrary,
+              isLocalLibrary: firstRef.isLocalLibrary,
+              isMissingLibrary: firstRef.isMissingLibrary,
+              groupKey: firstRef.groupKey,
+              currentValue: firstRef.currentValue
+            });
+          }
+        });
         
         let results = {};
         
-        // DEBUGGING: Force display all groups first without validation
+        // Enhanced logging for local library scan
+        if (this.selectedScanType === 'local-library') {
+          console.log('Processing filteredResults specifically for local-library scan type');
+          
+          // Track local library references
+          let localLibraryRefCount = 0;
+          let groupsWithLocalRefs = 0;
+          
+          // First pass: Count local library references
+          Object.entries(this.groupedReferences).forEach(([key, group]) => {
+            const refs = group.refs || (Array.isArray(group) ? group : []);
+            const localRefs = refs.filter(ref => ref.isLocalLibrary === true);
+            
+            if (localRefs.length > 0) {
+              groupsWithLocalRefs++;
+              localLibraryRefCount += localRefs.length;
+            }
+          });
+          
+          console.log(`Found ${localLibraryRefCount} local library references in ${groupsWithLocalRefs} groups`);
+        }
+        
+        // Improved processing to handle both array and object formats
         Object.keys(this.groupedReferences).forEach(key => {
           // Make sure the group has a refs array
           const group = this.groupedReferences[key];
-          if (group) {
-            const refs = group.refs ? group.refs : (Array.isArray(group) ? group : []);
-            
-            if (refs.length > 0) {
-              // Always include group for debugging
+          let refs;
+          
+          // Handle different group formats
+          if (group && group.refs && Array.isArray(group.refs)) {
+            refs = group.refs;
+          } else if (group && Array.isArray(group)) {
+            refs = group;
+          } else {
+            console.warn(`Group ${key} has unexpected format:`, group);
+            return; // Skip this group
+          }
+          
+          if (refs.length > 0) {
+            // For local library scan, check each reference individually
+            if (this.selectedScanType === 'local-library') {
+              // Filter to only include references with isLocalLibrary flag
+              const localRefs = refs.filter(ref => ref.isLocalLibrary === true);
+              
+              if (localRefs.length > 0) {
+                results[key] = { refs: localRefs };
+                console.log(`Including local library group: ${key}, refs: ${localRefs.length}`);
+              }
+            } else {
+              // Default processing for other types
               results[key] = { refs };
-              console.log(`Including group (debug): ${key}, refs: ${refs.length}`);
+              console.log(`Including group: ${key}, refs: ${refs.length}`);
             }
           }
         });
@@ -1035,7 +1114,27 @@ function initializeApp() {
         this.isScanning = false;
         this.scanComplete = true;
         
-        // Process the results to ensure padding types are identified
+        // Special handling for missing library scans
+        if (msg.type === 'scan-complete' && msg.scanType === 'missing-library') {
+          console.log('Processing missing-library scan results');
+          
+          // Ensure we store missing library results even if they arrive in different format
+          if (msg.results && Array.isArray(msg.results) && msg.results.length > 0) {
+            // Store in libraryResults for missing library references
+            this.libraryResults = this.libraryResults || {};
+            this.libraryResults.missing = msg.results;
+            
+            console.log(`Stored ${msg.results.length} missing library references`);
+            
+            // Force update the UI state to show results
+            if (!this.groupedReferences || Object.keys(this.groupedReferences).length === 0) {
+              // Create a simple group structure if none exists
+              this.groupedReferences = {'missing-library-group': msg.results};
+            }
+          }
+        }
+        
+        // Process other scan types with existing logic
         if (msg.type === 'scan-complete') {
           if (msg.scanType === 'vertical-padding') {
             // For vertical padding, identify top vs bottom padding if not already set
@@ -1053,7 +1152,7 @@ function initializeApp() {
               });
             }
           } else if (msg.scanType === 'horizontal-padding') {
-            // For horizontal padding, identify left vs right padding
+            // For horizontal padding, identify left vs right padding if not already set
             if (msg.results && Array.isArray(msg.results)) {
               msg.results.forEach(result => {
                 // Check if result has paddingLeft or paddingRight property
@@ -1068,67 +1167,100 @@ function initializeApp() {
               });
             }
           } else if (msg.scanType === 'corner-radius') {
-            // For corner radius, identify corner types
+            // For corner radius, identify which corner if not already set
             if (msg.results && Array.isArray(msg.results)) {
               msg.results.forEach(result => {
-                // Check the property to identify which corner it is
-                if (result.property === 'topLeftRadius' || result.property === 'cornerRadius[0]') {
+                // Check which corner radius property this is
+                if (result.property === 'topLeftRadius') {
                   result.cornerType = 'top-left';
-                } else if (result.property === 'topRightRadius' || result.property === 'cornerRadius[1]') {
+                } else if (result.property === 'topRightRadius') {
                   result.cornerType = 'top-right';
-                } else if (result.property === 'bottomRightRadius' || result.property === 'cornerRadius[2]') {
-                  result.cornerType = 'bottom-right';
-                } else if (result.property === 'bottomLeftRadius' || result.property === 'cornerRadius[3]') {
+                } else if (result.property === 'bottomLeftRadius') {
                   result.cornerType = 'bottom-left';
-                } else if (result.property === 'cornerRadius') {
-                  // All corners have the same radius
-                  result.cornerType = 'all';
+                } else if (result.property === 'bottomRightRadius') {
+                  result.cornerType = 'bottom-right';
                 } else {
                   // For backwards compatibility
                   result.cornerType = 'all';
                 }
               });
             }
-          }
-        }
-        
-        // Check if the plugin has already grouped the references or if we need to process raw results
-        if (msg.type === 'missing-references-result' && msg.references && Object.keys(msg.references).length > 0) {
-          console.log('Using pre-grouped references from plugin:', msg.references);
-          
-          // Convert the grouped references to the format expected by the UI
-          const formattedGroups = {};
-          Object.entries(msg.references).forEach(([key, refs]) => {
-            if (Array.isArray(refs) && refs.length > 0) {
-              formattedGroups[key] = { refs };
+          } else if (msg.scanType === 'local-library') {
+            console.log('Processing local-library scan results');
+            // Special handling for local library variables
+            if (msg.results && Array.isArray(msg.results)) {
+              console.log(`Found ${msg.results.length} local library references`);
+              
+              // Add groupKey if missing to ensure proper grouping
+              msg.results.forEach(result => {
+                if (!result.groupKey) {
+                  const variable = result.currentValue || {};
+                  const variableName = variable.variableName || result.variableName || 'Unknown';
+                  const collectionName = variable.collectionName || 'Unknown Collection';
+                  
+                  // Create a descriptive group key
+                  result.groupKey = `local:${variableName}:${collectionName}`;
+                }
+                
+                // Ensure isLocalLibrary flag is set
+                result.isLocalLibrary = true;
+              });
             }
-          });
-          
-          this.groupedReferences = formattedGroups;
-          console.log('Set pre-grouped references:', this.groupedReferences);
-        } else if ((msg.type === 'scan-complete' || msg.type === 'missing-references-result') && 
-                   msg.results && Array.isArray(msg.results)) {
-          // We have raw results from the scan, group them using our groupByValue method
-          console.log('Processing raw scan results - count:', msg.results.length);
-          console.log('First few results:', msg.results.slice(0, 3));
-          
-          const rawResults = msg.results;
-          const groupedResults = this.groupByValue(rawResults);
-          
-          // Set the grouped references
-          this.groupedReferences = groupedResults;
-          console.log('Set manually grouped results - keys:', Object.keys(this.groupedReferences).length);
-        } else {
-          console.warn('No valid results found in message. Type:', msg.type);
-          if (msg.type === 'scan-complete') {
-            console.log('Scan complete message details:', { 
-              hasReferences: !!msg.references,
-              referencesLength: msg.references ? Object.keys(msg.references).length : 0,
-              hasResults: !!msg.results,
-              resultsLength: msg.results ? msg.results.length : 0
-            });
           }
-          this.groupedReferences = {}; // Reset to empty object
+          
+          // Group the results if they're in array form
+          if (msg.results && Array.isArray(msg.results)) {
+            console.log(`Processing ${msg.results.length} scan results as array`);
+            
+            // Import the scanner module to group results
+            parent.postMessage({
+              pluginMessage: {
+                type: 'group-results',
+                results: msg.results,
+                scanType: msg.scanType
+              }
+            }, '*');
+            
+            // Don't update groupedReferences yet - wait for the grouped response
+            return;
+          } else if (msg.references && typeof msg.references === 'object') {
+            console.log(`Processing scan results as grouped references`);
+            
+            // Check if we have local library results
+            let hasLocalLibraryRefs = false;
+            
+            if (msg.scanType === 'local-library') {
+              // For local library scan, check if there are any groups with local library references
+              Object.values(msg.references).forEach(group => {
+                const refs = group.refs || (Array.isArray(group) ? group : []);
+                if (refs.length > 0 && refs.some(ref => ref.isLocalLibrary)) {
+                  hasLocalLibraryRefs = true;
+                }
+              });
+              
+              console.log(`Local library scan has references: ${hasLocalLibraryRefs}`);
+            }
+            
+            // Update the grouped references
+            this.groupedReferences = msg.references;
+            
+            console.log('Updated groupedReferences:', {
+              keys: Object.keys(this.groupedReferences).length,
+              hasLocalReferences: hasLocalLibraryRefs,
+              scanType: msg.scanType
+            });
+          } else {
+            console.warn('No valid results found in message. Type:', msg.type);
+            if (msg.type === 'scan-complete') {
+              console.log('Scan complete message details:', { 
+                hasReferences: !!msg.references,
+                referencesLength: msg.references ? Object.keys(msg.references).length : 0,
+                hasResults: !!msg.results,
+                resultsLength: msg.results ? msg.results.length : 0
+              });
+            }
+            this.groupedReferences = {}; // Reset to empty object
+          }
         }
         
         // Set the scan type for filtering
@@ -1197,332 +1329,19 @@ function initializeApp() {
         return 'Ready to scan';
       },
       
-      handlePluginMessage(msg) {
-        console.log('UI received message:', msg);
-        
-        // Handle scan progress
-        if (msg.type === 'scan-progress') {
-          this.handleScanProgress(msg);
+      getStartScanButtonTitle() {
+        if (!this.hasSelection && !this.scanEntirePage) {
+          return 'Select frames/components/sections or enable "Scan Entire Page"';
         }
-        
-        // Track if we've already processed results in this scan cycle
-        if (msg.type === 'missing-references-result') {
-          console.log('Received scan results:', msg);
-          this.hasProcessedResults = true;
-          this.handleScanComplete(msg);
+        if (!this.selectedSourceType) {
+          return 'Select a source type';
         }
-        
-        // Only process scan-complete if we haven't already processed results
-        if (msg.type === 'scan-complete') {
-          console.log('Received scan complete:', msg);
-          if (!this.hasProcessedResults) {
-            this.handleScanComplete(msg);
-          } else {
-            // Just update scan state without resetting results
-            this.isScanning = false;
-            this.scanComplete = true;
-            this.successMessage = 'Scan complete!';
-            this.showSuccessToast = true;
-            setTimeout(() => { this.showSuccessToast = false; }, 3000);
-            console.log('Skipping result processing for scan-complete as results were already processed');
-          }
-          // Reset the flag for next scan
-          this.hasProcessedResults = false;
+        if (!this.selectedScanType) {
+          return 'Select a token type';
         }
-        
-        // Handle selection updates
-        if (msg.type === 'selection-update' || msg.type === 'selected-frame-ids') {
-          console.log('Selection update received:', msg);
-          this.updateSelection(msg);
-        }
-        
-        // Handle node selection confirmation
-        if (msg.type === 'nodes-selected') {
-          if (msg.success) {
-            this.successMessage = `Selected ${msg.count} nodes`;
-            this.showSuccessToast = true;
-            setTimeout(() => { this.showSuccessToast = false; }, 2000);
-          } else {
-            this.errorMessage = msg.error || 'Failed to select nodes';
-            this.showErrorToast = true;
-            setTimeout(() => { this.showErrorToast = false; }, 3000);
-          }
-        }
-        
-        // Special case for error messages
-        if (msg.type === 'error') {
-          this.errorMessage = msg.message;
-          this.showErrorToast = true;
-          setTimeout(() => { this.showErrorToast = false; }, 3000);
-        }
-        
-        // Handle watch status
-        if (msg.type === 'watch-status') {
-          this.isWatching = msg.isWatching;
-        }
-        
-        // Handle watch status
-        if (msg.type === 'scan-cancelled') {
-          this.isScanning = false;
-          this.scanProgress = 0;
-          this.successMessage = 'Scan cancelled';
-          this.showSuccessToast = true;
-          setTimeout(() => { this.showSuccessToast = false; }, 3000);
-        }
-        
-        // Handle variable scan completion
-        if (msg.type === 'variable-scan-complete') {
-          this.isVariableScanning = false;
-          this.variableScanComplete = true;
-          
-          if (msg.variables && Array.isArray(msg.variables)) {
-            this.variables = msg.variables;
-            
-            // Find unique collections
-            this.variableCollections = [...new Set(
-              this.variables
-                .filter(v => v.collectionId)
-                .map(v => v.collectionId)
-            )];
-            
-            // Set success message
-            this.variableSuccessMessage = 'Variable scan complete!';
-            this.showVariableSuccessToast = true;
-            setTimeout(() => { this.showVariableSuccessToast = false; }, 3000);
-          }
-        }
-        
-        // Handle variable scan progress
-        if (msg.type === 'variable-scan-progress') {
-          this.variableScanProgress = msg.progress;
-        }
-        
-        // Handle variable scan status
-        if (msg.type === 'variable-scan-status') {
-          this.variableScanStatus = msg.message;
-        }
-        
-        // Handle variable scan cancelled
-        if (msg.type === 'variable-scan-cancelled') {
-          this.isVariableScanning = false;
-          this.variableScanProgress = 0;
-          this.variableSuccessMessage = 'Variable scan cancelled';
-          this.showVariableSuccessToast = true;
-          setTimeout(() => { this.showVariableSuccessToast = false; }, 3000);
-        }
+        return 'Start scanning';
       },
-      async getSelectedFrameIds() {
-        return new Promise((resolve) => {
-          parent.postMessage({ 
-            pluginMessage: { type: 'get-selected-frame-ids' }
-          }, '*');
-
-          const handler = (event) => {
-            const msg = event.data.pluginMessage;
-            if (msg.type === 'selected-frame-ids') {
-              window.removeEventListener('message', handler);
-              resolve(msg.ids);
-            }
-          };
-          window.addEventListener('message', handler);
-        });
-      },
-      async selectGroup(refs, groupId) {
-        console.log('Selecting group with refs:', refs);
-        
-        if (!refs || (refs.length === 0 && !refs.refs)) {
-          console.log('No references provided to selectGroup method');
-          return;
-        }
-        
-        // Handle both array and object with refs property
-        const refsArray = Array.isArray(refs) ? refs : (refs.refs || []);
-        
-        if (refsArray.length === 0) {
-          console.log('No references to select after processing');
-          return;
-        }
-        
-        // Track the selection state
-        if (typeof groupId === 'string') {
-          this.selectingNodeIds.add(groupId);
-        } else {
-          // Use the first node id if groupId is not provided
-          this.selectingNodeIds.add(refsArray[0].nodeId);
-        }
-        
-        try {
-          // Get all node IDs from the references
-          const nodeIds = refsArray.map(ref => ref.nodeId).filter(Boolean);
-          
-          if (nodeIds.length === 0) {
-            console.warn('No valid node IDs found in references');
-            return;
-          }
-          
-          console.log('Selecting nodes with IDs:', nodeIds);
-          
-          // Send a message to the plugin to select these nodes
-          parent.postMessage({
-            pluginMessage: {
-              type: 'select-nodes',
-              nodeIds: nodeIds
-            }
-          }, '*');
-        } catch (err) {
-          console.error('Error selecting group:', err);
-        } finally {
-          // Clear selection state after a delay
-          setTimeout(() => {
-            if (typeof groupId === 'string') {
-              this.selectingNodeIds.delete(groupId);
-            } else if (refsArray[0]) {
-              this.selectingNodeIds.delete(refsArray[0].nodeId);
-            }
-          }, 1000);
-        }
-      },
-      formatValue(value) {
-        if (value === null || value === undefined) {
-          return 'N/A';
-        }
-        if (typeof value === 'object') {
-          return JSON.stringify(value);
-        }
-        return String(value);
-      },
-      formatGapValue(value, ref) {
-        if (ref.type === 'gap') {
-          const direction = ref.isVertical ? 'Vertical' : 'Horizontal';
-          return `${direction} Gap: ${value}px`;
-        }
-        return formatValue(value);
-      },
-      toggleGroup(groupKey) {
-        if (this.expandedGroups.has(groupKey)) {
-          this.expandedGroups.delete(groupKey);
-        } else {
-          this.expandedGroups.add(groupKey);
-        }
-      },
-      isGroupExpanded(groupKey) {
-        return this.expandedGroups.has(groupKey);
-      },
-      getPropertyName(key) {
-        return key.split(':')[0];
-      },
-      toggleWatch() {
-        if (!this.canWatch) return;
-        
-        this.isWatching = !this.isWatching;
-        parent.postMessage({ 
-          pluginMessage: { 
-            type: this.isWatching ? 'start-watching' : 'stop-watching',
-            scanType: this.selectedScanType,
-            scanScope: this.scanScope,
-            scanEntirePage: this.scanEntirePage
-          }
-        }, '*');
-      },
-      clearResults() {
-        this.groupedReferences = {};
-        this.expandedGroups.clear();
-      },
-      dismissToast() {
-        this.showSuccessToast = false;
-      },
-      handleResize(msg) {
-        if (msg.type === 'resize' && msg.width && msg.height) {
-          const width = Number(msg.width);
-          const height = Number(msg.height);
-          
-          if (!isNaN(width) && !isNaN(height)) {
-            this.windowSize = { width, height };
-          }
-        }
-      },
-      updateProgress(newProgress) {
-        const progress = Math.min(Math.max(0, Number(newProgress) || 0), 100);
-        console.log(`Updating progress bar: ${progress}%`);
-        this.scanProgress = progress;
-      },
-      isSelecting(id) {
-        return this.selectingNodeIds.has(id);
-      },
-      async startLibraryScan() {
-        this.isLibraryScanning = true;
-        this.libraryScanProgress = 0;
-        this.currentScanNode = null;
-        this.scanSummary = null;
-        this.isPaused = false;
-        
-        const selectedFrameIds = !this.scanEntirePage  // Use the same scanEntirePage state
-          ? await this.getSelectedFrameIds()
-          : undefined;
-        
-        parent.postMessage({ 
-          pluginMessage: { 
-            type: 'scan-for-tokens',
-            scanType: 'inactive-tokens',
-            scanScope: this.scanEntirePage ? 'entire-page' : 'selected-frames',
-            selectedFrameIds
-          }
-        }, '*');
-      },
-      clearLibraryResults() {
-        this.libraryResults = {};
-      },
-      async listVariables() {
-        this.isAnalyzing = true;
-        this.variableAnalysis = null;  // Reset previous results
-        parent.postMessage({ 
-          pluginMessage: { 
-            type: 'list-variables'
-          }
-        }, '*');
-      },
-      openStripePayment() {
-        window.open('https://buy.stripe.com/8wM7wb49NeFD5UYcMM', '_blank');
-      },
-      startResize(e) {
-        this.isResizing = true;
-        
-        const startX = e.clientX;
-        const startY = e.clientY;
-        const startWidth = this.windowSize.width;
-        const startHeight = this.windowSize.height;
-        
-        const onMouseMove = (e) => {
-          if (!this.isResizing) return;
-          
-          const newWidth = startWidth + (e.clientX - startX);
-          const newHeight = startHeight + (e.clientY - startY);
-          
-          // Set minimum sizes
-          const width = Math.max(300, newWidth);
-          const height = Math.max(400, newHeight);
-          
-          this.windowSize = { width, height };
-          
-          // Send resize message to plugin
-          parent.postMessage({ 
-            pluginMessage: { 
-              type: 'resize', 
-              width,
-              height
-            }
-          }, '*');
-        };
-        
-        const onMouseUp = () => {
-          this.isResizing = false;
-          document.removeEventListener('mousemove', onMouseMove);
-          document.removeEventListener('mouseup', onMouseUp);
-        };
-        
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
-      },
+      
       updateSelection(msg) {
         console.log('Updating selection with:', msg);
         
@@ -1544,182 +1363,144 @@ function initializeApp() {
           selectedFrameIds: this.selectedFrameIds.length
         });
       },
-      getStyleData(key) {
-        try {
-          // Extract the JSON data from the textStyleId string
-          const styleMatch = key.match(/textStyleId:({.*?})/);
-          if (!styleMatch) return this.getDefaultStyle();
-          
-          const styleData = JSON.parse(styleMatch[1]);
-          
-          // Clean up the font family name
-          styleData.fontFamily = styleData.fontFamily.split(' ')[0];
-          
-          return styleData;
-        } catch (err) {
-          console.warn('Error parsing style data:', err);
-          return this.getDefaultStyle();
-        }
-      },
-      getDefaultStyle() {
-        return {
-          fontFamily: 'Unknown',
-          fontWeight: 'Regular',
-          fontSize: 14
-        };
-      },
-      async scanLibraryTokens() {
-        this.isLibraryScanning = true;
-        this.libraryScanProgress = 0;
-        this.currentScanNode = null;
-        this.scanSummary = null;
-        this.isPaused = false;
-        this.inactiveLibraryTokens = [];
-        this.activeLibraryTokens = [];
-        parent.postMessage({ 
-          pluginMessage: { 
-            type: 'scan-library-tokens',
-            scanType: this.selectedLibraryTokenScanType
-          }
-        }, '*');
-      },
-      async activateLibrary(libraryName) {
-        parent.postMessage({ 
-          pluginMessage: { 
-            type: 'activate-library',
-            libraryName 
-          }
-        }, '*');
-      },
-      stopLibraryScan() {
-        console.log('Requesting scan stop...');
-        parent.postMessage({ 
-          pluginMessage: { type: 'stop-library-scan' }
-        }, '*');
-      },
-      formatTokenType(type) {
-        switch (type.toLowerCase()) {
-          case 'color':
-            return 'Color';
-          case 'float':
-            return 'Number';
-          case 'string':
-            return 'Text';
-          default:
-            return type;
-        }
-      },
-      pauseLibraryScan() {
-        console.log('Requesting scan pause...');
-        this.isPaused = true;
-        parent.postMessage({ 
-          pluginMessage: { type: 'pause-library-scan' }
-        }, '*');
-      },
-      resumeLibraryScan() {
-        console.log('Requesting scan resume...');
-        this.isPaused = false;
-        parent.postMessage({ 
-          pluginMessage: { type: 'resume-library-scan' }
-        }, '*');
-      },
-      getUniqueLibraries(tokens) {
-        return [...new Set(tokens.map(token => token.libraryName))];
-      },
-      getTokensByLibrary(tokens, libraryName) {
-        return tokens.filter(token => token.libraryName === libraryName);
-      },
-      showTokenUsages(token) {
-        const nodeIds = token.usages.map(usage => usage.nodeId);
-        parent.postMessage({ 
-          pluginMessage: { 
-            type: 'select-nodes',
-            nodeIds
-          }
-        }, '*');
-      },
-      toggleUsageDetails(variableId) {
-        this.isUsageExpanded = { ...this.isUsageExpanded, [variableId]: !this.isUsageExpanded[variableId] };
-      },
-      isUsageExpanded(variableId) {
-        return this.isUsageExpanded[variableId] || false;
-      },
-      selectNode(nodeId) {
-        if (!nodeId) return;
+      
+      handlePluginMessage(msg) {
+        console.log('Plugin message received:', msg);
         
-        try {
-          parent.postMessage({
-            pluginMessage: this.makeSerializable({
-              type: 'select-node',
-              nodeId
-            })
-          }, '*');
-        } catch (error) {
-          console.error('Failed to send node selection message:', error);
+        // Handle different message types
+        switch (msg.type) {
+          case 'selection-update':
+            // Direct handling instead of calling updateSelection
+            console.log('Handling selection update directly:', msg);
+            this.hasSelection = msg.hasSelection === true;
+            this.selectedCount = msg.count || 0;
+            this.hasInstances = msg.hasInstances === true;
+            
+            if (Array.isArray(msg.selectedFrameIds)) {
+              this.selectedFrameIds = msg.selectedFrameIds;
+            } else if (Array.isArray(msg.ids)) {
+              this.selectedFrameIds = msg.ids;
+            }
+            break;
+          case 'scan-progress':
+            this.handleScanProgress(msg);
+            break;
+          case 'scan-complete':
+            this.handleScanComplete(msg);
+            break;
+          case 'missing-references-result':
+            // Special handling for missing library references
+            if (msg.scanType === 'missing-library' || 
+                (msg.references && Object.keys(msg.references).some(key => key.startsWith('missing-library')))) {
+              this.handleMissingLibraryResult(msg);
+            } else {
+              // Original handling for other reference types
+              this.handleScanComplete({
+                type: 'scan-complete',
+                references: msg.references,
+                scanType: msg.scanType || 'unknown'
+              });
+            }
+            break;
+          case 'nodes-selected':
+            if (msg.success) {
+              this.successMessage = `Selected ${msg.count} nodes`;
+              this.showSuccessToast = true;
+              setTimeout(() => { this.showSuccessToast = false; }, 2000);
+            } else {
+              this.errorMessage = msg.error || 'Failed to select nodes';
+              this.showErrorToast = true;
+              setTimeout(() => { this.showErrorToast = false; }, 3000);
+            }
+            break;
+          case 'error':
+            this.errorMessage = msg.message;
+            this.showErrorToast = true;
+            setTimeout(() => { this.showErrorToast = false; }, 3000);
+            break;
+          case 'watch-status':
+            this.isWatching = msg.isWatching;
+            break;
+          case 'scan-cancelled':
+            this.isScanning = false;
+            this.scanProgress = 0;
+            this.successMessage = 'Scan cancelled';
+            this.showSuccessToast = true;
+            setTimeout(() => { this.showSuccessToast = false; }, 3000);
+            break;
+          case 'variable-scan-complete':
+            this.isVariableScanning = false;
+            this.variableScanComplete = true;
+            
+            if (msg.variables && Array.isArray(msg.variables)) {
+              this.variables = msg.variables;
+              
+              // Find unique collections
+              this.variableCollections = [...new Set(
+                this.variables
+                  .filter(v => v.collectionId)
+                  .map(v => v.collectionId)
+              )];
+              
+              // Set success message
+              this.variableSuccessMessage = 'Variable scan complete!';
+              this.showVariableSuccessToast = true;
+              setTimeout(() => { this.showVariableSuccessToast = false; }, 3000);
+            }
+            break;
+          case 'variable-scan-progress':
+            this.variableScanProgress = msg.progress;
+            break;
+          case 'variable-scan-status':
+            this.variableScanStatus = msg.message;
+            break;
+          case 'variable-scan-cancelled':
+            this.isVariableScanning = false;
+            this.variableScanProgress = 0;
+            this.variableSuccessMessage = 'Variable scan cancelled';
+            this.showVariableSuccessToast = true;
+            setTimeout(() => { this.showVariableSuccessToast = false; }, 3000);
+            break;
+          case 'resize':
+            if (msg.width && msg.height) {
+              const width = Number(msg.width);
+              const height = Number(msg.height);
+              
+              if (!isNaN(width) && !isNaN(height)) {
+                this.windowSize = { width, height };
+              }
+            }
+            break;
+          default:
+            console.log(`Unhandled message type: ${msg.type}`);
         }
       },
-      switchTab(tab) {
-        this.activeTab = tab;
-      },
-      getProgressWidth() {
-        // Always return a percentage, even if 0
-        return `${Math.max(0, Math.min(100, this.scanProgress))}%`;
-      },
-      getStartScanButtonTitle() {
-        if (!this.hasSelection && !this.scanEntirePage) {
-          return 'Select frames/components/sections or enable "Scan Entire Page"';
+      handleMissingLibraryResult(msg) {
+        console.log('Handling missing library result:', msg);
+        
+        if (!msg.references || typeof msg.references !== 'object') {
+          console.warn('Invalid missing library references received');
+          return;
         }
-        if (!this.selectedSourceType) {
-          return 'Select a source type';
-        }
-        if (!this.selectedScanType) {
-          return 'Select a token type';
-        }
-        return 'Start scanning';
-      },
-      handleScanCardKeydown(e) {
-        if (e.key === 'ArrowRight') {
-          this.selectNextCard();
-        } else if (e.key === 'ArrowLeft') {
-          this.selectPreviousCard();
-        } else if (e.key === 'Enter') {
-          this.selectCurrentCard();
-        }
-      },
-      selectNextCard() {
-        const currentIndex = this.tokenScanOptions.findIndex(option => option.value === this.selectedScanType);
-        const nextIndex = (currentIndex + 1) % this.tokenScanOptions.length;
-        this.selectedScanType = this.tokenScanOptions[nextIndex].value;
-      },
-      selectPreviousCard() {
-        const currentIndex = this.tokenScanOptions.findIndex(option => option.value === this.selectedScanType);
-        const prevIndex = (currentIndex - 1 + this.tokenScanOptions.length) % this.tokenScanOptions.length;
-        this.selectedScanType = this.tokenScanOptions[prevIndex].value;
-      },
-      selectCurrentCard() {
-        this.selectedScanType = this.selectedScanType;
-      },
-      handleLibraryScanCardKeydown(e) {
-        if (e.key === 'ArrowRight') {
-          this.selectNextLibraryCard();
-        } else if (e.key === 'ArrowLeft') {
-          this.selectPreviousLibraryCard();
-        } else if (e.key === 'Enter') {
-          this.selectCurrentLibraryCard();
-        }
-      },
-      selectNextLibraryCard() {
-        const currentIndex = this.libraryTokenScanOptions.findIndex(option => option.value === this.selectedLibraryTokenScanType);
-        const nextIndex = (currentIndex + 1) % this.libraryTokenScanOptions.length;
-        this.selectedLibraryTokenScanType = this.libraryTokenScanOptions[nextIndex].value;
-      },
-      selectPreviousLibraryCard() {
-        const currentIndex = this.libraryTokenScanOptions.findIndex(option => option.value === this.selectedLibraryTokenScanType);
-        const prevIndex = (currentIndex - 1 + this.libraryTokenScanOptions.length) % this.libraryTokenScanOptions.length;
-        this.selectedLibraryTokenScanType = this.libraryTokenScanOptions[prevIndex].value;
-      },
-      selectCurrentLibraryCard() {
-        this.selectedLibraryTokenScanType = this.selectedLibraryTokenScanType;
+        
+        // Store the references
+        this.groupedReferences = msg.references;
+        
+        // Ensure we know it's a missing library scan
+        this.scanType = 'missing-library';
+        this.isLibraryVariableScan = true;
+        
+        // Update scan completion state
+        this.isScanning = false;
+        this.scanComplete = true;
+        this.scanProgress = 100;
+        
+        console.log(`Processed ${Object.keys(msg.references).length} missing library reference groups`);
+        
+        // Ensure the UI shows the results
+        this.showSuccessToast = true;
+        this.successMessage = 'Found missing library variables!';
+        setTimeout(() => { this.showSuccessToast = false; }, 3000);
       },
       handleScanProgress(msg) {
         if (msg && typeof msg.progress === 'number') {
@@ -1759,6 +1540,56 @@ function initializeApp() {
         // Format the count with comma for thousands
         return count.toLocaleString();
       },
+      
+      // Add the formatValue function
+      formatValue(value) {
+        if (value === undefined || value === null) {
+          return 'N/A';
+        }
+        
+        // Handle different types of values
+        if (typeof value === 'object') {
+          // Special handling for objects
+          if (value.libraryName !== undefined || value.variableName !== undefined) {
+            // It's a library variable reference
+            const parts = [];
+            if (value.variableName) parts.push(value.variableName);
+            if (value.libraryName) parts.push(`(${value.libraryName})`);
+            if (value.errorDetails) parts.push(`Error: ${value.errorDetails.substring(0, 50)}`);
+            return parts.join(' ');
+          }
+          
+          // Special handling for color objects
+          if (value.r !== undefined && value.g !== undefined && value.b !== undefined) {
+            const r = Math.round(value.r * 255);
+            const g = Math.round(value.g * 255);
+            const b = Math.round(value.b * 255);
+            const a = value.a !== undefined ? value.a.toFixed(2) : 1;
+            return `RGBA(${r}, ${g}, ${b}, ${a})`;
+          }
+          
+          // Default object handling - stringify but limit length
+          try {
+            const str = JSON.stringify(value);
+            return str.length > 50 ? str.substring(0, 47) + '...' : str;
+          } catch (e) {
+            return '[Complex Object]';
+          }
+        }
+        
+        // Handle basic types
+        if (typeof value === 'string') {
+          return value.length > 50 ? value.substring(0, 47) + '...' : value;
+        }
+        
+        if (typeof value === 'number') {
+          return value.toLocaleString();
+        }
+        
+        // Default - convert to string
+        return String(value);
+      },
+      
       formatTypographyValue(value) {
         if (typeof value === 'object') {
           return `${value.fontFamily} ${value.fontWeight} ${value.fontSize}px`;
@@ -1766,16 +1597,45 @@ function initializeApp() {
         return String(value);
       },
       debugResults() {
-        console.log('Debugging results:', this.groupedReferences);
+        console.log('=== DEBUG SCAN RESULTS ===');
+        console.log('Selected source type:', this.selectedSourceType);
+        console.log('Selected scan type:', this.selectedScanType);
+        console.log('Has results:', this.hasResults);
+        console.log('Grouped references:', this.groupedReferences);
+        console.log('Show scan results:', this.showScanResults);
+        console.log('Filtered results:', this.filteredResults);
+        console.log('=== END DEBUG ===');
         
-        // Format results for easier reading
-        Object.entries(this.groupedReferences).forEach(([key, group]) => {
-          console.log(`Group: ${key}`, {
-            refs: group.refs,
-            type: group.refs[0]?.type,
-            property: group.refs[0]?.property,
+        // Create a detailed report
+        const report = {
+          scanType: this.selectedScanType,
+          sourceType: this.selectedSourceType,
+          groupedReferencesCount: Object.keys(this.groupedReferences).length,
+          filteredResultsCount: Object.keys(this.filteredResults).length,
+          showScanResults: this.showScanResults,
+          scanComplete: this.scanComplete,
+          isScanning: this.isScanning,
+          hasResults: this.hasResults,
+          localLibraryCount: 0,
+          teamLibraryCount: 0,
+          unlinkedCount: 0,
+          missingLibraryCount: 0
+        };
+        
+        // Count reference types
+        for (const key in this.groupedReferences) {
+          const group = this.groupedReferences[key];
+          if (!group.refs || !Array.isArray(group.refs)) continue;
+          
+          group.refs.forEach(ref => {
+            if (ref.isLocalLibrary) report.localLibraryCount++;
+            if (ref.isTeamLibrary) report.teamLibraryCount++;
+            if (ref.isUnlinked) report.unlinkedCount++;
+            if (ref.isMissingLibrary) report.missingLibraryCount++;
           });
-        });
+        }
+        
+        console.table(report);
       },
       
       // New function to debug variables in the document
@@ -2283,6 +2143,77 @@ function initializeApp() {
       setGapFilter(type) {
         this.gapFilterType = type;
       },
+      // Add toggleGroup method
+      toggleGroup(groupKey) {
+        if (this.expandedGroups.has(groupKey)) {
+          this.expandedGroups.delete(groupKey);
+        } else {
+          this.expandedGroups.add(groupKey);
+        }
+      },
+      
+      // Add isGroupExpanded method
+      isGroupExpanded(groupKey) {
+        return this.expandedGroups.has(groupKey);
+      },
+      
+      // Add selectGroup method
+      async selectGroup(refs, event) {
+        console.log('Selecting group with refs:', refs);
+        
+        if (!refs || (refs.length === 0 && !refs.refs)) {
+          console.log('No references provided to selectGroup method');
+          return;
+        }
+        
+        // Handle both array and object with refs property
+        const refsArray = Array.isArray(refs) ? refs : (refs.refs || []);
+        
+        if (refsArray.length === 0) {
+          console.log('No references to select after processing');
+          return;
+        }
+        
+        try {
+          // Get all node IDs from the references
+          const nodeIds = refsArray.map(ref => ref.nodeId).filter(Boolean);
+          
+          if (nodeIds.length === 0) {
+            console.warn('No valid node IDs found in references');
+            return;
+          }
+          
+          console.log('Selecting nodes with IDs:', nodeIds);
+          
+          // Send a message to the plugin to select these nodes
+          parent.postMessage({
+            pluginMessage: this.makeSerializable({
+              type: 'select-group',
+              nodeIds: nodeIds
+            })
+          }, '*');
+        } catch (err) {
+          console.error('Error selecting group:', err);
+        }
+      },
+      
+      // Add selectNode method
+      selectNode(nodeId, event) {
+        if (!nodeId) return;
+        
+        try {
+          // Send node ID to plugin
+          parent.postMessage({
+            pluginMessage: this.makeSerializable({
+              type: 'select-node',
+              nodeId: nodeId
+            })
+          }, '*');
+        } catch (err) {
+          console.error('Error selecting node:', err);
+        }
+      },
+      
       // Add a new method to process debug results
       processMissingLibraryVariables(variables) {
         if (!variables || !Array.isArray(variables) || variables.length === 0) {
@@ -2476,6 +2407,14 @@ function initializeApp() {
         // Default: include the group
         return true;
         */
+      },
+      // Add the clearResults method
+      clearResults() {
+        console.log('Clearing previous scan results');
+        this.groupedReferences = {};
+        this.expandedGroups.clear();
+        this.scanComplete = false;
+        this.scanProgress = 0;
       },
     },
     watch: {

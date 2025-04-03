@@ -2,8 +2,14 @@
 // Handles initialization, UI events, and plugin lifecycle
 
 import * as common from './common';
-import * as valuesScanner from '@relink';
+// The old @relink module functionality has been migrated to the scanners module
 import * as variablesScanner from '@unlink';
+import * as scanners from './scanners';
+import { 
+  ScanType,
+  MissingReference,
+  // ... other imports
+} from './common';
 
 // Clear previous logs
 console.clear();
@@ -146,10 +152,11 @@ async function startWatchingDocument(scanType: common.ScanType, scanEntirePage: 
             type: 'clear-results'
           });
           
-          // Perform a new scan
-          const missingRefs = await valuesScanner.scanForMissingReferences(
+          // Use the new scanners module instead of valuesScanner
+          const missingRefs = await scanners.runScanner(
+            'missing-library', // Default to missing library for watch
             documentState.lastScanType,
-            documentState.scanEntirePage ? undefined : documentState.selectedFrameIds,
+            documentState.scanEntirePage ? [] : documentState.selectedFrameIds,
             (progress) => {
               figma.ui.postMessage({ 
                 type: 'scan-progress', 
@@ -167,9 +174,10 @@ async function startWatchingDocument(scanType: common.ScanType, scanEntirePage: 
               message: 'No unlinked parameters found!'
             });
           } else {
+            // Use the grouping function from scanners module
             figma.ui.postMessage({
               type: 'missing-references-result',
-              references: common.groupMissingReferences(missingRefs)
+              references: scanners.groupScanResults('missing-library', missingRefs)
             });
           }
         } catch (err) {
@@ -297,10 +305,10 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
     }
   }
   
-  // Stop scan
+  // Handle stop scan
   if (msg.type === 'stop-scan') {
     console.log('Received stop scan request');
-    valuesScanner.cancelScan();
+    scanners.cancelScan(); // Use cancelScan from scanners instead of valuesScanner
     
     // Notify UI that scan was cancelled
     figma.ui.postMessage({ 
@@ -311,188 +319,108 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
 
   // Handle scan request for values
   if (msg.type === 'scan-for-tokens') {
+    // Reset scan cancellation flag
+    scanners.cancelScan();
+    
+    console.log('Starting scan for tokens:', {
+      scanType: msg.scanType,
+      scanEntirePage: msg.scanEntirePage,
+      selectedFrameIds: msg.selectedFrameIds,
+      isLibraryVariableScan: msg.isLibraryVariableScan,
+      sourceType: msg.sourceType
+    });
+    
+    // Get nodes to scan
+    let nodesToScan: SceneNode[] = [];
+    
+    // Check if we should scan the entire page
+    if (msg.scanEntirePage) {
+      nodesToScan = Array.from(figma.currentPage.children);
+      console.log('Scanning entire page:', nodesToScan.length, 'top-level nodes');
+    } else if (msg.selectedFrameIds && msg.selectedFrameIds.length > 0) {
+      // Get selected nodes from IDs
+      nodesToScan = await Promise.all(
+        msg.selectedFrameIds.map(id => figma.getNodeByIdAsync(id))
+      ).then(nodes => nodes.filter((node): node is SceneNode => node !== null && 'type' in node));
+      
+      console.log('Scanning selected frames:', nodesToScan.length, 'nodes');
+    } else {
+      // Fallback to current selection
+      nodesToScan = Array.from(figma.currentPage.selection);
+      console.log('Using current selection:', nodesToScan.length, 'nodes');
+      
+      if (nodesToScan.length === 0) {
+        // Nothing selected, scan the whole page
+        nodesToScan = Array.from(figma.currentPage.children);
+        console.log('No selection, defaulting to entire page:', nodesToScan.length, 'top-level nodes');
+      }
+    }
+    
+    // Start the scan using the appropriate scanner module
     try {
-      // Type guard to ensure we have a ScanForTokensMessage
-      const scanMsg = msg as ScanForTokensMessage;
-      
-      const { 
-        scanType, 
-        scanEntirePage, 
-        selectedFrameIds, 
-        ignoreHiddenLayers = false, 
-        isLibraryVariableScan = false,
-        sourceType = 'raw-values', // Default to raw-values if sourceType is not provided
-        tokenType
-      } = scanMsg;
-
-      console.log('Starting scan with progress tracking');
-      console.log('Scan type:', scanType);
-      console.log('Source type:', sourceType);
-      console.log('Token type:', tokenType);
-      console.log('Selected frame IDs:', selectedFrameIds);
-      console.log('Scan entire page:', scanEntirePage);
-      console.log('Is rescan:', scanMsg.isRescan || false);
-      console.log('Is library variable scan:', isLibraryVariableScan);
-
-      // Determine what scan method to use based on the source type
-      let missingRefs: common.MissingReference[] = [];
-
-      // Show scanning status in UI
-      figma.ui.postMessage({ 
-        type: 'scan-status', 
-        message: `Scanning for ${scanType}...`
-      });
-
-      // If it's not scanning entire page, handle selection
-      const selectedFrameIdArray = selectedFrameIds && selectedFrameIds.length > 0 ? selectedFrameIds : undefined;
-      let selectedNodes: SceneNode[] | undefined = undefined;
-      
-      // Only prepare the nodes if needed for functions that expect SceneNode[]
-      if (!scanEntirePage && selectedFrameIds.length > 0 && sourceType !== 'missing-library' && scanType !== 'missing-library') {
-        // For functions that expect SceneNode[], we need to convert the IDs to nodes
-        try {
-          // Get the actual nodes from the IDs
-          const nodes = await Promise.all(
-            selectedFrameIds.map(id => figma.getNodeByIdAsync(id))
-          );
-          
-          // Filter out nulls and convert to SceneNodes
-          selectedNodes = nodes.filter((node): node is SceneNode => 
-            node !== null && 'type' in node
-          );
-          
-          if (selectedNodes.length === 0) {
-            figma.ui.postMessage({
-              type: 'error',
-              message: 'No valid nodes found for scanning'
-            });
-            return;
-          }
-        } catch (error) {
-          console.error('Error converting IDs to nodes:', error);
-          figma.ui.postMessage({
-            type: 'error',
-            message: 'Error preparing nodes for scanning'
-          });
-          return;
-        }
-      }
-
-      // Handle different source types and optional token types
-      if (sourceType === 'raw-values') {
-        // For raw values, use the scanType directly (it's the token type)
-        missingRefs = await valuesScanner.scanForMissingReferences(
-          scanType as common.ScanType,
-          selectedFrameIdArray, // Pass IDs because scanForMissingReferences expects string[]
-          (progress) => {
-            figma.ui.postMessage({ 
-              type: 'scan-progress', 
-              progress,
-              isScanning: true
-            });
-          },
-          ignoreHiddenLayers
-        );
-      } else if (sourceType && !tokenType) {
-        // If only source type is selected, scan for all variable types of that source
-        switch (sourceType) {
-          case 'team-library':
-            missingRefs = await valuesScanner.scanForTeamLibraryVariables(
-              (progress) => {
-                figma.ui.postMessage({
-                  type: 'scan-progress',
-                  progress,
-                  isScanning: true
-                });
-              },
-              selectedNodes, // Pass nodes because this function expects SceneNode[]
-              ignoreHiddenLayers
-            );
-            break;
-          case 'local-library':
-            missingRefs = await valuesScanner.scanForLocalLibraryVariables(
-              (progress) => {
-                figma.ui.postMessage({
-                  type: 'scan-progress',
-                  progress,
-                  isScanning: true
-                });
-              },
-              selectedNodes, // Pass nodes because this function expects SceneNode[]
-              ignoreHiddenLayers
-            );
-            break;
-          case 'missing-library':
-            missingRefs = await valuesScanner.scanForMissingLibraryVariables(
-              (progress) => {
-                figma.ui.postMessage({
-                  type: 'scan-progress',
-                  progress,
-                  isScanning: true
-                });
-              },
-              selectedNodes, // Pass nodes because this function expects SceneNode[]
-              ignoreHiddenLayers
-            );
-            break;
-        }
-      } else if (sourceType && tokenType) {
-        // If both source and token type are selected, use scanForMissingReferences
-        missingRefs = await valuesScanner.scanForMissingReferences(
-          scanType as common.ScanType,
-          selectedFrameIdArray, // Pass IDs because scanForMissingReferences expects string[]
-          (progress) => {
-            figma.ui.postMessage({ 
-              type: 'scan-progress', 
-              progress,
-              isScanning: true
-            });
-          },
-          ignoreHiddenLayers
-        );
-      }
-      
-      // Process and send scan results back to the UI
-      if (missingRefs.length === 0) {
+      // Prepare progress update handler
+      const updateProgress = (progress: number) => {
         figma.ui.postMessage({
-          type: 'scan-complete',
-          status: 'success',
-          message: 'No matching variables found.'
+          type: 'scan-progress',
+          progress,
+          isScanning: true
+        });
+      };
+      
+      // Default to 'fill' if scanType is undefined and 'raw-values' if sourceType is undefined
+      const scanType = msg.scanType || 'fill';
+      const sourceType = msg.sourceType || 'raw-values';
+      
+      // Run the scan based on the source type
+      let results: MissingReference[] = [];
+      
+      results = await scanners.runScanner(
+        sourceType as 'raw-values' | 'team-library' | 'local-library' | 'missing-library',
+        scanType as ScanType,
+        msg.selectedFrameIds || [],
+        updateProgress,
+        msg.ignoreHiddenLayers || false
+      );
+      
+      // Group the results for UI display
+      if (results.length > 0) {
+        console.log(`Scan found ${results.length} results, grouping...`);
+        
+        // Group using the appropriate grouping function
+        const groupedResults = scanners.groupScanResults(
+          sourceType as 'raw-values' | 'team-library' | 'local-library' | 'missing-library', 
+          results
+        );
+        
+        console.log(`Results grouped into ${Object.keys(groupedResults).length} categories`);
+        
+        // Send the grouped references
+        figma.ui.postMessage({
+          type: 'missing-references-result',
+          scanType: scanType,
+          sourceType: sourceType,
+          references: groupedResults,
+          isLibraryVariableScan: msg.isLibraryVariableScan
         });
       } else {
-        console.log(`Scan complete. Found ${missingRefs.length} variables.`);
+        console.log('Scan found no results');
         
-        // For debug variables scan, include the isDebugScan flag
-        if (scanType === 'missing-library' || sourceType === 'missing-library') {
-          figma.ui.postMessage({
-            type: 'debug-results',
-            variables: missingRefs,
-            isDebugScan: true
-          });
-        } else {
-          // For normal scan, we send the grouped references
-          figma.ui.postMessage({
-            type: 'missing-references-result',
-            references: common.groupMissingReferences(missingRefs)
-          });
-        }
-        
+        // Send empty results
         figma.ui.postMessage({
           type: 'scan-complete',
-          status: 'success',
-          message: `Found ${missingRefs.length} variables.`
+          scanType: scanType,
+          sourceType: sourceType,
+          results: [],
+          isLibraryVariableScan: msg.isLibraryVariableScan
         });
       }
-      
-      // Start watching document for changes if requested
-      if (msg.isRescan) {
-        startWatchingDocument(scanType as common.ScanType, scanEntirePage);
-      }
-    } catch (err) {
-      console.error('Error during scan:', err);
+    } catch (error) {
+      console.error('Error during scan:', error);
       figma.ui.postMessage({
-        type: 'error',
-        message: 'Failed to complete scan: ' + (err instanceof Error ? err.message : String(err))
+        type: 'scan-error',
+        message: error instanceof Error ? error.message : 'An error occurred during the scan',
+        scanType: msg.scanType,
+        sourceType: msg.sourceType
       });
     }
   }
@@ -624,7 +552,21 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
           if (node.parent) {
             newInstance.x = node.x;
             newInstance.y = node.y;
-            newInstance.resize(node.width, node.height);
+            
+            // Add safety check for node width and height to avoid "Node::setSize() cannot set size of node" error
+            const safeWidth = typeof node.width === 'number' && isFinite(node.width) && node.width > 0 ? 
+                             node.width : 100; // Default to 100 if invalid
+            const safeHeight = typeof node.height === 'number' && isFinite(node.height) && node.height > 0 ? 
+                              node.height : 100; // Default to 100 if invalid
+            
+            try {
+              // Attempt to resize with safe values
+              newInstance.resize(safeWidth, safeHeight);
+            } catch (resizeErr) {
+              console.error('Error resizing node:', resizeErr);
+              // If resize fails, don't throw - continue with insertion
+            }
+            
             node.parent.insertChild(node.parent.children.indexOf(node), newInstance);
             node.remove();
           }
@@ -643,7 +585,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
 
   // Handle cancel scan
   if (msg.type === 'cancel-scan') {
-    valuesScanner.cancelScan();
+    scanners.cancelScan();
     figma.ui.postMessage({ 
       type: 'scan-cancelled', 
       message: 'Scan cancelled by user' 
@@ -655,13 +597,11 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
     figma.closePlugin();
   }
   
-  // Debug document variables - new handler
+  // Handle debug document variables request
   if (msg.type === 'debug-document-variables') {
-    console.log('Starting comprehensive variable scan debug...');
-    
     try {
       // First run the general debug to log information to console
-      await valuesScanner.debugDocumentVariables((progress) => {
+      await scanners.debugDocumentVariables((progress: number) => {
         // Send progress updates to UI
         figma.ui.postMessage({
           type: 'debug-progress',
@@ -669,29 +609,36 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
         });
       });
       
-      // Collect variables from all library types to show in UI
-      let allVariables = [];
-      
+      // Use runScanner instead of direct function calls
       // Scan for team library variables
-      const teamLibraryVariables = await valuesScanner.scanForTeamLibraryVariables(
+      const teamLibraryVariables = await scanners.runScanner(
+        'team-library',
+        'fill', // default scan type 
+        [], // scan the whole page
         () => {}, // Skip progress updates for this scan
-        undefined, // scan the whole page
-        false     // include all layers
+        false // don't ignore hidden layers
       );
       
       // Scan for local library variables
-      const localLibraryVariables = await valuesScanner.scanForLocalLibraryVariables(
+      const localLibraryVariables = await scanners.runScanner(
+        'local-library',
+        'fill', // default scan type
+        [], // scan the whole page
         () => {}, // Skip progress updates for this scan
-        undefined, // scan the whole page
-        false     // include all layers
+        false // don't ignore hidden layers
       );
       
       // Scan for missing library variables
-      const missingLibraryVariables = await valuesScanner.scanForMissingLibraryVariables(
+      const missingLibraryVariables = await scanners.runScanner(
+        'missing-library',
+        'fill', // default scan type
+        [], // scan the whole page
         () => {}, // Skip progress updates for this scan
-        undefined, // scan the whole page
-        false     // include all layers
+        false // don't ignore hidden layers
       );
+      
+      // Collect variables from all library types to show in UI
+      let allVariables = [];
       
       // Combine all results
       allVariables = [
@@ -1164,6 +1111,49 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
         });
     } catch (error) {
       console.error('Error handling legacy select-group:', error);
+    }
+  }
+
+  // Add a simplified handler for the group-results message type
+  if (msg.type === 'group-results') {
+    console.log('Received request to group scan results');
+    
+    if (msg.results && Array.isArray(msg.results)) {
+      try {
+        console.log(`Grouping ${msg.results.length} scan results`);
+        
+        // Default to 'raw-values' if sourceType is undefined
+        const sourceType = msg.sourceType || 'raw-values';
+        
+        // Group using the appropriate grouping function
+        const groupedReferences = scanners.groupScanResults(
+          sourceType as 'raw-values' | 'team-library' | 'local-library' | 'missing-library', 
+          msg.results
+        );
+        
+        console.log(`Grouped ${msg.results.length} results into ${Object.keys(groupedReferences).length} groups`);
+        
+        // Send the grouped references back to the UI with proper formatting
+        figma.ui.postMessage({
+          type: 'missing-references-result',
+          references: groupedReferences,
+          scanType: msg.scanType,
+          sourceType: sourceType,
+          isGrouped: true
+        });
+      } catch (err) {
+        console.error('Error grouping scan results:', err);
+        figma.ui.postMessage({
+          type: 'error',
+          message: 'Failed to group scan results'
+        });
+      }
+    } else {
+      console.warn('Invalid or empty results array for grouping');
+      figma.ui.postMessage({
+        type: 'error',
+        message: 'Invalid results for grouping'
+      });
     }
   }
 };

@@ -19,6 +19,7 @@ import {
   isTeamLibraryVariable,
   isLocalLibraryVariable,
   isMissingLibraryVariable,
+  isVariableBinding,
 } from '../common';
 
 // Global variable to allow cancellation of scanning
@@ -794,87 +795,242 @@ export async function scanForLocalLibraryVariables(
   const missingRefs: MissingReference[] = [];
   
   try {
-    console.log('Starting scan for local library variables');
+    console.log('Starting enhanced scan for local library variables');
     
-    // Get all local variables
+    // Get all local variables with improved logging
     const allVariables = await figma.variables.getLocalVariablesAsync();
     const localVariables = allVariables.filter(v => !v.remote);
     const variablesMap = new Map(localVariables.map(v => [v.id, v]));
     
+    console.log(`Found ${localVariables.length} local variables out of ${allVariables.length} total variables`);
+    
+    if (localVariables.length === 0) {
+      console.log('No local variables found in this document');
+      return [];
+    }
+    
+    // Log detailed information about local variables
+    localVariables.forEach((v, index) => {
+      if (index < 10) { // Limit to first 10 to prevent log overflow
+        console.log(`Local variable ${index+1}: ${v.name}, type: ${v.resolvedType}, id: ${v.id}, collection: ${v.variableCollectionId}`);
+      }
+    });
+    
     // Get collections for naming
     const collections = await figma.variables.getLocalVariableCollectionsAsync();
     const collectionsMap = new Map(collections.map(c => [c.id, c]));
+    
+    console.log(`Found ${collections.length} variable collections`);
+    
+    // Log collection details
+    collections.forEach((c, index) => {
+      if (index < 5) {
+        console.log(`Collection ${index+1}: ${c.name}, id: ${c.id}, remote: ${c.remote}`);
+      }
+    });
     
     // Process all nodes with possible variable bindings - look for ANY nodes with boundVariables property
     const nodes = (nodesToScan || figma.currentPage.findAll())
       .filter(node => 'boundVariables' in node && node.boundVariables && shouldIncludeNode(node, ignoreHiddenLayers));
 
     console.log(`Found ${nodes.length} nodes to scan for local library variables`);
-
+    
+    // Log the first few text nodes for debugging
+    const textNodes = nodes.filter(node => node.type === 'TEXT');
+    console.log(`Found ${textNodes.length} text nodes with boundVariables`);
+    
+    if (textNodes.length > 0) {
+      console.log('Examples of text nodes with boundVariables:');
+      textNodes.slice(0, 3).forEach((node, i) => {
+        const textNode = node as TextNode;
+        console.log(`Text node ${i+1}: "${textNode.name}", text: "${textNode.characters.substring(0, 20)}${textNode.characters.length > 20 ? '...' : ''}"`);
+        if ('boundVariables' in textNode && textNode.boundVariables) {
+          console.log('Bound variables:', textNode.boundVariables);
+        }
+      });
+    }
+    
+    let nodesWithLocalVars = 0;
+    let variableCheckCount = 0;
+    let failedLookups = 0;
+    let typographyVarsFound = 0;
+    
+    // Create a Set to track which variable IDs we've already checked
+    const checkedVariableIds = new Set<string>();
+    
+    // Pre-validate the first few local variables to ensure they're accessible
+    if (localVariables.length > 0) {
+      console.log('Testing variable lookup functionality:');
+      for (let i = 0; i < Math.min(3, localVariables.length); i++) {
+        const testVar = localVariables[i];
+        try {
+          const looked = await figma.variables.getVariableByIdAsync(testVar.id);
+          console.log(`Test lookup ${i+1}: ${testVar.name}, id: ${testVar.id}, found: ${!!looked}, type: ${looked?.resolvedType}`);
+        } catch (err) {
+          console.error(`Failed to look up test variable ${testVar.name}:`, err);
+        }
+      }
+    }
+    
     for (let i = 0; i < nodes.length; i++) {
       if (isScanCancelled) break;
       
       const node = nodes[i];
+      let foundLocalVarInNode = false;
       
       // Analyze ALL variable bindings in the node
       const varInfo = debugNodeVariables(node);
-      console.log(`Analyzing variables for node ${node.name}:`, varInfo);
+      
+      // Add special handling for text nodes and typography
+      const isTextNode = node.type === 'TEXT';
+      const typographyProperties = [
+        'fontName', 'fontSize', 'fontWeight', 'textDecoration', 
+        'textCase', 'letterSpacing', 'lineHeight', 'paragraphSpacing',
+        'paragraphIndent', 'textStyleId'
+      ];
       
       // Process each binding property
       for (const prop in varInfo.variableBindings) {
         const binding = varInfo.variableBindings[prop];
         
+        // Determine if this is a typography-related property
+        const isTypographyProperty = isTextNode && typographyProperties.includes(prop);
+        
         // Handle direct variable binding
         if (binding.isVariable && binding.variableId) {
+          variableCheckCount++;
+          
+          // Check if we've already processed this variable ID
+          const variableId = binding.variableId;
+          let isLocal = checkedVariableIds.has(variableId);
+          
+          // If we haven't checked this variable before, look it up and cache the result
+          if (!checkedVariableIds.has(variableId)) {
+            try {
+              isLocal = await isLocalLibraryVariable(variableId);
+              checkedVariableIds.add(variableId);
+            } catch (err) {
+              failedLookups++;
+              console.error(`Failed to check variable: ${variableId}`, err);
+              continue;
+            }
+          }
+          
           // Only include if it's a local library variable
-          if (await isLocalLibraryVariable(binding.variableId)) {
-            const variable = variablesMap.get(binding.variableId);
+          if (isLocal) {
+            const variable = variablesMap.get(variableId);
             const collection = variable ? collectionsMap.get(variable.variableCollectionId) : null;
+            
+            foundLocalVarInNode = true;
+            
+            // Track typography variables separately
+            if (isTypographyProperty) {
+              typographyVarsFound++;
+            }
+            
+            // Create a more descriptive key for grouping similar variables
+            let groupKey;
+            
+            if (isTypographyProperty) {
+              // Special handling for typography
+              const textNode = node as TextNode;
+              const fontFamily = getFontFamilyFromNode(textNode);
+              const fontWeight = getFontWeightFromNode(textNode);
+              const fontSize = typeof textNode.fontSize === 'number' ? textNode.fontSize : 16;
+              
+              groupKey = `typography-local-library-${fontFamily}-${fontWeight}-${fontSize}`;
+            } else {
+              // Default handling for other types
+              const varType = variable?.resolvedType?.toLowerCase() || 'unknown';
+              groupKey = `${prop}-local-library-${variableId}`;
+            }
             
             missingRefs.push({
               nodeId: node.id,
               nodeName: node.name,
-              type: node.type.toLowerCase(),
+              type: isTypographyProperty ? 'typography' : node.type.toLowerCase(),
               property: prop,
-              currentValue: {
-                variableId: binding.variableId,
-                variableName: variable?.name || 'Unknown',
-                variableType: variable?.resolvedType || 'UNKNOWN',
-                collectionName: collection?.name || 'Unknown'
+              currentValue: variable ? {
+                variableId: variableId,
+                variableName: variable.name || 'Unknown',
+                variableType: variable.resolvedType || 'UNKNOWN',
+                collectionName: collection?.name || 'Unknown',
+                // Add special handling for typography values
+                ...(isTypographyProperty && node.type === 'TEXT' ? { 
+                  fontFamily: getFontFamilyFromNode(node as TextNode),
+                  fontWeight: getFontWeightFromNode(node as TextNode),
+                  fontSize: (node as TextNode).fontSize || 0
+                } : {})
+              } : {
+                variableId: variableId,
+                variableName: 'Unknown',
+                variableType: 'UNKNOWN',
+                collectionName: 'Unknown'
               },
               location: getNodePath(node),
               variableName: variable?.name || 'Unknown',
               isVisible: 'visible' in node ? node.visible : true,
               isLocalLibrary: true,
-              libraryName: collection?.name || 'Local Document'
+              libraryName: collection?.name || 'Local Document',
+              groupKey: groupKey // Add a specific key for better grouping
             });
           }
-        } 
+        }
         // Handle array of bindings (e.g., fills)
         else if (binding.type === 'array' && binding.items) {
           for (const item of binding.items) {
             if (item.isVariable && item.variableId) {
+              variableCheckCount++;
+              
+              // Check if we've already processed this variable ID
+              const variableId = item.variableId;
+              let isLocal = checkedVariableIds.has(variableId);
+              
+              // If we haven't checked this variable before, look it up and cache the result
+              if (!checkedVariableIds.has(variableId)) {
+                try {
+                  isLocal = await isLocalLibraryVariable(variableId);
+                  checkedVariableIds.add(variableId);
+                } catch (err) {
+                  failedLookups++;
+                  console.error(`Failed to check variable in array: ${variableId}`, err);
+                  continue;
+                }
+              }
+              
               // Only include if it's a local library variable
-              if (await isLocalLibraryVariable(item.variableId)) {
-                const variable = variablesMap.get(item.variableId);
+              if (isLocal) {
+                const variable = variablesMap.get(variableId);
                 const collection = variable ? collectionsMap.get(variable.variableCollectionId) : null;
+                
+                foundLocalVarInNode = true;
+                
+                // Create a more descriptive key for grouping similar variables
+                const varType = variable?.resolvedType?.toLowerCase() || 'unknown';
+                const groupKey = `${prop}-local-library-${variableId}`;
                 
                 missingRefs.push({
                   nodeId: node.id,
                   nodeName: node.name,
                   type: node.type.toLowerCase(),
                   property: `${prop}[${item.index}]`,
-                  currentValue: {
-                    variableId: item.variableId,
-                    variableName: variable?.name || 'Unknown',
-                    variableType: variable?.resolvedType || 'UNKNOWN',
+                  currentValue: variable ? {
+                    variableId: variableId,
+                    variableName: variable.name || 'Unknown',
+                    variableType: variable.resolvedType || 'UNKNOWN',
                     collectionName: collection?.name || 'Unknown'
+                  } : {
+                    variableId: variableId,
+                    variableName: 'Unknown',
+                    variableType: 'UNKNOWN',
+                    collectionName: 'Unknown'
                   },
                   location: getNodePath(node),
                   variableName: variable?.name || 'Unknown',
                   isVisible: 'visible' in node ? node.visible : true,
                   isLocalLibrary: true,
-                  libraryName: collection?.name || 'Local Document'
+                  libraryName: collection?.name || 'Local Document',
+                  groupKey: groupKey // Add a specific key for better grouping
                 });
               }
             }
@@ -882,11 +1038,43 @@ export async function scanForLocalLibraryVariables(
         }
       }
       
+      if (foundLocalVarInNode) {
+        nodesWithLocalVars++;
+      }
+      
       // Update progress
       progressCallback(Math.round((i + 1) / nodes.length * 100));
     }
     
-    console.log(`Found ${missingRefs.length} local library variables`);
+    console.log(`Found ${missingRefs.length} local library variable references in ${nodesWithLocalVars} nodes`);
+    console.log(`Stats: checked ${variableCheckCount} variables, encountered ${failedLookups} failed lookups`);
+    console.log(`Typography variables found: ${typographyVarsFound}`);
+    
+    // Log the first few results for debugging
+    if (missingRefs.length > 0) {
+      console.log('First 3 local library references:');
+      missingRefs.slice(0, 3).forEach((ref, i) => {
+        console.log(`Ref ${i+1}: ${ref.nodeName}, property: ${ref.property}, type: ${ref.type}, variableName: ${ref.variableName}, groupKey: ${ref.groupKey}`);
+      });
+      
+      // Log typography-specific results
+      const typographyRefs = missingRefs.filter(ref => ref.type === 'typography');
+      if (typographyRefs.length > 0) {
+        console.log(`Found ${typographyRefs.length} typography references`);
+        typographyRefs.slice(0, 3).forEach((ref, i) => {
+          console.log(`Typography ref ${i+1}:`, {
+            nodeName: ref.nodeName,
+            property: ref.property,
+            variableName: ref.variableName,
+            currentValue: ref.currentValue
+          });
+        });
+      } else {
+        console.log('No typography references found');
+      }
+    } else {
+      console.log('No local library references found after scanning');
+    }
   } catch (err) {
     console.error('Error scanning for local library variables:', err);
   }
@@ -1028,64 +1216,85 @@ export function groupMissingReferences(references: MissingReference[]): Record<s
     let key: string;
     
     try {
+      // Check if the reference has a predefined groupKey (for local library variables)
+      if (ref.groupKey) {
+        key = ref.groupKey;
+      }
       // Group references by their value type
-      if (ref.type === 'typography') {
+      else if (ref.type === 'typography') {
         const typographyValue = ref.currentValue || {};
         const family = typographyValue.fontFamily || 'Unknown';
         const style = typographyValue.fontWeight || 'Regular';
         const size = typographyValue.fontSize || '0';
         key = `typography-${family}-${style}-${size}`;
       } else if (ref.type === 'fill' || ref.type === 'stroke') {
-        // For colors, use the hex or rgba value if available
-        key = `${ref.type}-${JSON.stringify(ref.currentValue)}`;
-      } else if (ref.type === 'vertical-padding' || ref.type === 'horizontal-padding') {
-        const value = ref.currentValue !== undefined ? ref.currentValue : 0;
-        const paddingType = ref.property === 'paddingTop' ? 'top' : 
-                           ref.property === 'paddingBottom' ? 'bottom' :
-                           ref.property === 'paddingLeft' ? 'left' :
-                           ref.property === 'paddingRight' ? 'right' : 'all';
-        key = `${ref.type}-${value}-${paddingType}`;
-      } else if (ref.type === 'corner-radius') {
-        const value = ref.currentValue !== undefined ? ref.currentValue : 0;
-        const cornerType = ref.property === 'topLeftRadius' ? 'top-left' :
-                          ref.property === 'topRightRadius' ? 'top-right' :
-                          ref.property === 'bottomLeftRadius' ? 'bottom-left' :
-                          ref.property === 'bottomRightRadius' ? 'bottom-right' : 'all';
-        key = `${ref.type}-${value}-${cornerType}`;
-      } else if (ref.type === 'gap' || ref.type === 'verticalGap') {
-        const value = ref.currentValue !== undefined ? ref.currentValue : 0;
-        key = `${ref.type}-${value}`;
-      } else if (['team-library', 'local-library', 'missing-library'].includes(ref.type)) {
-        // For library variables, use the variable name and ID
-        const variableName = extRef.variableName || (ref.currentValue && ref.currentValue.variableName) || 'Unknown';
-        const variableId = extRef.variableId || (ref.currentValue && ref.currentValue.variableId) || '';
-        key = `${ref.type}-${variableName}-${variableId}-${ref.property}`;
+        // Color values need special handling
+        const colorValue = ref.currentValue;
+        
+        if (colorValue?.variableId) {
+          // For variable colors, group by variable ID
+          key = `${ref.type}-variable-${colorValue.variableId}`;
+          
+          // Add library type to the key if present
+          if (ref.isTeamLibrary) key = `${key}-team`;
+          else if (ref.isLocalLibrary) key = `${key}-local`;
+          else if (ref.isMissingLibrary) key = `${key}-missing`;
+        } else if (colorValue && typeof colorValue === 'object' && 'r' in colorValue) {
+          // For raw colors, round the values for better grouping
+          const r = Math.round(colorValue.r * 255);
+          const g = Math.round(colorValue.g * 255);
+          const b = Math.round(colorValue.b * 255);
+          const a = colorValue.a !== undefined ? Math.round(colorValue.a * 100) / 100 : 1;
+          key = `${ref.type}-color-${r}-${g}-${b}-${a}`;
+        } else {
+          // Fallback for any other type of color value
+          key = `${ref.type}-other-${JSON.stringify(colorValue)}`;
+        }
+      } else if (extRef.paddingType) {
+        // For padding, group by value and padding type
+        key = `${ref.type}-${extRef.paddingType}-${ref.currentValue}`;
+      } else if (extRef.cornerType) {
+        // For corner radius, group by value and corner type
+        key = `${ref.type}-${extRef.cornerType}-${ref.currentValue}`;
       } else {
-        // Generic fallback
-        key = `${ref.type}-${JSON.stringify(ref.currentValue || extRef.value || 0)}-${ref.property || ''}`;
+        // Default grouping for other types
+        key = `${ref.type}-${ref.property}-${JSON.stringify(ref.currentValue)}`;
       }
-    } catch (err) {
-      console.warn('Error creating group key for reference:', ref, err);
-      // Fallback key
-      key = `${ref.type}-${ref.nodeId}-${Date.now()}`;
+      
+      // Handle references from libraries by adding the library type to the key
+      if (ref.isTeamLibrary && !key.includes('-team')) {
+        key = `team-${key}`;
+      } else if (ref.isLocalLibrary && !key.includes('-local')) {
+        key = `local-${key}`;
+      } else if (ref.isMissingLibrary && !key.includes('-missing')) {
+        key = `missing-${key}`;
+      }
+      
+      // Handle vertical and horizontal padding separately
+      if (ref.type === 'verticalPadding' || ref.type === 'horizontalPadding') {
+        if (ref.property === 'paddingTop' || ref.property === 'paddingBottom' || 
+            ref.property === 'paddingLeft' || ref.property === 'paddingRight') {
+          key = `${ref.type}-${ref.property}-${ref.currentValue}`;
+        }
+      }
+      
+      // Add the reference to its group
+      if (!groupedRefs[key]) {
+        groupedRefs[key] = [];
+      }
+      groupedRefs[key].push(ref);
+    } catch (error) {
+      console.error(`Error grouping reference: ${error}`, ref);
+      // Skip this reference if there's an error
+      continue;
     }
-    
-    // Make sure the key is valid
-    key = key.replace(/[.#$\/\[\]]/g, '_');
-    
-    // Create group if it doesn't exist
-    if (!groupedRefs[key]) {
-      groupedRefs[key] = [];
-    }
-    
-    // Add the reference to its group
-    groupedRefs[key].push(ref);
   }
   
-  // Log the grouped references for debugging
+  // Log some debug info about the grouping results
   console.log(`Grouped ${references.length} references into ${Object.keys(groupedRefs).length} groups`);
   
-  return groupedRefs;
+  // Final sanitization to ensure no empty or invalid groups
+  return sanitizeReferenceGroups(groupedRefs);
 }
 
 /**
@@ -1441,4 +1650,34 @@ async function analyzeVariableBinding(variableId: string, propPath: string): Pro
 export function cancelScan(): void {
   isScanCancelled = true;
   console.log('Scan cancelled');
+}
+
+// Helper function to safely extract fontFamily from a node
+function getFontFamilyFromNode(node: TextNode): string {
+  if (!node.fontName) return 'Unknown Font';
+  
+  // Check if fontName is an object with a family property
+  if (typeof node.fontName === 'object' && 'family' in node.fontName) {
+    return node.fontName.family;
+  }
+  
+  // Fall back to a default or try to extract information differently
+  return node.fontName.toString() || 'Unknown Font';
+}
+
+// Helper function to safely extract fontWeight from a node
+function getFontWeightFromNode(node: TextNode): number {
+  if (!node.fontName) return 400;
+  
+  // Check if fontName is an object with a style property
+  if (typeof node.fontName === 'object' && 'style' in node.fontName) {
+    // Try to extract weight from style (e.g., "Bold" -> 700, "Regular" -> 400)
+    const style = node.fontName.style.toLowerCase();
+    if (style.includes('bold')) return 700;
+    if (style.includes('medium')) return 500;
+    if (style.includes('light')) return 300;
+    return 400; // Default to regular weight
+  }
+  
+  return 400; // Default weight
 } 
