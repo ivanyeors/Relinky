@@ -31,6 +31,32 @@ figma.showUI(__html__, {
   title: "Relinky"
 });
 
+// Initialize selection state
+(() => {
+  const selection = figma.currentPage.selection;
+  const hasInstances = selection.some(node => node.type === 'INSTANCE');
+  const validSelection = selection.filter(node => 
+    node.type === 'FRAME' || 
+    node.type === 'COMPONENT' || 
+    node.type === 'COMPONENT_SET' || 
+    node.type === 'SECTION'
+  );
+  
+  // Update lastSelectedFrameIds
+  if (validSelection.length > 0) {
+    lastSelectedFrameIds = validSelection.map(node => node.id);
+  }
+  
+  // Send initial selection info to UI
+  figma.ui.postMessage({ 
+    type: 'selection-update',
+    hasSelection: validSelection.length > 0,
+    count: validSelection.length,
+    selectedFrameIds: validSelection.map(node => node.id),
+    hasInstances
+  });
+})();
+
 // Initialize window size from saved preferences
 (async function initializeWindowSize() {
   try {
@@ -64,7 +90,7 @@ figma.on('selectionchange', async () => {
   
   // Send more detailed selection info to UI
   figma.ui.postMessage({ 
-    type: 'selection-updated',
+    type: 'selection-update',
     hasSelection: validSelection.length > 0,
     count: validSelection.length,
     selectedFrameIds: validSelection.map(node => node.id),
@@ -193,12 +219,24 @@ function stopWatchingDocument() {
   });
 }
 
-// Extend the PluginMessage type or interface to include new message properties
+// Add interface for scan-for-tokens message
+interface ScanForTokensMessage {
+  type: 'scan-for-tokens';
+  scanType: string;
+  scanEntirePage: boolean;
+  selectedFrameIds: string[];
+  ignoreHiddenLayers?: boolean;
+  isRescan?: boolean;
+  isLibraryVariableScan?: boolean;
+  // New properties for the two-level scan approach
+  sourceType: 'raw-values' | 'team-library' | 'local-library' | 'missing-library';
+  tokenType?: string | null;
+}
+
 interface ScanVariablesMessage {
   type: 'scan-variables';
-  variableTypes: string[];
-  scanEntirePage: boolean;
-  selectedFrameIds?: string[];
+  scanTypes: string[];
+  ignoreHiddenLayers: boolean;
 }
 
 interface UnlinkVariableMessage {
@@ -206,8 +244,37 @@ interface UnlinkVariableMessage {
   variableId: string;
 }
 
+// Add interface for select-variable-nodes message
+interface SelectVariableNodesMessage {
+  type: 'select-variable-nodes';
+  variableId: string;
+}
+
+// Add interface for select-variable-group-nodes message
+interface SelectVariableGroupNodesMessage {
+  type: 'select-variable-group-nodes';
+  variableIds: string[];
+}
+
+// Add interface for load-variables message
+interface LoadVariablesMessage {
+  type: 'load-variables';
+}
+
+// Add interface for stop-variable-scan message
+interface StopVariableScanMessage {
+  type: 'stop-variable-scan';
+}
+
 // Update the existing PluginMessage type to include our new message types
-type PluginMessage = common.PluginMessage | ScanVariablesMessage | UnlinkVariableMessage;
+type PluginMessage = common.PluginMessage | 
+  ScanForTokensMessage |
+  ScanVariablesMessage | 
+  UnlinkVariableMessage | 
+  SelectVariableNodesMessage | 
+  SelectVariableGroupNodesMessage | 
+  LoadVariablesMessage | 
+  StopVariableScanMessage;
 
 // Handle messages from the UI
 figma.ui.onmessage = async (msg: PluginMessage) => {
@@ -245,97 +312,187 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
   // Handle scan request for values
   if (msg.type === 'scan-for-tokens') {
     try {
-      const { scanType, scanEntirePage, selectedFrameIds, ignoreHiddenLayers = false } = msg;
+      // Type guard to ensure we have a ScanForTokensMessage
+      const scanMsg = msg as ScanForTokensMessage;
+      
+      const { 
+        scanType, 
+        scanEntirePage, 
+        selectedFrameIds, 
+        ignoreHiddenLayers = false, 
+        isLibraryVariableScan = false,
+        sourceType = 'raw-values', // Default to raw-values if sourceType is not provided
+        tokenType
+      } = scanMsg;
 
       console.log('Starting scan with progress tracking');
-      console.log('Scan scope:', msg.scanScope);
-      console.log('Selected frame IDs:', msg.selectedFrameIds);
-      console.log('Scan entire page:', msg.scanEntirePage);
-      console.log('Is rescan:', msg.isRescan || false);
+      console.log('Scan type:', scanType);
+      console.log('Source type:', sourceType);
+      console.log('Token type:', tokenType);
+      console.log('Selected frame IDs:', selectedFrameIds);
+      console.log('Scan entire page:', scanEntirePage);
+      console.log('Is rescan:', scanMsg.isRescan || false);
+      console.log('Is library variable scan:', isLibraryVariableScan);
 
+      // Determine what scan method to use based on the source type
+      let missingRefs: common.MissingReference[] = [];
+
+      // Show scanning status in UI
       figma.ui.postMessage({ 
         type: 'scan-status', 
         message: `Scanning for ${scanType}...`
       });
 
       // If it's not scanning entire page, handle selection
-      if (!scanEntirePage) {
-        let frameIdsToUse: string[];
-        
-        if (msg.isRescan) {
-          // Use initial selection for rescan
-          frameIdsToUse = initialScanSelection;
-          
-          // Reselect the initial frames
-          const framesToSelect = await Promise.all(
-            frameIdsToUse.map(id => figma.getNodeByIdAsync(id))
+      const selectedFrameIdArray = selectedFrameIds && selectedFrameIds.length > 0 ? selectedFrameIds : undefined;
+      let selectedNodes: SceneNode[] | undefined = undefined;
+      
+      // Only prepare the nodes if needed for functions that expect SceneNode[]
+      if (!scanEntirePage && selectedFrameIds.length > 0 && sourceType !== 'missing-library' && scanType !== 'missing-library') {
+        // For functions that expect SceneNode[], we need to convert the IDs to nodes
+        try {
+          // Get the actual nodes from the IDs
+          const nodes = await Promise.all(
+            selectedFrameIds.map(id => figma.getNodeByIdAsync(id))
           );
           
-          // Filter out any null values and ensure they're valid frame types
-          const validFrames = framesToSelect.filter((node): node is FrameNode | ComponentNode | ComponentSetNode | SectionNode => 
-            node !== null && 
-            (node.type === 'FRAME' || node.type === 'COMPONENT' || node.type === 'COMPONENT_SET' || node.type === 'SECTION')
+          // Filter out nulls and convert to SceneNodes
+          selectedNodes = nodes.filter((node): node is SceneNode => 
+            node !== null && 'type' in node
           );
           
-          // Update the selection
-          figma.currentPage.selection = validFrames;
-        } else {
-          // This is the initial scan - store the selection
-          frameIdsToUse = Array.isArray(msg.selectedFrameIds) ? msg.selectedFrameIds : [];
-          initialScanSelection = frameIdsToUse; // Store initial selection
+          if (selectedNodes.length === 0) {
+            figma.ui.postMessage({
+              type: 'error',
+              message: 'No valid nodes found for scanning'
+            });
+            return;
+          }
+        } catch (error) {
+          console.error('Error converting IDs to nodes:', error);
+          figma.ui.postMessage({
+            type: 'error',
+            message: 'Error preparing nodes for scanning'
+          });
+          return;
         }
+      }
 
-        // Perform the scan with the appropriate frame IDs
-        const refs = await valuesScanner.scanForMissingReferences(
+      // Handle different source types and optional token types
+      if (sourceType === 'raw-values') {
+        // For raw values, use the scanType directly (it's the token type)
+        missingRefs = await valuesScanner.scanForMissingReferences(
           scanType as common.ScanType,
-          frameIdsToUse,
+          selectedFrameIdArray, // Pass IDs because scanForMissingReferences expects string[]
           (progress) => {
-            console.log(`Sending progress update: ${progress}%`);
             figma.ui.postMessage({ 
               type: 'scan-progress', 
-              progress
+              progress,
+              isScanning: true
             });
           },
           ignoreHiddenLayers
         );
-
-        const groupedRefs = common.groupMissingReferences(refs);
-        figma.ui.postMessage({ 
-          type: 'missing-references-result', 
-          scanType: scanType,
-          references: groupedRefs 
+      } else if (sourceType && !tokenType) {
+        // If only source type is selected, scan for all variable types of that source
+        switch (sourceType) {
+          case 'team-library':
+            missingRefs = await valuesScanner.scanForTeamLibraryVariables(
+              (progress) => {
+                figma.ui.postMessage({
+                  type: 'scan-progress',
+                  progress,
+                  isScanning: true
+                });
+              },
+              selectedNodes, // Pass nodes because this function expects SceneNode[]
+              ignoreHiddenLayers
+            );
+            break;
+          case 'local-library':
+            missingRefs = await valuesScanner.scanForLocalLibraryVariables(
+              (progress) => {
+                figma.ui.postMessage({
+                  type: 'scan-progress',
+                  progress,
+                  isScanning: true
+                });
+              },
+              selectedNodes, // Pass nodes because this function expects SceneNode[]
+              ignoreHiddenLayers
+            );
+            break;
+          case 'missing-library':
+            missingRefs = await valuesScanner.scanForMissingLibraryVariables(
+              (progress) => {
+                figma.ui.postMessage({
+                  type: 'scan-progress',
+                  progress,
+                  isScanning: true
+                });
+              },
+              selectedNodes, // Pass nodes because this function expects SceneNode[]
+              ignoreHiddenLayers
+            );
+            break;
+        }
+      } else if (sourceType && tokenType) {
+        // If both source and token type are selected, use scanForMissingReferences
+        missingRefs = await valuesScanner.scanForMissingReferences(
+          scanType as common.ScanType,
+          selectedFrameIdArray, // Pass IDs because scanForMissingReferences expects string[]
+          (progress) => {
+            figma.ui.postMessage({ 
+              type: 'scan-progress', 
+              progress,
+              isScanning: true
+            });
+          },
+          ignoreHiddenLayers
+        );
+      }
+      
+      // Process and send scan results back to the UI
+      if (missingRefs.length === 0) {
+        figma.ui.postMessage({
+          type: 'scan-complete',
+          status: 'success',
+          message: 'No matching variables found.'
         });
       } else {
-        // Reset stored selections when scanning entire page
-        lastSelectedFrameIds = [];
-        initialScanSelection = [];
+        console.log(`Scan complete. Found ${missingRefs.length} variables.`);
         
-        // Perform scan for entire page
-        const refs = await valuesScanner.scanForMissingReferences(
-          scanType as common.ScanType,
-          undefined,
-          (progress) => {
-            console.log(`Sending progress update: ${progress}%`);
-            figma.ui.postMessage({ 
-              type: 'scan-progress', 
-              progress
-            });
-          },
-          ignoreHiddenLayers
-        );
-
-        const groupedRefs = common.groupMissingReferences(refs);
-        figma.ui.postMessage({ 
-          type: 'missing-references-result', 
-          scanType: scanType,
-          references: groupedRefs 
+        // For debug variables scan, include the isDebugScan flag
+        if (scanType === 'missing-library' || sourceType === 'missing-library') {
+          figma.ui.postMessage({
+            type: 'debug-results',
+            variables: missingRefs,
+            isDebugScan: true
+          });
+        } else {
+          // For normal scan, we send the grouped references
+          figma.ui.postMessage({
+            type: 'missing-references-result',
+            references: common.groupMissingReferences(missingRefs)
+          });
+        }
+        
+        figma.ui.postMessage({
+          type: 'scan-complete',
+          status: 'success',
+          message: `Found ${missingRefs.length} variables.`
         });
       }
+      
+      // Start watching document for changes if requested
+      if (msg.isRescan) {
+        startWatchingDocument(scanType as common.ScanType, scanEntirePage);
+      }
     } catch (err) {
-      console.error('Scan failed:', err);
-      figma.ui.postMessage({ 
-        type: 'error', 
-        message: err instanceof Error ? err.message : 'Scan failed. Please try again.' 
+      console.error('Error during scan:', err);
+      figma.ui.postMessage({
+        type: 'error',
+        message: 'Failed to complete scan: ' + (err instanceof Error ? err.message : String(err))
       });
     }
   }
@@ -497,6 +654,66 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
   if (msg.type === 'close-plugin') {
     figma.closePlugin();
   }
+  
+  // Debug document variables - new handler
+  if (msg.type === 'debug-document-variables') {
+    console.log('Starting comprehensive variable scan debug...');
+    
+    try {
+      // First run the general debug to log information to console
+      await valuesScanner.debugDocumentVariables((progress) => {
+        // Send progress updates to UI
+        figma.ui.postMessage({
+          type: 'debug-progress',
+          progress
+        });
+      });
+      
+      // Collect variables from all library types to show in UI
+      let allVariables = [];
+      
+      // Scan for team library variables
+      const teamLibraryVariables = await valuesScanner.scanForTeamLibraryVariables(
+        () => {}, // Skip progress updates for this scan
+        undefined, // scan the whole page
+        false     // include all layers
+      );
+      
+      // Scan for local library variables
+      const localLibraryVariables = await valuesScanner.scanForLocalLibraryVariables(
+        () => {}, // Skip progress updates for this scan
+        undefined, // scan the whole page
+        false     // include all layers
+      );
+      
+      // Scan for missing library variables
+      const missingLibraryVariables = await valuesScanner.scanForMissingLibraryVariables(
+        () => {}, // Skip progress updates for this scan
+        undefined, // scan the whole page
+        false     // include all layers
+      );
+      
+      // Combine all results
+      allVariables = [
+        ...teamLibraryVariables,
+        ...localLibraryVariables,
+        ...missingLibraryVariables
+      ];
+      
+      // Send results to UI for display
+      figma.ui.postMessage({
+        type: 'debug-complete',
+        message: 'Variable scan debug complete. Check console for detailed results.',
+        variables: allVariables // Include all variables in the message
+      });
+    } catch (error: any) {
+      console.error('Error during variable debug:', error);
+      figma.ui.postMessage({
+        type: 'error',
+        message: `Debug failed: ${error.message}`
+      });
+    }
+  }
 
   // Handle node selection
   if (msg.type === 'select-group') {
@@ -508,11 +725,11 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
 
       // Fetch nodes asynchronously
       const nodes = await Promise.all(
-        msg.nodeIds.map(id => figma.getNodeByIdAsync(id))
+        msg.nodeIds.map((id: string) => figma.getNodeByIdAsync(id))
       );
       
       // Filter out null values and ensure nodes are SceneNodes
-      const validNodes = nodes.filter((node): node is SceneNode => 
+      const validNodes = nodes.filter((node: BaseNode | null): node is SceneNode => 
         node !== null && 'type' in node && node.type !== 'DOCUMENT'
       );
 
@@ -537,6 +754,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
   // Get selected frame IDs
   if (msg.type === 'get-selected-frame-ids') {
     const selection = figma.currentPage.selection;
+    const hasInstances = selection.some(node => node.type === 'INSTANCE');
     const validSelection = selection.filter(node => 
       node.type === 'FRAME' || 
       node.type === 'COMPONENT' || 
@@ -548,7 +766,10 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
     figma.ui.postMessage({
       type: 'selected-frame-ids',
       ids: validSelection.map(node => node.id),
-      count: validSelection.length
+      count: validSelection.length,
+      hasSelection: validSelection.length > 0,
+      hasInstances,
+      selectedFrameIds: validSelection.map(node => node.id)
     });
   }
 
@@ -621,99 +842,38 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
   // Scan for variables
   if (msg.type === 'scan-variables') {
     try {
-      // Type assertion to access the scan-variables message properties
-      const { variableTypes, scanEntirePage, selectedFrameIds } = msg as ScanVariablesMessage;
+      // Extract scan variables message properties
+      const { scanTypes, ignoreHiddenLayers } = msg as ScanVariablesMessage;
       
-      console.log('Starting variable scan:', {
-        variableTypes,
-        scanEntirePage,
-        selectedFrameIds: selectedFrameIds?.length
-      });
+      console.log('Starting variable scan with types:', scanTypes);
       
-      // Start progress at 0
+      // Update UI with scanning status
       figma.ui.postMessage({
-        type: 'variable-scan-progress',
-        progress: 0
+        type: 'variable-scan-started'
       });
       
-      // Perform the scan
       const scanVariable = async () => {
         try {
-          // Get nodes to scan
-          let nodesToScan: readonly SceneNode[] = [];
-          
-          if (scanEntirePage) {
-            nodesToScan = figma.currentPage.children;
-          } else if (Array.isArray(selectedFrameIds) && selectedFrameIds.length > 0) {
-            // Get nodes by IDs
-            const frameNodes = await Promise.all(
-              selectedFrameIds.map(id => figma.getNodeByIdAsync(id))
-            );
-            
-            // Filter out any null values
-            nodesToScan = frameNodes.filter((node): node is SceneNode => node !== null);
-          } else {
-            // Use current selection
-            nodesToScan = figma.currentPage.selection.filter(node => 
-              node.type === 'FRAME' || 
-              node.type === 'COMPONENT' || 
-              node.type === 'COMPONENT_SET' || 
-              node.type === 'SECTION'
-            );
-          }
-          
-          // Load variables and collections
-          const variables = await figma.variables.getLocalVariablesAsync();
-          const collections = await figma.variables.getLocalVariableCollectionsAsync();
-          
-          // Create collection map for easy lookup
-          const collectionMap = new Map(
-            collections.map(collection => [collection.id, collection])
-          );
-          
-          // Filter variables to match selected types
-          const filteredVariables = variables.filter(variable => 
-            variableTypes.includes(variable.resolvedType)
-          );
-          
-          console.log(`Found ${filteredVariables.length} variables matching selected types`);
-          
-          // Set up progress tracking
-          let processedNodes = 0;
-          const totalNodes = nodesToScan.length;
-          const linkedVariablesMap = new Map(); // Store linked variables and their usages
-          
-          // Process each node to find variable bindings
-          for (const node of nodesToScan) {
-            // Send progress updates every 10 nodes
-            if (processedNodes % 10 === 0) {
-              const progress = Math.min(95, Math.round((processedNodes / totalNodes) * 100));
+          // Use the new scanForAllVariables function from the unlink module
+          const variables = await variablesScanner.scanForAllVariables(
+            scanTypes, 
+            (progress) => {
+              // Send progress updates to the UI
               figma.ui.postMessage({
                 type: 'variable-scan-progress',
                 progress
               });
-            }
-            
-            // Recursively process node and its children
-            processNodeForVariables(node, filteredVariables, collectionMap, linkedVariablesMap);
-            
-            processedNodes++;
-          }
+            },
+            ignoreHiddenLayers
+          );
           
-          // Convert map to array for UI
-          const linkedVariables = Array.from(linkedVariablesMap.values());
-          
-          // Send results to UI
+          // Send results to the UI
           figma.ui.postMessage({
-            type: 'variable-scan-results',
-            data: {
-              variables: linkedVariables,
-              totalScanned: totalNodes,
-              totalFound: linkedVariables.length
-            }
+            type: 'variable-scan-complete',
+            variables
           });
           
-          console.log(`Variable scan complete: found ${linkedVariables.length} linked variables`);
+          console.log(`Variable scan complete. Found ${variables.length} variables.`);
         } catch (err) {
           console.error('Error scanning for variables:', err);
           figma.ui.postMessage({
@@ -744,40 +904,8 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
         throw new Error('No variable ID provided');
       }
       
-      // Get all nodes with this variable binding
-      const nodesWithVariable = figma.currentPage.findAll(node => {
-        if (!('boundVariables' in node) || !node.boundVariables) return false;
-        
-        // Check if any binding uses this variable
-        for (const binding of Object.values(node.boundVariables)) {
-          // Check for variable bindings - ensure proper type checking
-          if (binding && typeof binding === 'object' && 'id' in binding && binding.id === variableId) {
-            return true;
-          }
-        }
-        
-        return false;
-      });
-      
-      // Count how many nodes were actually unlinked
-      let unlinkedCount = 0;
-      
-      // Unlink the variable from each node
-      for (const node of nodesWithVariable) {
-        if (!('boundVariables' in node) || !node.boundVariables) continue;
-        
-        // Find properties using this variable
-        for (const [property, binding] of Object.entries(node.boundVariables)) {
-          // Check for variable bindings with safer type checking
-          if (binding && typeof binding === 'object' && 'id' in binding && binding.id === variableId) {
-            // Type assertion for TypeScript to recognize property access
-            const boundVars = node.boundVariables as Record<string, any>;
-            // Remove this binding
-            delete boundVars[property];
-            unlinkedCount++;
-          }
-        }
-      }
+      // Use the new unlinkVariable function from the unlink module
+      const unlinkedCount = await variablesScanner.unlinkVariable(variableId);
       
       // Notify the UI
       figma.ui.postMessage({
@@ -795,6 +923,247 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
         type: 'error',
         message: 'Failed to unlink variable'
       });
+    }
+  }
+
+  // Add handler for 'load-variables' message
+  if (msg.type === 'load-variables') {
+    try {
+      console.log('Loading variables...');
+      
+      // Get variables using the unlink module
+      const variables = await variablesScanner.listAllVariables();
+      
+      // Send variables to the UI
+      figma.ui.postMessage({
+        type: 'variables-loaded',
+        variables
+      });
+      
+      console.log(`Loaded ${variables.length} variables`);
+    } catch (err) {
+      console.error('Error loading variables:', err);
+      figma.ui.postMessage({
+        type: 'error',
+        message: 'Failed to load variables'
+      });
+    }
+  }
+
+  // Add handler for 'select-variable-nodes' message
+  if (msg.type === 'select-variable-nodes') {
+    try {
+      // Type assertion to access the message properties
+      const { variableId } = msg as SelectVariableNodesMessage;
+      
+      if (!variableId) {
+        throw new Error('No variable ID provided');
+      }
+      
+      // Find all nodes using this variable
+      const nodesWithVariable = figma.currentPage.findAll(node => {
+        if (!('boundVariables' in node) || !node.boundVariables) return false;
+        
+        // Check if any binding uses this variable
+        for (const binding of Object.values(node.boundVariables)) {
+          if (binding && typeof binding === 'object' && 'id' in binding && binding.id === variableId) {
+            return true;
+          }
+        }
+        
+        return false;
+      });
+      
+      // Select the nodes
+      figma.currentPage.selection = nodesWithVariable;
+      
+      console.log(`Selected ${nodesWithVariable.length} nodes using variable ${variableId}`);
+      
+      // Show message if no nodes found
+      if (nodesWithVariable.length === 0) {
+        figma.ui.postMessage({
+          type: 'info',
+          message: 'No nodes found with this variable'
+        });
+      }
+    } catch (err) {
+      console.error('Error selecting variable nodes:', err);
+      figma.ui.postMessage({
+        type: 'error',
+        message: 'Failed to select nodes'
+      });
+    }
+  }
+
+  // Add handler for 'select-variable-group-nodes' message
+  if (msg.type === 'select-variable-group-nodes') {
+    try {
+      // Type assertion to access the message properties
+      const { variableIds } = msg as SelectVariableGroupNodesMessage;
+      
+      if (!variableIds || variableIds.length === 0) {
+        throw new Error('No variable IDs provided');
+      }
+      
+      // Find all nodes using any of these variables
+      const nodesWithVariables = figma.currentPage.findAll(node => {
+        if (!('boundVariables' in node) || !node.boundVariables) return false;
+        
+        // Check if any binding uses any of the variables
+        for (const binding of Object.values(node.boundVariables)) {
+          if (binding && typeof binding === 'object' && 'id' in binding && variableIds.includes(binding.id as string)) {
+            return true;
+          }
+        }
+        
+        return false;
+      });
+      
+      // Select the nodes
+      figma.currentPage.selection = nodesWithVariables;
+      
+      console.log(`Selected ${nodesWithVariables.length} nodes using ${variableIds.length} variables`);
+      
+      // Show message if no nodes found
+      if (nodesWithVariables.length === 0) {
+        figma.ui.postMessage({
+          type: 'info',
+          message: 'No nodes found with these variables'
+        });
+      }
+    } catch (err) {
+      console.error('Error selecting variable group nodes:', err);
+      figma.ui.postMessage({
+        type: 'error',
+        message: 'Failed to select nodes'
+      });
+    }
+  }
+
+  // Add handler for 'stop-variable-scan' message
+  if (msg.type === 'stop-variable-scan') {
+    try {
+      console.log('Stopping variable scan...');
+      
+      // Stop the scan
+      variablesScanner.stopLibraryScan();
+      
+      figma.ui.postMessage({
+        type: 'variable-scan-stopped'
+      });
+    } catch (err) {
+      console.error('Error stopping variable scan:', err);
+    }
+  }
+
+  // Handle the select-nodes message to select a group of nodes
+  if (msg.type === 'select-nodes' && Array.isArray(msg.nodeIds)) {
+    const nodeIds = msg.nodeIds;
+    console.log(`Selecting ${nodeIds.length} nodes`);
+    
+    try {
+      // Clear current selection
+      figma.currentPage.selection = [];
+      
+      // Get all nodes asynchronously and add them to selection
+      Promise.all(nodeIds.map(id => figma.getNodeByIdAsync(id)))
+        .then(nodes => {
+          // Filter out null values and ensure they are SceneNode types
+          const validNodes = nodes
+            .filter((node): node is SceneNode => 
+              node !== null && 'type' in node && node.type !== 'PAGE' && node.type !== 'DOCUMENT'
+            );
+          
+          console.log(`Found ${validNodes.length} valid nodes out of ${nodeIds.length} requested`);
+          
+          if (validNodes.length > 0) {
+            // Set the selection to the found nodes
+            figma.currentPage.selection = validNodes;
+            
+            // Scroll to the first node
+            if (validNodes[0]) {
+              figma.viewport.scrollAndZoomIntoView(validNodes);
+            }
+            
+            // Send success message back to UI
+            figma.ui.postMessage({
+              type: 'nodes-selected',
+              success: true,
+              count: validNodes.length
+            });
+          } else {
+            // Send error message if no valid nodes found
+            figma.ui.postMessage({
+              type: 'nodes-selected',
+              success: false,
+              error: 'No valid nodes found with the provided IDs'
+            });
+          }
+        })
+        .catch(error => {
+          console.error('Error selecting nodes:', error);
+          figma.ui.postMessage({
+            type: 'nodes-selected',
+            success: false,
+            error: 'Error selecting nodes: ' + (error instanceof Error ? error.message : String(error))
+          });
+        });
+    } catch (error) {
+      console.error('Error handling select-nodes message:', error);
+      figma.ui.postMessage({
+        type: 'nodes-selected',
+        success: false,
+        error: 'Error handling select-nodes message: ' + (error instanceof Error ? error.message : String(error))
+      });
+    }
+  }
+
+  // Maintain compatibility with old select-group message type
+  if (msg.type === 'select-group' && Array.isArray(msg.nodeIds)) {
+    // Redirect to the new handler, but directly handle it instead of a recursive call
+    const nodeIds = msg.nodeIds;
+    console.log(`Legacy select-group handling for ${nodeIds.length} nodes`);
+    
+    try {
+      // Clear current selection
+      figma.currentPage.selection = [];
+      
+      // Get all nodes asynchronously and add them to selection
+      Promise.all(nodeIds.map(id => figma.getNodeByIdAsync(id)))
+        .then(nodes => {
+          // Filter out null values and ensure they are SceneNode types
+          const validNodes = nodes
+            .filter((node): node is SceneNode => 
+              node !== null && 'type' in node && node.type !== 'PAGE' && node.type !== 'DOCUMENT'
+            );
+          
+          if (validNodes.length > 0) {
+            figma.currentPage.selection = validNodes;
+            figma.viewport.scrollAndZoomIntoView(validNodes);
+            
+            figma.ui.postMessage({
+              type: 'nodes-selected',
+              success: true,
+              count: validNodes.length
+            });
+          } else {
+            figma.ui.postMessage({
+              type: 'nodes-selected',
+              success: false,
+              error: 'No valid nodes found'
+            });
+          }
+        })
+        .catch(error => {
+          console.error('Error in legacy select-group:', error);
+          figma.ui.postMessage({
+            type: 'nodes-selected',
+            success: false,
+            error: 'Error selecting nodes: ' + (error instanceof Error ? error.message : String(error))
+          });
+        });
+    } catch (error) {
+      console.error('Error handling legacy select-group:', error);
     }
   }
 };

@@ -36,7 +36,7 @@ export interface TokenVariable {
 export interface TokenGroup {
   name: string;
   variables: TokenVariable[];
-  isEnabled: boolean;
+  isEnabled: boolean | undefined;
   libraryName?: string;
 }
 
@@ -114,6 +114,40 @@ export const LIBRARY_TOKEN_SCAN_OPTIONS: LibraryTokenScanOption[] = [
   }
 ];
 
+// Variable scan options for the Variables Unlinker feature
+export const VARIABLE_SCAN_OPTIONS: LibraryTokenScanOption[] = [
+  {
+    value: 'all',
+    label: 'All Variables',
+    description: 'Scan for all variable types',
+    icon: 'variable'
+  },
+  {
+    value: 'color',
+    label: 'Color Variables',
+    description: 'Scan for color variables',
+    icon: 'fill'
+  },
+  {
+    value: 'boolean',
+    label: 'Boolean Variables',
+    description: 'Scan for boolean variables',
+    icon: 'toggle'
+  },
+  {
+    value: 'number',
+    label: 'Number Variables',
+    description: 'Scan for number variables',
+    icon: 'spacing'
+  },
+  {
+    value: 'string',
+    label: 'String Variables',
+    description: 'Scan for string variables',
+    icon: 'typography'
+  }
+];
+
 /**
  * Scans for inactive design tokens/variables
  * Finds all node with variables from inactive libraries
@@ -151,7 +185,7 @@ export async function scanForInactiveTokens(
           tokenGroups[groupKey] = {
             name: groupKey,
             variables: [],
-            isEnabled: !!library?.enabled,
+            isEnabled: library?.enabled ?? false,
             libraryName: library?.name
           };
         }
@@ -182,7 +216,7 @@ export async function scanForInactiveTokens(
         if (!node.boundVariables) continue;
 
         for (const [key, binding] of Object.entries(node.boundVariables)) {
-          if (binding && typeof binding === 'object' && 'type' in binding && binding.type === 'VARIABLE') {
+          if (binding && typeof binding === 'object' && 'id' in binding) {
             try {
               const variableId = typeof binding.id === 'string' ? binding.id : '';
               const variable = await figma.variables.getVariableByIdAsync(variableId);
@@ -260,266 +294,503 @@ export async function scanForInactiveTokens(
 }
 
 /**
- * Lists all variables in the document, both local and from libraries
- * Sends analysis data to the UI
+ * Lists all variables available in the document
+ * This is used for the UI to show all available variables
  */
 export async function listAllVariables() {
   try {
-    const localVariables = await figma.variables.getLocalVariablesAsync();
+    const variables = await figma.variables.getLocalVariablesAsync();
     const collections = await figma.variables.getLocalVariableCollectionsAsync();
     
-    // Convert collections to Library type with all required properties
-    const libraries: Library[] = collections.map(collection => ({
-      key: collection.key,
-      name: collection.name,
-      enabled: collection.remote,
-      type: collection.remote ? 'REMOTE' : 'LOCAL' // Add required type property
-    }));
-
-    // Prepare analysis data
-    const analysisData = {
-      totalVariables: localVariables.length,
-      libraryVariables: localVariables.filter(v => v.remote).length,
-      localVariables: localVariables.filter(v => !v.remote).length,
-      libraries: libraries.map(lib => ({
-        key: lib.key,
-        name: lib.name,
-        enabled: lib.enabled,
-        type: lib.type,
-        variableCount: localVariables.filter(v => v.remote && v.key.startsWith(lib.key)).length
-      }))
+    // Map collections to their names
+    const collectionMap = new Map(
+      collections.map(collection => [collection.id, {
+        id: collection.id,
+        name: collection.name,
+        remote: collection.remote,
+        key: collection.key
+      }])
+    );
+    
+    // Get the first mode from the first collection to use as default
+    const getDefaultMode = (variableCollectionId: string) => {
+      const collection = collections.find(c => c.id === variableCollectionId);
+      return collection && collection.modes.length > 0 ? collection.modes[0].modeId : '';
     };
-
-    // Find nodes with variable bindings
-    const nodesWithVariables = figma.currentPage.findAll(node => {
-      return 'boundVariables' in node && node.boundVariables !== null;
+    
+    // Format variables with their values
+    return variables.map(variable => {
+      const collection = collectionMap.get(variable.variableCollectionId);
+      const modes = Object.keys(variable.valuesByMode);
+      const currentMode = getDefaultMode(variable.variableCollectionId) || modes[0];
+      const value = variable.valuesByMode[currentMode];
+      
+      return {
+        id: variable.id,
+        name: variable.name,
+        key: variable.key,
+        resolvedType: variable.resolvedType,
+        collection: collection ? {
+          id: collection.id,
+          name: collection.name,
+          remote: collection.remote
+        } : null,
+        value: value,
+        remote: variable.remote
+      };
     });
-
-    console.log('Nodes with variables:', nodesWithVariables.length);
-    console.log('Analysis data:', analysisData);
-
-    // Send analysis data to UI
-    figma.ui.postMessage({
-      type: 'variables-analysis',
-      data: analysisData
-    });
-
   } catch (err) {
     console.error('Error listing variables:', err);
-    figma.ui.postMessage({
-      type: 'variables-analysis-error',
-      message: 'Failed to analyze variables'
-    });
+    return [];
   }
 }
 
 /**
- * Scans for library tokens
- * This function scans for all variables from libraries, both active and inactive
+ * Scans for library tokens of a specific type
+ * Used for the "Unlinked Tokens" page
  */
 export async function scanForLibraryTokens(
   scanType: string = 'all',
   ignoreHiddenLayers: boolean = false
 ): Promise<TokenScanResult> {
-  // Reset control flags at start
+  // Reset scan control flags
   isScanPaused = false;
   isScanStopped = false;
+  isScanCancelled = false;
 
-  const result: TokenScanResult = {
-    activeLibraryTokens: [],
-    inactiveLibraryTokens: []
-  };
-
+  console.log(`Starting library token scan for type: ${scanType}`);
+  
+  const activeLibraryTokens: LibraryToken[] = [];
+  const inactiveLibraryTokens: LibraryToken[] = [];
+  
   try {
+    // Get all variables and collections
     const variables = await figma.variables.getLocalVariablesAsync();
     const collections = await figma.variables.getLocalVariableCollectionsAsync();
-
-    // Find nodes using variables
-    const nodesWithVariables = figma.currentPage.findAll(node => {
-      return ('boundVariables' in node && node.boundVariables !== null) ||
-             ('resolvedVariableModes' in node && node.resolvedVariableModes !== null);
+    
+    console.log(`Found ${variables.length} variables and ${collections.length} collections`);
+    
+    // Filter variables by type if needed
+    const filteredVariables = variables.filter(variable => {
+      if (scanType === 'all') return true;
+      if (scanType === 'colors' && variable.resolvedType === 'COLOR') return true;
+      if (scanType === 'typography' && variable.resolvedType === 'STRING') return true;
+      if (scanType === 'spacing' && variable.resolvedType === 'FLOAT') return true;
+      return false;
     });
-
-    // Track processed variables
-    const processedVariables = new Map<string, PublishedVariable>();
-
-    console.log('Initial scan:', {
-      variables: variables.length,
-      collections: collections.length,
-      nodesWithVariables: nodesWithVariables.length
+    
+    // Get collection map
+    const collectionMap = new Map(
+      collections.map(collection => [collection.id, {
+        id: collection.id,
+        name: collection.name,
+        remote: collection.remote,
+        key: collection.key
+      }])
+    );
+    
+    // Track all nodes that use variables
+    const nodeVariableMap = new Map<string, Set<string>>();
+    
+    // Scan all nodes for variable usages
+    const allNodes = figma.currentPage.findAll(node => {
+      if (ignoreHiddenLayers && 'visible' in node && !node.visible) {
+        return false;
+      }
+      
+      return hasVariableBindings(node);
     });
-
-    // Process nodes
-    for (const node of nodesWithVariables) {
-      // Check for stop
-      if (isScanStopped) {
-        figma.ui.postMessage({ type: 'library-scan-stopped' });
-        return result;
-      }
-
-      // Check for pause
-      while (isScanPaused && !isScanStopped) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-
+    
+    for (const node of allNodes) {
+      if (isScanStopped || isScanCancelled) break;
+      
       try {
-        // Check resolved modes first (includes inherited modes)
-        if ('resolvedVariableModes' in node && node.resolvedVariableModes) {
-          const resolvedModes = node.resolvedVariableModes;
-          
-          // Process each variable reference
-          for (const [variableRef, modeInfo] of Object.entries(resolvedModes)) {
-            // Parse the variable reference
-            const matches = variableRef.match(/VariableCollectionId:([^/]+)\/(\d+):(\d+)/);
-            if (matches) {
-              const [_, collectionId, variableId, variableSubId] = matches;
-              const [modeId, aliasId] = modeInfo.split(':');
-
-              console.log('Variable Usage:', {
-                collectionId,
-                variableId: `${variableId}:${variableSubId}`,
-                modeId,
-                aliasId,
-                nodeName: node.name,
-                nodeType: node.type
-              });
+        if (!('boundVariables' in node) || !node.boundVariables) continue;
+        
+        for (const [property, binding] of Object.entries(node.boundVariables)) {
+          // Ensure binding is a variable binding
+          if (binding && typeof binding === 'object' && 'id' in binding) {
+            const variableId = binding.id as string;
+            if (!nodeVariableMap.has(variableId)) {
+              nodeVariableMap.set(variableId, new Set());
             }
-          }
-        }
-
-        // Then check explicit bindings
-        if (node.boundVariables) {
-          for (const [property, binding] of Object.entries(node.boundVariables)) {
-            if (!binding || typeof binding !== 'object' || !('type' in binding)) continue;
-
-            if (binding.type === 'VARIABLE_ALIAS') {
-              const variableBinding = binding;
-              const variableId = typeof variableBinding.id === 'string' ? variableBinding.id : '';
-              const variable = await figma.variables.getVariableByIdAsync(variableId);
-              if (!variable) continue;
-
-              const collection = collections.find(c => c.id === variable.variableCollectionId);
-              if (!collection) continue;
-
-              // Check if variable is from a published library
-              const isPublished = variable.remote && variable.key.includes(':');
-              const [libraryKey] = variable.key.split(':');
-
-              // Check if library is active
-              let isActive = false;
-              try {
-                await figma.variables.importVariableByKeyAsync(variable.key);
-                isActive = true;
-              } catch {
-                isActive = false;
-              }
-
-              // Get current mode value
-              const modeId = Object.keys(variable.valuesByMode)[0];
-              const currentValue = variable.valuesByMode[modeId];
-
-              const token: LibraryToken = {
-                id: variable.id,
-                name: variable.name,
-                key: variable.key,
-                type: variable.resolvedType,
-                libraryName: collection.name,
-                isActive,
-                value: currentValue,
-                collection: {
-                  name: collection.name,
-                  id: collection.id
-                },
-                sourceType: 'REMOTE',
-                subscribedID: libraryKey,
-                usages: [{
-                  nodeId: node.id,
-                  nodeName: node.name,
-                  property,
-                  mode: modeId
-                }]
-              };
-
-              if (isActive) {
-                result.activeLibraryTokens.push(token);
-              } else {
-                result.inactiveLibraryTokens.push(token);
-              }
-            }
+            nodeVariableMap.get(variableId)?.add(`${node.id}:${property}`);
           }
         }
       } catch (err) {
-        console.warn('Error processing node:', err);
+        console.warn(`Error processing node ${node.name}:`, err);
       }
-
-      // Update progress
-      figma.ui.postMessage({
-        type: 'library-scan-progress',
-        progress: Math.round((nodesWithVariables.indexOf(node) + 1) / nodesWithVariables.length * 100),
-        currentNode: {
-          name: node.name,
-          type: node.type,
-          processedCount: nodesWithVariables.indexOf(node) + 1,
-          totalCount: nodesWithVariables.length
-        }
-      });
     }
-
-    console.log('Scan Results:', {
-      processedVariables: processedVariables.size,
-      publishedVariables: Array.from(processedVariables.values()).filter(v => v.isPublished).length,
-      activeTokens: result.activeLibraryTokens.length,
-      inactiveTokens: result.inactiveLibraryTokens.length,
-      activeLibraries: new Set(result.activeLibraryTokens.map(t => t.subscribedID)).size,
-      inactiveLibraries: new Set(result.inactiveLibraryTokens.map(t => t.subscribedID)).size
-    });
-
-    // Only send completion if not stopped
-    if (!isScanStopped) {
-      figma.ui.postMessage({
-        type: 'library-scan-complete',
-        summary: {
-          totalNodes: nodesWithVariables.length,
-          totalTokens: result.activeLibraryTokens.length + result.inactiveLibraryTokens.length
-        }
-      });
+    
+    // Process variables
+    for (const variable of filteredVariables) {
+      if (isScanStopped || isScanCancelled) break;
+      
+      const collection = collectionMap.get(variable.variableCollectionId);
+      const isRemote = variable.remote;
+      const libraryName = collection?.name || 'Unknown Library';
+      
+      // Get the current mode value
+      const modes = Object.keys(variable.valuesByMode);
+      const currentMode = figma.variables.getVariableCollectionById(variable.variableCollectionId)?.modes[0]?.modeId || modes[0];
+      const value = variable.valuesByMode[currentMode];
+      
+      // Get usages for this variable
+      const usages = nodeVariableMap.has(variable.id)
+        ? Array.from(nodeVariableMap.get(variable.id) || []).map(usage => {
+            const [nodeId, property] = usage.split(':');
+            const node = figma.getNodeById(nodeId);
+            return {
+              nodeId,
+              nodeName: node?.name || 'Unknown Node',
+              property,
+              mode: currentMode
+            };
+          })
+        : [];
+      
+      const token: LibraryToken = {
+        id: variable.id,
+        name: variable.name,
+        key: variable.key,
+        type: variable.resolvedType,
+        libraryName,
+        isActive: isRemote ? !!collection?.remote : true,
+        value,
+        collection: collection ? {
+          name: collection.name,
+          id: collection.id
+        } : undefined,
+        sourceType: isRemote ? 'REMOTE' : 'LOCAL',
+        subscribedID: variable.remote ? variable.key.split(':')[1] || '' : '',
+        usages
+      };
+      
+      if (token.isActive) {
+        activeLibraryTokens.push(token);
+      } else {
+        inactiveLibraryTokens.push(token);
+      }
     }
-
+    
+    console.log(`Scan complete. Found ${activeLibraryTokens.length} active tokens and ${inactiveLibraryTokens.length} inactive tokens`);
+    
   } catch (err) {
-    console.error('Error scanning library tokens:', err);
-    figma.ui.postMessage({
-      type: 'error',
-      message: 'Failed to scan library tokens'
-    });
+    console.error('Error scanning for library tokens:', err);
   }
-
-  return result;
+  
+  return { activeLibraryTokens, inactiveLibraryTokens };
 }
 
 /**
- * Pause library scan
+ * NEW FUNCTION: Scan for all variables (linked and unlinked)
+ * This is the main scanning function for the Variables Unlinker feature
  */
+export async function scanForAllVariables(
+  selectedTypes: string[] = ['all'],
+  progressCallback: (progress: number) => void,
+  ignoreHiddenLayers: boolean = false
+): Promise<LibraryToken[]> {
+  // Reset scan control flags
+  isScanPaused = false;
+  isScanStopped = false;
+  isScanCancelled = false;
+
+  console.log(`Starting variables scan for types: ${selectedTypes.join(', ')}`);
+  
+  const allVariables: LibraryToken[] = [];
+  
+  try {
+    // Get all variables and collections
+    const variables = await figma.variables.getLocalVariablesAsync();
+    const collections = await figma.variables.getLocalVariableCollectionsAsync();
+    
+    console.log(`Found ${variables.length} variables and ${collections.length} collections`);
+    
+    // Filter variables by type if needed
+    const filteredVariables = variables.filter(variable => {
+      // If 'all' is selected, include all variables
+      if (selectedTypes.includes('all')) return true;
+      
+      // Otherwise, check if the variable type is in the selected types
+      if (selectedTypes.includes('color') && variable.resolvedType === 'COLOR') return true;
+      if (selectedTypes.includes('boolean') && variable.resolvedType === 'BOOLEAN') return true;
+      if (selectedTypes.includes('number') && variable.resolvedType === 'FLOAT') return true;
+      if (selectedTypes.includes('string') && variable.resolvedType === 'STRING') return true;
+      
+      return false;
+    });
+    
+    // Get collection map
+    const collectionMap = new Map(
+      collections.map(collection => [collection.id, {
+        id: collection.id,
+        name: collection.name,
+        remote: collection.remote,
+        key: collection.key
+      }])
+    );
+    
+    // Track all nodes that use variables
+    const nodeVariableMap = new Map<string, Set<string>>();
+    
+    // Scan all nodes for variable usages
+    const allNodes = figma.currentPage.findAll(node => {
+      if (ignoreHiddenLayers && 'visible' in node && !node.visible) {
+        return false;
+      }
+      
+      return hasVariableBindings(node);
+    });
+    
+    let processedNodes = 0;
+    const totalNodes = allNodes.length;
+    
+    for (const node of allNodes) {
+      if (isScanStopped || isScanCancelled) break;
+      
+      try {
+        if (!('boundVariables' in node) || !node.boundVariables) continue;
+        
+        for (const [property, binding] of Object.entries(node.boundVariables)) {
+          // Ensure binding is a variable binding
+          if (binding && typeof binding === 'object' && 'id' in binding) {
+            const variableId = binding.id as string;
+            if (!nodeVariableMap.has(variableId)) {
+              nodeVariableMap.set(variableId, new Set());
+            }
+            nodeVariableMap.get(variableId)?.add(`${node.id}:${property}`);
+          }
+        }
+      } catch (err) {
+        console.warn(`Error processing node ${node.name}:`, err);
+      }
+      
+      processedNodes++;
+      // Report progress to the UI
+      if (processedNodes % 10 === 0 || processedNodes === totalNodes) {
+        progressCallback(Math.floor((processedNodes / totalNodes) * 50)); // First 50% of progress is scanning nodes
+      }
+    }
+    
+    // Process variables
+    let processedVars = 0;
+    const totalVars = filteredVariables.length;
+    
+    for (const variable of filteredVariables) {
+      if (isScanStopped || isScanCancelled) break;
+      
+      const collection = collectionMap.get(variable.variableCollectionId);
+      const isRemote = variable.remote;
+      const libraryName = collection?.name || 'Unknown Library';
+      
+      // Get the current mode value
+      const modes = Object.keys(variable.valuesByMode);
+      const currentMode = figma.variables.getVariableCollectionById(variable.variableCollectionId)?.modes[0]?.modeId || modes[0];
+      const value = variable.valuesByMode[currentMode];
+      
+      // Get usages for this variable
+      const usages = nodeVariableMap.has(variable.id)
+        ? Array.from(nodeVariableMap.get(variable.id) || []).map(usage => {
+            const [nodeId, property] = usage.split(':');
+            const node = figma.getNodeById(nodeId);
+            return {
+              nodeId,
+              nodeName: node?.name || 'Unknown Node',
+              property,
+              mode: currentMode
+            };
+          })
+        : [];
+      
+      const token: LibraryToken = {
+        id: variable.id,
+        name: variable.name,
+        key: variable.key,
+        type: variable.resolvedType,
+        libraryName,
+        isActive: true, // All variables are active in this context
+        value,
+        collection: collection ? {
+          name: collection.name,
+          id: collection.id
+        } : undefined,
+        sourceType: isRemote ? 'REMOTE' : 'LOCAL',
+        subscribedID: variable.remote ? variable.key.split(':')[1] || '' : '',
+        usages
+      };
+      
+      // Only add variables that are actually used in the document
+      if (usages.length > 0) {
+        allVariables.push(token);
+      }
+      
+      processedVars++;
+      // Report progress to the UI (second 50% of the progress)
+      if (processedVars % 5 === 0 || processedVars === totalVars) {
+        progressCallback(50 + Math.floor((processedVars / totalVars) * 50));
+      }
+    }
+    
+    console.log(`Scan complete. Found ${allVariables.length} variables in use`);
+    
+  } catch (err) {
+    console.error('Error scanning for variables:', err);
+  }
+  
+  return allVariables;
+}
+
+/**
+ * NEW FUNCTION: Unlink a variable from all its usages
+ * Converts variable references to their raw values
+ */
+export async function unlinkVariable(variableId: string): Promise<number> {
+  let unlinkedCount = 0;
+  
+  try {
+    // Get the variable to access its current value
+    const variable = await figma.variables.getVariableByIdAsync(variableId);
+    if (!variable) {
+      throw new Error(`Variable with ID ${variableId} not found`);
+    }
+    
+    // Get the current mode for this variable
+    const collection = figma.variables.getVariableCollectionById(variable.variableCollectionId);
+    const currentMode = collection?.modes[0]?.modeId || Object.keys(variable.valuesByMode)[0];
+    
+    // Get the current value of the variable
+    const rawValue = variable.valuesByMode[currentMode];
+    
+    // Find all nodes using this variable
+    const nodesWithVariable = figma.currentPage.findAll(node => {
+      if (!('boundVariables' in node) || !node.boundVariables) return false;
+      
+      // Check if any binding uses this variable
+      for (const binding of Object.values(node.boundVariables)) {
+        if (binding && typeof binding === 'object' && 'id' in binding && binding.id === variableId) {
+          return true;
+        }
+      }
+      
+      return false;
+    });
+    
+    console.log(`Found ${nodesWithVariable.length} nodes using variable ${variable.name}`);
+    
+    // Process each node to unlink the variable
+    for (const node of nodesWithVariable) {
+      if (!('boundVariables' in node) || !node.boundVariables) continue;
+      
+      // Find properties using this variable
+      for (const [property, binding] of Object.entries(node.boundVariables)) {
+        if (binding && typeof binding === 'object' && 'id' in binding && binding.id === variableId) {
+          try {
+            // For different properties, we need different approaches to apply the raw value
+            if (property.startsWith('fills') && variable.resolvedType === 'COLOR') {
+              // Handle fill colors
+              if ('fills' in node && Array.isArray(node.fills)) {
+                const fillIndex = parseInt(property.split('.')[1]);
+                if (!isNaN(fillIndex) && node.fills[fillIndex]) {
+                  const fills = [...node.fills];
+                  fills[fillIndex] = {
+                    ...fills[fillIndex],
+                    color: rawValue as RGBA
+                  };
+                  node.fills = fills;
+                  unlinkedCount++;
+                }
+              }
+            } else if (property.startsWith('strokes') && variable.resolvedType === 'COLOR') {
+              // Handle stroke colors
+              if ('strokes' in node && Array.isArray(node.strokes)) {
+                const strokeIndex = parseInt(property.split('.')[1]);
+                if (!isNaN(strokeIndex) && node.strokes[strokeIndex]) {
+                  const strokes = [...node.strokes];
+                  strokes[strokeIndex] = {
+                    ...strokes[strokeIndex],
+                    color: rawValue as RGBA
+                  };
+                  node.strokes = strokes;
+                  unlinkedCount++;
+                }
+              }
+            } else if (property === 'cornerRadius' && variable.resolvedType === 'FLOAT') {
+              // Handle corner radius
+              if ('cornerRadius' in node) {
+                (node as any).cornerRadius = Number(rawValue);
+                unlinkedCount++;
+              }
+            } else if (property === 'paddingLeft' && variable.resolvedType === 'FLOAT') {
+              // Handle padding
+              if ('paddingLeft' in node) {
+                (node as any).paddingLeft = Number(rawValue);
+                unlinkedCount++;
+              }
+            } else if (property === 'paddingRight' && variable.resolvedType === 'FLOAT') {
+              if ('paddingRight' in node) {
+                (node as any).paddingRight = Number(rawValue);
+                unlinkedCount++;
+              }
+            } else if (property === 'paddingTop' && variable.resolvedType === 'FLOAT') {
+              if ('paddingTop' in node) {
+                (node as any).paddingTop = Number(rawValue);
+                unlinkedCount++;
+              }
+            } else if (property === 'paddingBottom' && variable.resolvedType === 'FLOAT') {
+              if ('paddingBottom' in node) {
+                (node as any).paddingBottom = Number(rawValue);
+                unlinkedCount++;
+              }
+            } else if (property === 'itemSpacing' && variable.resolvedType === 'FLOAT') {
+              // Handle spacing
+              if ('itemSpacing' in node) {
+                (node as any).itemSpacing = Number(rawValue);
+                unlinkedCount++;
+              }
+            } else if (property === 'opacity' && variable.resolvedType === 'FLOAT') {
+              // Handle opacity
+              if ('opacity' in node) {
+                (node as any).opacity = Number(rawValue);
+                unlinkedCount++;
+              }
+            } else {
+              console.log(`Unsupported property for unlinking: ${property} with type ${variable.resolvedType}`);
+            }
+            
+            // Remove the variable binding
+            const boundVars = node.boundVariables as Record<string, any>;
+            delete boundVars[property];
+            
+          } catch (err) {
+            console.error(`Error unlinking variable from node ${node.name}, property ${property}:`, err);
+          }
+        }
+      }
+    }
+    
+    console.log(`Successfully unlinked variable ${variable.name} from ${unlinkedCount} instances`);
+    
+  } catch (err) {
+    console.error('Error unlinking variable:', err);
+  }
+  
+  return unlinkedCount;
+}
+
+// Control functions for scan operations
 export function pauseLibraryScan(): void {
+  console.log('Pausing library scan...');
   isScanPaused = true;
-  console.log('Library scan paused');
-  figma.ui.postMessage({ type: 'library-scan-paused' });
 }
 
-/**
- * Resume library scan
- */
 export function resumeLibraryScan(): void {
+  console.log('Resuming library scan...');
   isScanPaused = false;
-  console.log('Library scan resumed');
-  figma.ui.postMessage({ type: 'library-scan-resumed' });
 }
 
-/**
- * Stop library scan completely
- */
 export function stopLibraryScan(): void {
+  console.log('Stopping library scan...');
   isScanStopped = true;
-  isScanPaused = false;
-  console.log('Library scan stopped');
-  figma.ui.postMessage({ type: 'library-scan-stopped' });
+  isScanCancelled = true;
 } 
