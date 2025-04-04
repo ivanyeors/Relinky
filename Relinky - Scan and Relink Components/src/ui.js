@@ -1,6 +1,9 @@
 // Import the CSS file so webpack can process it
 import './styles.css';
 
+// Import the icons from icons.js
+import { icons } from './icons.js';
+
 // Wait for DOM content to be loaded
 document.addEventListener('DOMContentLoaded', () => {
   // Show loading indicator initially
@@ -202,96 +205,8 @@ function initializeApp() {
         isAnalyzing: false,
         showSettings: false,
         ignoreHiddenLayers: false,
-        icons: {
-          'typography': `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <g id="type">
-              <path d="M19.9567 8.71249V9.97212H14.9434V8.71249H19.9567ZM16.4045 6.39478H17.8909V15.6153C17.8909 16.0351 17.9518 16.35 18.0735 16.56C18.1995 16.7657 18.3591 16.9043 18.5522 16.9757C18.7495 17.0428 18.9574 17.0764 19.1757 17.0764C19.3395 17.0764 19.4738 17.068 19.5788 17.0512C19.6838 17.0302 19.7677 17.0134 19.8307 17.0009L20.133 18.3361C20.0323 18.3738 19.8916 18.4116 19.7111 18.4494C19.5305 18.4914 19.3017 18.5124 19.0246 18.5124C18.6047 18.5124 18.1932 18.4221 17.7901 18.2416C17.3912 18.061 17.0595 17.786 16.795 17.4165C16.5347 17.047 16.4045 16.581 16.4045 16.0183V6.39478Z M3.8667 6.87338V5.48779H13.5406V6.87338H9.48464V18.3864H7.9227V6.87338H3.8667Z" fill="currentColor"/>
-            </g>
-          </svg>`,
-          
-          'stroke': `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <g id="stroke">
-              <path d="M17.1266 17.1267L6.87317 6.87329" stroke="currentColor" stroke-linecap="round"/>
-              <rect x="3.84668" y="3.84668" width="16.3066" height="16.3066" rx="2.5" stroke="currentColor" stroke-linecap="round"/>
-            </g>
-          </svg>`,
-          
-          'spacing': `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <g id="Gap">
-              <path d="M20.7651 3.39014H19C17.3431 3.39014 16 4.73328 16 6.39014V17.6096C16 19.2665 17.3431 20.6096 19 20.6096H20.7651" stroke="currentColor" stroke-linecap="round"/>
-              <path d="M3.23486 3.39014H4.99998C6.65683 3.39014 7.99998 4.73328 7.99998 6.39014V17.6096C7.99998 19.2665 6.65683 20.6096 4.99998 20.6096H3.23486" stroke="currentColor" stroke-linecap="round"/>
-              <path d="M12 6.92114V17.2227" stroke="currentColor" stroke-linecap="round"/>
-            </g>
-          </svg>`,
-          
-          'radius': `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <g id="corner">
-              <path id="Vector 1" d="M2.62552 8.80389V6.99321C2.62552 4.78407 4.41638 2.99321 6.62552 2.99321H8.86661" stroke="white" stroke-linecap="round"/>
-              <path id="Vector 3" d="M21.3745 15.1961L21.3745 17.0068C21.3745 19.2159 19.5836 21.0068 17.3745 21.0068L15.1334 21.0068" stroke="white" stroke-linecap="round"/>
-              <path id="Vector 2" d="M15.5638 2.99321L17.3745 2.99321C19.5836 2.99321 21.3745 4.78407 21.3745 6.99321V9.23431" stroke="white" stroke-linecap="round"/>
-              <path id="Vector 4" d="M8.4362 21.0068L6.62552 21.0068C4.41638 21.0068 2.62552 19.2159 2.62552 17.0068L2.62552 14.7657" stroke="white" stroke-linecap="round"/>
-            </g>
-          </svg>`,
-          
-          'radius-top-left': `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <g id="top-left">
-              <path id="Vector 1" d="M4 19V10C4 6 7 3 11 3H20" stroke="white" stroke-linecap="round"/>
-            </g>
-          </svg>`,
-          
-          'radius-top-right': `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <g id="top-right">
-              <path id="Vector 1" d="M4 3H13C17 3 20 6 20 10V19" stroke="white" stroke-linecap="round"/>
-            </g>
-          </svg>`,
-          
-          'radius-bottom-left': `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <g id="bottom-left">
-              <path id="Vector 1" d="M20 3V12C20 16 17 19 13 19H4" stroke="white" stroke-linecap="round"/>
-            </g>
-          </svg>`,
-          
-          'radius-bottom-right': `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <g id="bottom-right">
-              <path id="Vector 1" d="M4 3V12C4 16 7 19 11 19H20" stroke="white" stroke-linecap="round"/>
-            </g>
-          </svg>`,
-          
-          'vertical-padding': `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <g id="vertical">
-              <path d="M20.7102 3.80981H3.34668" stroke="currentColor" stroke-linecap="round"/>
-              <path d="M20.7102 20.3337H3.34668" stroke="currentColor" stroke-linecap="round"/>
-              <rect x="7.87646" y="7.87646" width="8.24707" height="8.24707" rx="2.5" stroke="currentColor" stroke-linecap="round"/>
-            </g>
-          </svg>`,
-          
-          'horizontal-padding': `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <g id="horizontal">
-              <path d="M3.76648 3.39014L3.76648 20.7537" stroke="currentColor" stroke-linecap="round"/>
-              <path d="M20.2904 3.39014L20.2904 20.7537" stroke="currentColor" stroke-linecap="round"/>
-              <rect x="7.87646" y="7.87646" width="8.24707" height="8.24707" rx="2.5" stroke="currentColor" stroke-linecap="round"/>
-            </g>
-          </svg>`,
-          
-          'fill': `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <g id="fill">
-              <rect x="3.78979" y="3.78979" width="16.4204" height="16.4204" rx="2.5" stroke="currentColor" stroke-linecap="round"/>
-              <rect x="5.51733" y="5.51733" width="12.9653" height="12.9653" rx="1" fill="currentColor"/>
-            </g>
-          </svg>`,
-          'library': `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <g id="library">
-              <path d="M17.1266 17.1267L6.87317 6.87329" stroke="currentColor" stroke-linecap="round"/>
-              <rect x="3.84668" y="3.84668" width="16.3066" height="16.3066" rx="2.5" stroke="currentColor" stroke-linecap="round"/>
-            </g>
-          </svg>`,
-          'variable': `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <g id="variable">
-              <path d="M17.1266 17.1267L6.87317 6.87329" stroke="currentColor" stroke-linecap="round"/>
-              <rect x="3.84668" y="3.84668" width="16.3066" height="16.3066" rx="2.5" stroke="currentColor" stroke-linecap="round"/>
-            </g>
-          </svg>`
-        },
+        // Use the imported icons
+        icons,
         windowSize: {
           width: 400,
           height: 600
@@ -868,25 +783,25 @@ function initializeApp() {
             value: 'raw-values',
             label: 'Raw Values',
             description: 'Find unlinked design tokens that need to be connected to variables',
-            icon: 'token'
+            icon: 'raw-value'
           },
           {
             value: 'team-library',
             label: 'Team Library',
             description: 'Find elements using variables from shared team libraries',
-            icon: 'team'
+            icon: 'team-lib'
           },
           {
             value: 'local-library',
-            label: 'Local Library',
+            label: 'Local Variables',
             description: 'Find elements using variables defined in this document',
-            icon: 'local'
+            icon: 'local-var'
           },
           {
             value: 'missing-library',
-            label: 'Missing Library',
+            label: 'Missing Variables',
             description: 'Find elements using variables from inaccessible libraries',
-            icon: 'missing'
+            icon: 'missing-var'
           }
         ];
       },
@@ -969,8 +884,8 @@ function initializeApp() {
         if (!ref) return 'Unknown';
         
         if (ref.isTeamLibrary) return 'Team Library';
-        if (ref.isLocalLibrary) return 'Local Library';
-        if (ref.isMissingLibrary) return 'Missing Library';
+        if (ref.isLocalLibrary) return 'Local Variables';
+        if (ref.isMissingLibrary) return 'Missing Variables';
         if (ref.isInactiveLibrary) return 'Inactive Library';
         return 'Unlinked Value';
       },
@@ -2307,8 +2222,8 @@ function initializeApp() {
       getSourceTypeLabel(sourceType) {
         switch (sourceType) {
           case 'team-library': return 'team library';
-          case 'local-library': return 'local library';
-          case 'missing-library': return 'missing library';
+          case 'local-library': return 'local variables';
+          case 'missing-library': return 'missing variables';
           case 'raw-values': return 'unlinked';
           default: return sourceType;
         }
