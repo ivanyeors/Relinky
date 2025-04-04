@@ -920,6 +920,19 @@ function initializeApp() {
         if (!isRescan) {
           this.clearResults();
         }
+        
+        // Reset animation classes and scroll state
+        const tokenTypeSection = document.querySelector('.token-type-section');
+        const resultsSection = document.querySelector('.results-section');
+        
+        if (tokenTypeSection) {
+          tokenTypeSection.classList.remove('selected');
+        }
+        
+        if (resultsSection) {
+          resultsSection.classList.remove('scan-complete');
+          resultsSection.classList.remove('scroll-target');
+        }
 
         // Determine the scan type based on our two-level selection
         let effectiveScanType;
@@ -1202,6 +1215,22 @@ function initializeApp() {
         
         this.showSuccessToast = true;
         setTimeout(() => { this.showSuccessToast = false; }, 3000);
+        
+        // After a short delay to ensure the results section has been rendered,
+        // scroll to it if we have results
+        if (this.hasResults) {
+          setTimeout(() => {
+            const resultsSection = document.querySelector('.results-section');
+            if (resultsSection) {
+              // Add animation class
+              resultsSection.classList.add('scan-complete');
+              resultsSection.classList.add('scroll-target');
+              
+              // Scroll to the results
+              resultsSection.scrollIntoView({ behavior: 'smooth' });
+            }
+          }, 300);
+        }
       },
       handleScanError(error) {
         this.isScanning = false;
@@ -1426,6 +1455,21 @@ function initializeApp() {
         
         // Always set the selected value (no toggling)
         this.selectedScanType = value;
+        
+        // Add the selected class to the token type section for animation
+        const tokenTypeSection = document.querySelector('.token-type-section');
+        if (tokenTypeSection) {
+          tokenTypeSection.classList.add('selected');
+        }
+        
+        // Scroll to the scan buttons section after a short delay
+        setTimeout(() => {
+          const scanButtonsSection = document.querySelector('.scan-buttons');
+          if (scanButtonsSection) {
+            scanButtonsSection.classList.add('scroll-target');
+            scanButtonsSection.scrollIntoView({ behavior: 'smooth' });
+          }
+        }, 300); // Short delay to allow the animation to start
       },
       getTotalResultsCount() {
         let count = 0;
@@ -2214,6 +2258,27 @@ function initializeApp() {
         
         // Reset scan type when changing source type
         this.selectedScanType = null;
+        
+        // Reset animation classes
+        const tokenTypeSection = document.querySelector('.token-type-section');
+        const resultsSection = document.querySelector('.results-section');
+        
+        if (tokenTypeSection) {
+          tokenTypeSection.classList.remove('selected');
+        }
+        
+        if (resultsSection) {
+          resultsSection.classList.remove('scan-complete');
+          resultsSection.classList.remove('scroll-target');
+        }
+        
+        // Scroll back to the top of the plugin container
+        setTimeout(() => {
+          const pluginContainer = document.querySelector('.plugin-container');
+          if (pluginContainer) {
+            pluginContainer.scrollTop = 0;
+          }
+        }, 100);
       },
       
       // Get readable label for source type

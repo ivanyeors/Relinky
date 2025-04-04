@@ -2330,6 +2330,46 @@ gap: var(--spacing-xs);
    font-weight: 600;
 }
 
+/* Smooth scrolling animations for improved UX
+   ------------------------------------------------------------------------- */
+.plugin-container {
+   /* Add smooth scrolling behavior */
+   scroll-behavior: smooth;
+   overflow-y: auto;
+}
+
+/* Animation for revealing content sections */
+@keyframes reveal-section {
+   from {
+      opacity: 0;
+      transform: translateY(20px);
+   }
+   to {
+      opacity: 1;
+      transform: translateY(0);
+   }
+}
+
+/* Apply reveal animation to newly visible sections */
+.section-reveal {
+   animation: reveal-section 0.5s ease-out forwards;
+}
+
+/* Auto-scroll helper classes */
+.scroll-target {
+   scroll-margin-top: 16px; /* Adds some space at the top when scrolled to */
+}
+
+/* Token type selection animation - when token type is selected, animate to next section */
+.token-type-section.selected + .scan-buttons-container {
+   animation: reveal-section 0.5s ease-out forwards;
+}
+
+/* Scan results reveal animation - when scan is complete */
+.results-section.scan-complete {
+   animation: reveal-section 0.5s ease-out forwards;
+}
+
 /* Padding Filter
    ------------------------------------------------------------------------- */
 .padding-filter {
