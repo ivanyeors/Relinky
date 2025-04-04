@@ -168,7 +168,7 @@
 
                 <!-- Source Cards - First level filter -->
                 <div class="scan-cards">
-                  <div class="scan-card-section-divider">Source Type</div>
+                  <div class="scan-card-section-divider">Scan Type</div>
                   
                   <!-- Library Source Cards -->
                   <div v-for="option in librarySourceOptions"
@@ -200,7 +200,7 @@
 
                 <!-- Token Type Selection - Only show after source type is selected with a smooth transition -->
                 <div v-if="selectedSourceType" class="scan-cards token-type-section">
-                  <div class="scan-card-section-divider">Token Type</div>
+                  <div class="scan-card-section-divider">Variable Type</div>
                   
                   <!-- Design Token Cards -->
                   <div v-for="option in filteredTokenOptions"
