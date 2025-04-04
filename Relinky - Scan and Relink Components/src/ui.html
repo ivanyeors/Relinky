@@ -183,21 +183,23 @@
                        tabindex="0"
                        @click="selectSourceType(option.value)"
                   >
-                    <div class="scan-card-icon">
+                    <div class="scan-card-icon svg-icon">
                       <div class="icon" v-html="icons[option.icon]"></div>
                     </div>
                     
                     <div class="scan-card-content">
                       <div class="scan-card-text">
-                        <div class="scan-card-title">{{ option.label }}</div>
+                        <div class="scan-card-title">{{ option.value === 'local-library' ? 'Local Variables' : 
+                                                    option.value === 'missing-library' ? 'Missing Variables' : 
+                                                    option.label }}</div>
                         <div class="scan-card-description">{{ option.description }}</div>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <!-- Token Type Selection - Only show after source type is selected -->
-                <div v-if="selectedSourceType" class="scan-cards">
+                <!-- Token Type Selection - Only show after source type is selected with a smooth transition -->
+                <div v-if="selectedSourceType" class="scan-cards token-type-section">
                   <div class="scan-card-section-divider">Token Type</div>
                   
                   <!-- Design Token Cards -->
@@ -213,7 +215,7 @@
                        tabindex="0"
                        @click="selectScanType(option.value)"
                   >
-                    <div class="scan-card-icon">
+                    <div class="scan-card-icon svg-icon">
                       <div class="icon" v-html="icons[option.icon]"></div>
                     </div>
                     
@@ -635,8 +637,8 @@
                         <select v-model="variableFilters.libraryType" class="select">
                           <option value="all">All Libraries</option>
                           <option value="team-library">Team Library</option>
-                          <option value="local-library">Local Library</option>
-                          <option value="missing-library">Missing Library</option>
+                          <option value="local-library">Local Variables</option>
+                          <option value="missing-library">Missing Variables</option>
                         </select>
                         <input type="text" 
                                v-model="variableFilters.search" 
@@ -699,8 +701,8 @@
                                            variable.isLocalLibrary ? 'local-library-reference' : 
                                            variable.isMissingLibrary ? 'missing-library-reference' : 'unknown-reference']">
                                 {{ variable.isTeamLibrary ? 'Team Library' : 
-                                   variable.isLocalLibrary ? 'Local Library' : 
-                                   variable.isMissingLibrary ? 'Missing Library' : 'Unknown' }}
+                                   variable.isLocalLibrary ? 'Local Variables' : 
+                                   variable.isMissingLibrary ? 'Missing Variables' : 'Unknown' }}
                               </span>
                             </div>
                             <div class="variable-card-content">

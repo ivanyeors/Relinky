@@ -872,6 +872,26 @@ border-radius: var(--border-radius-sm);
 display: grid;
 grid-template-columns: repeat(2, 1fr);
 gap: var(--spacing-xs);
+margin-bottom: var(--spacing-sm);
+}
+
+/* Add animation for token type section */
+.token-type-section {
+  animation: fadeIn 0.3s ease-in-out;
+  border-top: 1px solid var(--figma-color-border);
+  padding-top: var(--spacing-sm);
+  margin-top: var(--spacing-xs);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .scan-card {
@@ -879,12 +899,15 @@ transition: all 0.2s ease;
 cursor: pointer;
 user-select: none;
 padding: var(--spacing-sm);
-align-items: flex-start;
+align-items: center;
 border-radius: 6px;
 border: 1px solid transparent;
 gap: var(--spacing-xs);
 display: flex;
 background: var(--figma-color-bg-secondary);
+position: relative;
+overflow: hidden;
+min-height: 72px;
 }
 
 .scan-card:hover:not(.selected),
@@ -929,30 +952,46 @@ opacity: 0.7;
 position: relative;
 }
 
+/* Special case for filled elements if needed */
+.scan-card-icon svg * {
+  stroke: currentColor;
+}
+
+.scan-card-icon svg .fill-white {
+  fill: white;
+}
+
+/* Ensure scan card icons are properly styled */
 .scan-card-icon {
-width: 24px;
-height: 24px;
-display: flex;
-align-items: center;
-justify-content: center;
-color: white;
-flex-shrink: 0;
-pointer-events: none;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  pointer-events: none;
+  margin-right: 4px;
 }
 
-.scan-card-icon .icon {
-opacity: 0.8;
+/* Basic icon container */
+.icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
-.scan-card:hover .icon,
-.scan-card.selected .icon {
-opacity: 1;
+/* When icon is within a selected scan card */
+.scan-card.selected .scan-card-icon {
+  color: white;
 }
 
 .scan-card-content {
 flex: 1;
 min-width: 0;
 pointer-events: none;
+padding-left: 4px;
 }
 
 .scan-card-text {
@@ -1507,75 +1546,88 @@ background: var(--figma-color-bg-disabled);
 
 /* Icon Containers
    ------------------------------------------------------------------------- */
-.icon {
-display: flex;
-align-items: center;
-justify-content: center;
-cursor: pointer;
-flex-shrink: 0;
-}
-
-.icon svg {
-width: 100%;
-height: 100%;
-}
-
 .icon-sm {
-width: 12px;
-height: 12px;
+  width: 12px;
+  height: 12px;
 }
 
 .icon-md {
-width: 16px;
-height: 16px;
+  width: 16px;
+  height: 16px;
 }
 
 .icon-lg {
-width: 20px;
-height: 20px;
+  width: 20px;
+  height: 20px;
 }
 
 .icon-xl {
-width: 24px;
-height: 24px;
+  width: 24px;
+  height: 24px;
 }
 
-/* Icon States & Variants
-   ------------------------------------------------------------------------- */
+/* Icon Button Styles */
 .icon-button {
-cursor: pointer;
-display: flex;
-align-items: center;
-justify-content: center;
-color: var(--figma-color-icon-secondary);
-border-radius: 6px;
-padding: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--figma-color-icon-secondary);
+  border-radius: 6px;
+  padding: 4px;
 }
 
 .icon-button:hover {
-background: var(--figma-color-bg-hover);
-color: var(--figma-color-icon);
+  background: var(--figma-color-bg-hover);
+  color: var(--figma-color-icon);
 }
 
 .icon-button.active {
-color: var(--figma-color-icon-brand);
-background: var(--figma-color-bg-brand-tertiary);
+  color: var(--figma-color-icon-brand);
+  background: var(--figma-color-bg-brand-tertiary);
 }
 
+/* Semantic icon colors */
 .icon-success {
-color: var(--figma-color-icon-success);
+  color: var(--figma-color-icon-success);
 }
 
 .icon-warning {
-color: var(--figma-color-icon-warning);
+  color: var(--figma-color-icon-warning);
 }
 
 .icon-danger {
-color: var(--figma-color-icon-danger);
+  color: var(--figma-color-icon-danger);
 }
 
 .icon-brand {
-color: var(--figma-color-icon-brand);
+  color: var(--figma-color-icon-brand);
+}
+
+/* Filter button icons */
+.filter-btn .icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+
+#radius-filter .icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+
+/* Ensure SVG icons use the correct colors */
+.filter-btn.active svg {
+  stroke: white;
+}
+
+.filter-btn svg {
+  stroke: white;
 }
 
 /* Avatars & Images
@@ -2425,11 +2477,12 @@ gap: var(--spacing-xs);
 .scan-card-section-divider {
   font-size: 12px;
   font-weight: 600;
-  color: #777;
+  color: var(--figma-color-text-secondary);
   margin: 16px 0 8px 0;
   padding-bottom: 4px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  border-bottom: 1px solid var(--figma-color-border);
   width: 100%;
+  grid-column: 1 / -1;
 }
 
 /* Library badge for library variable scans */
@@ -2471,5 +2524,4 @@ gap: var(--spacing-xs);
   background-color: rgba(192, 84, 255, 0.2);
   color: #5c2396;
 }
-
 
