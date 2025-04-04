@@ -143,9 +143,9 @@ function initializeApp() {
             icon: 'typography'
           },
           {
-            value: 'vertical-gap',
-            label: 'Vertical Gap',
-            description: 'Find frames with unlinked vertical gap',
+            value: 'gap',
+            label: 'Gap',
+            description: 'Find frames with unlinked gaps in auto-layouts',
             icon: 'spacing'
           },
           {
@@ -618,14 +618,12 @@ function initializeApp() {
         }
         
         // Apply gap filter
-        if (this.gapFilterType && this.gapFilterType !== 'all' && this.selectedScanType === 'vertical-gap') {
+        if (this.gapFilterType && this.gapFilterType !== 'all' && this.selectedScanType === 'gap') {
           let filteredResults = {};
           Object.keys(results).forEach(key => {
             const group = results[key];
             const filteredRefs = group.refs.filter(ref => 
-              (ref.type === 'verticalGap' && this.gapFilterType === 'vertical') ||
-              (ref.type === 'horizontalGap' && this.gapFilterType === 'horizontal') ||
-              (ref.gapType === this.gapFilterType)
+              ref.gapType === this.gapFilterType
             );
             if (filteredRefs.length > 0) {
               filteredResults[key] = { refs: filteredRefs };
@@ -766,7 +764,7 @@ function initializeApp() {
       designTokenOptions() {
         // Filter for standard design token options (typography, spacing, padding, radius, colors)
         return this.tokenScanOptions.filter(option => 
-          ['typography', 'vertical-gap', 'horizontal-padding', 'vertical-padding', 'corner-radius', 'fill', 'stroke'].includes(option.value)
+          ['typography', 'gap', 'horizontal-padding', 'vertical-padding', 'corner-radius', 'fill', 'stroke'].includes(option.value)
         );
       },
       libraryVariableOptions() {
@@ -837,8 +835,8 @@ function initializeApp() {
             icon: 'radius'
           },
           {
-            value: 'vertical-gap',
-            label: 'Vertical Spacing',
+            value: 'gap',
+            label: 'Gap',
             description: 'Find vertical auto-layout gap spacing',
             icon: 'spacing'
           },
@@ -1236,7 +1234,7 @@ function initializeApp() {
           return 'Scan error';
         }
         if (!this.isScanning && this.scanProgress === 100) {
-          return this.hasResults ? 'Scan complete' : 'Scan complete, no issues found';
+          return this.hasResults ? 'Scan complete' : 'No issues found';
         }
         if (this.isScanning) {
           return `Scanning... ${Math.round(this.scanProgress)}%`;
@@ -1939,8 +1937,8 @@ function initializeApp() {
       getVariableProgressStatus() {
         if (!this.canStartVariableScan) return 'Select variable types to scan';
         if (this.isVariableScanning) return `Scanning... ${this.variableScanProgress}%`;
-        if (this.showVariableScanResults) {
-          if (this.linkedVariables.length === 0) return 'No variables found';
+        if (!this.isVariableScanning && this.variableScanProgress === 100) {
+          if (this.linkedVariables.length === 0) return 'No issues found';
           return `Found ${this.linkedVariables.length} variables`;
         }
         return 'Ready to scan';

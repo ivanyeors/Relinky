@@ -386,7 +386,7 @@ export async function scanForVerticalGap(
       missingRefs.push({
         nodeId: node.id,
         nodeName: node.name,
-        type: 'vertical-gap',
+        type: 'gap',
         property: 'itemSpacing',
         currentValue: node.itemSpacing,
         location: 'Vertical Gap',
@@ -1427,7 +1427,7 @@ export async function scanForMissingReferences(
     let refs: MissingReference[] = [];
     
     switch (scanType) {
-      case 'vertical-gap':
+      case 'gap':
         refs = await scanForVerticalGap(
           progress => progressCallback?.(progress),
           nodesToScan,

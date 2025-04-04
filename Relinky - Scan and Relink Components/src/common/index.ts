@@ -28,7 +28,7 @@ export interface MissingReference {
 }
 
 // Update ScanType to include all scan types
-export type ScanType = 'inactive-tokens' | 'local-library' | 'team-library' | 'missing-library' | 'vertical-gap' | 'horizontal-padding' | 'vertical-padding' | 'corner-radius' | 'fill' | 'stroke' | 'typography';
+export type ScanType = 'inactive-tokens' | 'local-library' | 'team-library' | 'missing-library' | 'gap' | 'horizontal-padding' | 'vertical-padding' | 'corner-radius' | 'fill' | 'stroke' | 'typography';
 
 // Interface for tracking scan progress
 export interface ScanProgress {
