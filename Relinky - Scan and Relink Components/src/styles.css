@@ -878,7 +878,6 @@ margin-bottom: var(--spacing-sm);
 /* Add animation for token type section */
 .token-type-section {
   animation: fadeIn 0.3s ease-in-out;
-  border-top: 1px solid var(--figma-color-border);
   padding-top: var(--spacing-sm);
   margin-top: var(--spacing-xs);
 }
