@@ -142,7 +142,44 @@ export async function scanForRawValues(
   function isRawValue(node: SceneNode, property: string): boolean {
     // Check for variable bindings
     if ('boundVariables' in node && node.boundVariables) {
-      if (property in node.boundVariables) {
+      // For properties that could have array bindings (like fills)
+      if (property === 'fills' || property === 'strokes') {
+        // Get the binding, which could be an array for fills/strokes
+        const binding = node.boundVariables[property];
+        
+        // If we have any binding at all for this property, it's not fully raw
+        if (binding) {
+          console.log(`Node ${node.name} has bound variables for ${property}:`, binding);
+          
+          // For fills/strokes, we need to check if ALL paints have variables
+          // Since a partially bound fill array can still have raw values
+          if (Array.isArray(binding)) {
+            // Get the actual fills/strokes array
+            const paints = (node as any)[property] as Paint[];
+            
+            // If there are fewer bindings than paints, some paints are raw values
+            if (binding.length < paints.length) {
+              console.log(`Node ${node.name} has partially bound ${property}: ${binding.length} bindings for ${paints.length} paints`);
+              return true; // Has some raw values
+            }
+            
+            // Check if any binding is null/undefined in the array (indicating a raw value)
+            for (let i = 0; i < binding.length; i++) {
+              if (!binding[i] || !binding[i].id) {
+                console.log(`Node ${node.name} has a null/undefined binding for ${property}[${i}]`);
+                return true; // Has some raw values
+              }
+            }
+            
+            // All paints have valid variable bindings
+            console.log(`Node ${node.name} has fully bound ${property} (${binding.length} bindings)`);
+            return false;
+          }
+          
+          // Single binding for the whole property
+          return false;
+        }
+      } else if (property in node.boundVariables) {
         console.log(`Property ${property} in node ${node.name} has a bound variable`);
         return false;
       }
@@ -214,13 +251,42 @@ export async function scanForRawValues(
   
   // Helper to check if a node has a valid fill
   function hasValidFill(node: SceneNode): boolean {
-    if (!('fills' in node)) return false;
+    if (!('fills' in node)) {
+      return false;
+    }
     
-    const fills = (node as any).fills;
-    if (!hasValidItems(fills)) return false;
+    // Access fills safely with type casting
+    const fills = node.fills as ReadonlyArray<Paint> | PluginAPI['mixed'];
     
-    // Check if any of the fills are enabled (not hidden)
-    return fills.some((fill: Paint) => fill.visible !== false);
+    // Handle mixed or undefined fills
+    if (fills === figma.mixed || !fills || !Array.isArray(fills) || fills.length === 0) {
+      return false;
+    }
+    
+    // Check if any of the fills are enabled and aren't transparent
+    return fills.some((fill) => {
+      // Skip invisible fills
+      if (fill.visible === false) {
+        return false;
+      }
+      
+      if (fill.type === 'SOLID') {
+        // For solid fills - check if it has color and non-zero opacity
+        if (!fill.color) {
+          return false;
+        }
+        
+        // Check opacity from both the fill's opacity property and the color's alpha
+        const fillOpacity = typeof fill.opacity === 'number' ? fill.opacity : 1;
+        const colorAlpha = 'a' in fill.color ? fill.color.a : 1;
+        
+        // A fill is valid if it has any opacity
+        return fillOpacity > 0 && colorAlpha > 0;
+      } 
+      
+      // Consider other fill types (gradients, images) as valid
+      return true;
+    });
   }
   
   // Helper to check if a node has a valid stroke
@@ -292,15 +358,88 @@ export async function scanForRawValues(
           // Check fill
           if (hasValidFill(node) && isRawValue(node, 'fills')) {
             console.log(`Found raw fill value in node: ${node.name} (${String(node.type)})`);
-            results.push({
-              nodeId: node.id,
-              nodeName: node.name,
-              location: getNodePath(node),
-              property: 'fills',
-              type: 'raw-value',
-              currentValue: (node as any).fills,
-              isVisible: node.visible !== false
-            });
+            
+            // Get fills as a properly typed array - need to ensure 'fills' exists
+            if (!('fills' in node)) {
+              continue;
+            }
+            
+            const fillsProp = node.fills as ReadonlyArray<Paint> | PluginAPI['mixed'];
+            
+            // Skip mixed fills as they're complicated to handle
+            if (fillsProp === figma.mixed) {
+              console.log(`Node ${node.name} has mixed fills, skipping`);
+              continue;
+            }
+            
+            // Ensure we have an array of fills
+            const fills = Array.isArray(fillsProp) ? fillsProp : [];
+            
+            // Get bound variables for fills if they exist
+            const boundVars = ('boundVariables' in node && node.boundVariables && node.boundVariables['fills']) 
+                            ? node.boundVariables['fills'] 
+                            : [];
+            
+            // Log for debugging
+            console.log(`Node ${node.name} has ${fills.length} fills and ${Array.isArray(boundVars) ? boundVars.length : 0} bound variables`);
+            
+            // Find raw (unbound) fills
+            if (fills.length > 0) {
+              // Handle case where boundVars is an array (multiple bindings)
+              if (Array.isArray(boundVars) && boundVars.length > 0) {
+                // Process each fill to check which ones are raw
+                for (let i = 0; i < fills.length; i++) {
+                  const fill = fills[i];
+                  
+                  // Skip invisible fills
+                  if (fill.visible === false) continue;
+                  
+                  // Check if this specific fill has a bound variable
+                  const isBound = i < boundVars.length && 
+                                  boundVars[i] && 
+                                  typeof boundVars[i] === 'object' && 
+                                  'id' in boundVars[i] && 
+                                  boundVars[i].id;
+                  
+                  if (!isBound) {
+                    // This is a raw fill
+                    console.log(`Fill ${i} in node ${node.name} is raw:`, fill.type);
+                    
+                    // Add to results
+                    results.push({
+                      nodeId: node.id,
+                      nodeName: node.name,
+                      location: getNodePath(node),
+                      property: `fills[${i}]`,
+                      type: 'raw-value',
+                      currentValue: fill,
+                      isVisible: node.visible !== false
+                    });
+                  }
+                }
+              } else {
+                // No bound variables array, all fills are raw
+                console.log(`All ${fills.length} fills in node ${node.name} are raw`);
+                
+                // Add each fill individually for better tracking
+                for (let i = 0; i < fills.length; i++) {
+                  const fill = fills[i];
+                  
+                  // Skip invisible fills
+                  if (fill.visible === false) continue;
+                  
+                  results.push({
+                    nodeId: node.id,
+                    nodeName: node.name,
+                    location: getNodePath(node),
+                    property: `fills[${i}]`,
+                    type: 'raw-value',
+                    currentValue: fill,
+                    isVisible: node.visible !== false
+                  });
+                }
+              }
+            }
           }
           
           // Check stroke
@@ -615,13 +754,46 @@ export function groupRawValueResults(
     let groupKey = '';
     
     // Handle different types of values for better grouping
-    if (result.property === 'fills' || result.property === 'strokes') {
-      // For fills and strokes, group by the first item's type and color
-      const value = result.currentValue as Paint[];
-      if (Array.isArray(value) && value.length > 0) {
+    if (result.property === 'fills' || result.property.startsWith('fills[')) {
+      // For fills, group by the first item's type and color
+      const value = Array.isArray(result.currentValue) ? result.currentValue : [result.currentValue];
+      
+      if (value.length > 0) {
         const firstItem = value[0];
         if (firstItem && firstItem.type === 'SOLID') {
-          groupKey = `${result.property}-${firstItem.type}-${JSON.stringify(firstItem.color)}`;
+          // For solid fills, use the color as key
+          if (firstItem.color) {
+            const color = firstItem.color as RGBA | RGB;
+            const colorKey = `r:${color.r.toFixed(2)},g:${color.g.toFixed(2)},b:${color.b.toFixed(2)}`;
+            const opacityKey = 'a' in color ? `,a:${color.a.toFixed(2)}` : '';
+            groupKey = `${result.property}-${firstItem.type}-${colorKey}${opacityKey}`;
+          } else {
+            groupKey = `${result.property}-${firstItem.type}-unknown-color`;
+          }
+        } else if (firstItem && firstItem.type) {
+          // For other fill types, just use the type
+          groupKey = `${result.property}-${firstItem.type}`;
+        } else {
+          groupKey = `${result.property}-unknown`;
+        }
+      } else {
+        groupKey = `${result.property}-empty`;
+      }
+    } else if (result.property === 'strokes' || result.property.startsWith('strokes[')) {
+      // For strokes, similar to fills but with stroke type
+      const value = Array.isArray(result.currentValue) ? result.currentValue : [result.currentValue];
+      if (value.length > 0) {
+        const firstItem = value[0];
+        if (firstItem && firstItem.type === 'SOLID') {
+          // For solid strokes, use the color as key
+          if (firstItem.color) {
+            const color = firstItem.color as RGBA | RGB;
+            const colorKey = `r:${color.r.toFixed(2)},g:${color.g.toFixed(2)},b:${color.b.toFixed(2)}`;
+            const opacityKey = 'a' in color ? `,a:${color.a.toFixed(2)}` : '';
+            groupKey = `${result.property}-${firstItem.type}-${colorKey}${opacityKey}`;
+          } else {
+            groupKey = `${result.property}-${firstItem.type}-unknown-color`;
+          }
         } else if (firstItem && firstItem.type) {
           groupKey = `${result.property}-${firstItem.type}`;
         } else {
