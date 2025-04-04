@@ -6,7 +6,7 @@ import { isScancelled } from './index';
 
 // Type guards for node properties
 function hasLayoutMode(node: SceneNode): node is FrameNode {
-  return node.type === 'FRAME' && 'layoutMode' in node;
+  return node.type === 'FRAME';
 }
 
 function hasCornerRadius(node: SceneNode): node is RectangleNode | EllipseNode | PolygonNode | StarNode | VectorNode | FrameNode | ComponentNode | InstanceNode {
@@ -22,14 +22,14 @@ function hasIndividualCornerRadii(node: SceneNode): node is RectangleNode | Fram
   );
 }
 
-function hasPadding(node: SceneNode): node is FrameNode {
-  return (
-    node.type === 'FRAME' &&
-    'paddingLeft' in node &&
-    'paddingRight' in node &&
-    'paddingTop' in node &&
-    'paddingBottom' in node
-  );
+/**
+ * Determines if a FrameNode has any padding (top, right, bottom, or left)
+ */
+function hasPadding(node: FrameNode): boolean {
+  return node.paddingTop > 0 || 
+         node.paddingRight > 0 || 
+         node.paddingBottom > 0 || 
+         node.paddingLeft > 0;
 }
 
 /**
@@ -64,11 +64,13 @@ export async function scanForRawValues(
   // Determine which nodes to scan
   if (selectedFrameIds && selectedFrameIds.length > 0) {
     // Get selected nodes from IDs
-    nodesToScan = await Promise.all(
+    const selectedNodes = await Promise.all(
       selectedFrameIds.map(id => figma.getNodeByIdAsync(id))
     ).then(nodes => nodes.filter((node): node is SceneNode => node !== null && 'type' in node));
     
+    nodesToScan = selectedNodes;
     console.log('Scanning selected frames:', nodesToScan.length, 'nodes');
+    console.log('Selected node names:', nodesToScan.map(n => n.name).join(', '));
   } else {
     // Fallback to current page
     nodesToScan = Array.from(figma.currentPage.children);
@@ -133,115 +135,57 @@ export async function scanForRawValues(
     if (processedNodeIds.has(node.id)) return false;
     
     // Skip if node is hidden and we're ignoring hidden layers
-    if (ignoreHiddenLayers && 'visible' in node && !node.visible) return false;
+    if (ignoreHiddenLayers && 'visible' in node) {
+      // Safely check visibility
+      try {
+        // Need to check explicitly against false since visible could be a mixed value
+        if (node.visible === false) {
+          return false;
+        }
+      } catch (e) {
+        // If an error occurs, default to including the node
+        console.warn(`Error checking visibility for node ${node.name}:`, e);
+      }
+    }
     
     return true;
   }
   
-  // Function to check if a property has a raw value (not using variables)
-  function isRawValue(node: SceneNode, property: string): boolean {
-    // Check for variable bindings
-    if ('boundVariables' in node && node.boundVariables) {
-      // For properties that could have array bindings (like fills)
-      if (property === 'fills' || property === 'strokes') {
-        // Get the binding, which could be an array for fills/strokes
-        const binding = node.boundVariables[property];
-        
-        // If we have any binding at all for this property, it's not fully raw
-        if (binding) {
-          console.log(`Node ${node.name} has bound variables for ${property}:`, binding);
-          
-          // For fills/strokes, we need to check if ALL paints have variables
-          // Since a partially bound fill array can still have raw values
-          if (Array.isArray(binding)) {
-            // Get the actual fills/strokes array
-            const paints = (node as any)[property] as Paint[];
-            
-            // If there are fewer bindings than paints, some paints are raw values
-            if (binding.length < paints.length) {
-              console.log(`Node ${node.name} has partially bound ${property}: ${binding.length} bindings for ${paints.length} paints`);
-              return true; // Has some raw values
-            }
-            
-            // Check if any binding is null/undefined in the array (indicating a raw value)
-            for (let i = 0; i < binding.length; i++) {
-              if (!binding[i] || !binding[i].id) {
-                console.log(`Node ${node.name} has a null/undefined binding for ${property}[${i}]`);
-                return true; // Has some raw values
-              }
-            }
-            
-            // All paints have valid variable bindings
-            console.log(`Node ${node.name} has fully bound ${property} (${binding.length} bindings)`);
-            return false;
-          }
-          
-          // Single binding for the whole property
-          return false;
+  /**
+   * Checks if a property on a node is a raw value (not bound to a variable)
+   */
+  function isRawValue(node: SceneNode, propertyName: string): boolean {
+    try {
+      // Make sure the node has boundVariables property
+      if ('boundVariables' in node) {
+        // If there are no bound variables at all, it's definitely a raw value
+        if (!node.boundVariables) {
+          console.log(`Node ${node.name} has no boundVariables at all, property ${propertyName} is raw`);
+          return true;
         }
-      } else if (property in node.boundVariables) {
-        console.log(`Property ${property} in node ${node.name} has a bound variable`);
+        
+        // Type-safe check if the property is not in boundVariables
+        // @ts-ignore - Figma API doesn't provide complete typings for all possible property names
+        const boundVariable = node.boundVariables[propertyName];
+        if (!boundVariable) {
+          console.log(`Property ${propertyName} is not bound on node ${node.name}, considering it raw`);
+          return true;
+        }
+        
+        // The property is bound to something, so it's not a raw value
+        console.log(`Property ${propertyName} is bound on node ${node.name}, not a raw value`);
         return false;
       }
+      
+      // If the node doesn't have boundVariables property at all, 
+      // it's using raw values by definition
+      console.log(`Node ${node.name} cannot have bound variables (doesn't support boundVariables property), property ${propertyName} is raw`);
+      return true;
+    } catch (error) {
+      console.warn(`Error checking if ${propertyName} is raw on node ${node.name}:`, error);
+      // Default to true in case of errors - better to report potentially false positives
+      return true;
     }
-    
-    // Check for styles, based on node type
-    switch (node.type) {
-      case 'RECTANGLE':
-      case 'ELLIPSE':
-      case 'POLYGON':
-      case 'STAR':
-      case 'VECTOR':
-      case 'FRAME':
-      case 'COMPONENT':
-      case 'INSTANCE':
-        // For shapes and containers
-        if (property === 'fills' && 'fillStyleId' in node) {
-          const styleId = node.fillStyleId;
-          if (styleId !== '' && styleId !== undefined) {
-            console.log(`Node ${node.name} uses a fill style, not a raw value`);
-            return false;
-          }
-        }
-        
-        if (property === 'strokes' && 'strokeStyleId' in node) {
-          const styleId = node.strokeStyleId;
-          if (styleId !== '' && styleId !== undefined) {
-            console.log(`Node ${node.name} uses a stroke style, not a raw value`);
-            return false;
-          }
-        }
-        
-        if (property === 'effects' && 'effectStyleId' in node) {
-          const styleId = node.effectStyleId;
-          if (styleId !== '' && styleId !== undefined) {
-            console.log(`Node ${node.name} uses an effect style, not a raw value`);
-            return false;
-          }
-        }
-        break;
-        
-      case 'TEXT':
-        // For text nodes
-        if (property === 'fillStyleId' || 
-            property === 'fontName' || 
-            property === 'fontSize' || 
-            property === 'fontWeight' || 
-            property === 'lineHeight' || 
-            property === 'letterSpacing') {
-          if ('textStyleId' in node) {
-            const styleId = node.textStyleId;
-            if (styleId !== '' && styleId !== undefined) {
-              console.log(`Text node ${node.name} uses a text style, not raw values`);
-              return false;
-            }
-          }
-        }
-        break;
-    }
-    
-    // If we've gotten here, it's a raw value
-    return true;
   }
   
   // Helper to check if an array property has valid items
@@ -259,8 +203,20 @@ export async function scanForRawValues(
     const fills = node.fills as ReadonlyArray<Paint> | PluginAPI['mixed'];
     
     // Handle mixed or undefined fills
-    if (fills === figma.mixed || !fills || !Array.isArray(fills) || fills.length === 0) {
+    if (fills === figma.mixed || !fills) {
       return false;
+    }
+    
+    // For traversal purposes, consider all frames and containers valid
+    // This ensures nested elements are scanned even if parent has no fills
+    if (['FRAME', 'GROUP', 'COMPONENT', 'INSTANCE'].includes(node.type)) {
+      return true;
+    }
+    
+    // Empty array is valid for the purpose of traversal - we want to check children
+    // even if the parent has no fills
+    if (!Array.isArray(fills) || fills.length === 0) {
+      return true; // Changed to true to allow traversal
     }
     
     // Check if any of the fills are enabled and aren't transparent
@@ -322,6 +278,33 @@ export async function scanForRawValues(
     return effects.some((effect: Effect) => effect.visible !== false);
   }
   
+  /**
+   * Gets a node's visibility, considering all its parents
+   */
+  function getNodeVisibility(node: SceneNode): boolean {
+    try {
+      // Check if the node itself is visible
+      if ('visible' in node && !node.visible) {
+        return false;
+      }
+      
+      // Check parent visibility recursively
+      let parent = node.parent;
+      while (parent) {
+        if ('visible' in parent && !parent.visible) {
+          return false;
+        }
+        parent = parent.parent;
+      }
+      
+      return true;
+    } catch (error) {
+      console.warn(`Error checking visibility for node ${node.name}:`, error);
+      // Default to true in case of errors
+      return true;
+    }
+  }
+  
   // Recursively process nodes
   async function processNodes(nodes: readonly SceneNode[]) {
     // Check if scan was cancelled
@@ -338,377 +321,500 @@ export async function scanForRawValues(
         console.log(`Processing node: ${node.name} (${String(node.type)}), #${totalNodesProcessed} of ${totalNodesToProcess}`);
       }
       
-      // Skip if we shouldn't include this node
-      if (!shouldIncludeNode(node)) continue;
+      // Check if node has children
+      const hasChildren = 'children' in node && node.children && node.children.length > 0;
       
-      // Mark this node as processed
-      processedNodeIds.add(node.id);
+      // Extra debug for frames
+      if (node.type === 'FRAME') {
+        console.log(`Processing frame: ${node.name}, hasChildren: ${hasChildren}, layoutMode: ${(node as FrameNode).layoutMode}, scanType: ${scanType}`);
+      }
       
-      // Process raw values based on node type
-      switch (node.type) {
-        case 'RECTANGLE':
-        case 'ELLIPSE':
-        case 'POLYGON':
-        case 'STAR':
-        case 'VECTOR':
-        case 'FRAME':
-        case 'COMPONENT':
-        case 'INSTANCE':
-        case 'GROUP':
-          // Check fill
-          if (hasValidFill(node) && isRawValue(node, 'fills')) {
-            console.log(`Found raw fill value in node: ${node.name} (${String(node.type)})`);
+      // Determine if this node should be included in the results
+      const includeNode = shouldIncludeNode(node);
+      
+      // Get node visibility for logging
+      const isVisible = getNodeVisibility(node);
+      
+      // If we're processing a hidden node, log it
+      if (!isVisible) {
+        console.log(`Processing ${includeNode ? '' : 'but skipping results for'} hidden node: ${node.name} (${node.type})`);
+      }
+
+      // Process this node first if it's a special scan type
+      if (includeNode) {
+        // Mark this node as processed
+        processedNodeIds.add(node.id);
+        
+        // Extra debug logging for fill detection
+        if (scanType === 'fill' && 'fills' in node) {
+          const fills = node.fills as Paint[] | readonly Paint[] | PluginAPI['mixed'];
+          const fillCount = fills === figma.mixed ? 'mixed' : (Array.isArray(fills) ? fills.length : 0);
+          console.log(`Checking node for fills: ${node.name} (${node.type}), has ${fillCount} fills, visible: ${isVisible}`);
+        }
+
+        // For autolayout scans, we need to check the node regardless of children
+        if (['gap', 'vertical-padding', 'horizontal-padding'].includes(scanType) && node.type === 'FRAME') {
+          try {
+            // Debug logging for autolayout properties
+            console.log(`Checking frame for layout properties: ${node.name}, layoutMode: ${(node as FrameNode).layoutMode}, scanType: ${scanType}`);
             
-            // Get fills as a properly typed array - need to ensure 'fills' exists
-            if (!('fills' in node)) {
-              continue;
-            }
-            
-            const fillsProp = node.fills as ReadonlyArray<Paint> | PluginAPI['mixed'];
-            
-            // Skip mixed fills as they're complicated to handle
-            if (fillsProp === figma.mixed) {
-              console.log(`Node ${node.name} has mixed fills, skipping`);
-              continue;
-            }
-            
-            // Ensure we have an array of fills
-            const fills = Array.isArray(fillsProp) ? fillsProp : [];
-            
-            // Get bound variables for fills if they exist
-            const boundVars = ('boundVariables' in node && node.boundVariables && node.boundVariables['fills']) 
-                            ? node.boundVariables['fills'] 
-                            : [];
-            
-            // Log for debugging
-            console.log(`Node ${node.name} has ${fills.length} fills and ${Array.isArray(boundVars) ? boundVars.length : 0} bound variables`);
-            
-            // Find raw (unbound) fills
-            if (fills.length > 0) {
-              // Handle case where boundVars is an array (multiple bindings)
-              if (Array.isArray(boundVars) && boundVars.length > 0) {
-                // Process each fill to check which ones are raw
-                for (let i = 0; i < fills.length; i++) {
-                  const fill = fills[i];
-                  
-                  // Skip invisible fills
-                  if (fill.visible === false) continue;
-                  
-                  // Check if this specific fill has a bound variable
-                  const isBound = i < boundVars.length && 
-                                  boundVars[i] && 
-                                  typeof boundVars[i] === 'object' && 
-                                  'id' in boundVars[i] && 
-                                  boundVars[i].id;
-                  
-                  if (!isBound) {
-                    // This is a raw fill
-                    console.log(`Fill ${i} in node ${node.name} is raw:`, fill.type);
-                    
-                    // Add to results
+            const frameNode = node as FrameNode;
+            // Check for vertical spacing (gap value) - only if it has a valid layout mode
+            if (frameNode.layoutMode !== 'NONE') {
+              const spacing = frameNode.itemSpacing;
+              console.log(`Frame ${node.name} has spacing: ${spacing}, layout: ${frameNode.layoutMode}`);
+              
+              // For vertical gap, we care only if the layout is VERTICAL
+              if (scanType === 'gap' && frameNode.layoutMode === 'VERTICAL' && 
+                  spacing > 0 && isRawValue(node, 'itemSpacing')) {
+                console.log(`Found raw vertical gap in ${node.name}: ${spacing}`);
+                results.push({
+                  nodeId: node.id,
+                  nodeName: node.name,
+                  location: getNodePath(node),
+                  property: 'itemSpacing',
+                  type: 'raw-value',
+                  currentValue: spacing,
+                  isVisible: isVisible
+                });
+              }
+              
+              // Check padding values if needed
+              if ((scanType === 'vertical-padding' || scanType === 'horizontal-padding') && 
+                  hasPadding(frameNode)) {
+                
+                if (scanType === 'vertical-padding') {
+                  // Top padding
+                  if (frameNode.paddingTop > 0 && isRawValue(node, 'paddingTop')) {
+                    console.log(`Found raw paddingTop in ${node.name}: ${frameNode.paddingTop}`);
                     results.push({
                       nodeId: node.id,
                       nodeName: node.name,
                       location: getNodePath(node),
-                      property: `fills[${i}]`,
+                      property: 'paddingTop',
                       type: 'raw-value',
-                      currentValue: fill,
-                      isVisible: node.visible !== false
+                      currentValue: frameNode.paddingTop,
+                      isVisible: isVisible
+                    });
+                  }
+                  
+                  // Bottom padding
+                  if (frameNode.paddingBottom > 0 && isRawValue(node, 'paddingBottom')) {
+                    console.log(`Found raw paddingBottom in ${node.name}: ${frameNode.paddingBottom}`);
+                    results.push({
+                      nodeId: node.id,
+                      nodeName: node.name,
+                      location: getNodePath(node),
+                      property: 'paddingBottom',
+                      type: 'raw-value',
+                      currentValue: frameNode.paddingBottom,
+                      isVisible: isVisible
+                    });
+                  }
+                } else if (scanType === 'horizontal-padding') {
+                  // Left padding
+                  if (frameNode.paddingLeft > 0 && isRawValue(node, 'paddingLeft')) {
+                    console.log(`Found raw paddingLeft in ${node.name}: ${frameNode.paddingLeft}`);
+                    results.push({
+                      nodeId: node.id,
+                      nodeName: node.name,
+                      location: getNodePath(node),
+                      property: 'paddingLeft',
+                      type: 'raw-value',
+                      currentValue: frameNode.paddingLeft,
+                      isVisible: isVisible
+                    });
+                  }
+                  
+                  // Right padding
+                  if (frameNode.paddingRight > 0 && isRawValue(node, 'paddingRight')) {
+                    console.log(`Found raw paddingRight in ${node.name}: ${frameNode.paddingRight}`);
+                    results.push({
+                      nodeId: node.id,
+                      nodeName: node.name,
+                      location: getNodePath(node),
+                      property: 'paddingRight',
+                      type: 'raw-value',
+                      currentValue: frameNode.paddingRight,
+                      isVisible: isVisible
                     });
                   }
                 }
-              } else {
-                // No bound variables array, all fills are raw
-                console.log(`All ${fills.length} fills in node ${node.name} are raw`);
+              }
+            } else {
+              console.log(`Frame ${node.name} has no layout mode (NONE), skipping layout property checks`);
+            }
+          } catch (error) {
+            console.warn(`Error checking layout properties for node ${node.name}:`, error);
+          }
+        }
+        
+        // Process other properties based on node type
+        if (!['gap', 'vertical-padding', 'horizontal-padding'].includes(scanType)) {
+          // Process regular properties as before
+          switch (node.type) {
+            case 'RECTANGLE':
+            case 'ELLIPSE':
+            case 'POLYGON':
+            case 'STAR':
+            case 'VECTOR':
+            case 'FRAME':
+            case 'COMPONENT':
+            case 'INSTANCE':
+            case 'GROUP':
+              // Check fill - only for node types that can have fills
+              if (scanType === 'fill' && 'fills' in node) {
+                try {
+                  const fills = node.fills as Paint[] | readonly Paint[] | PluginAPI['mixed'];
+                  
+                  // Skip mixed fills - they're complex to handle
+                  if (fills === figma.mixed) {
+                    console.log(`Node ${node.name} has mixed fills, skipping fill check`);
+                  } 
+                  // Process array of fills - even empty ones
+                  else if (Array.isArray(fills)) {
+                    // Check if the fill array is a raw value that should be reported
+                    if (fills.length > 0 && isRawValue(node, 'fills')) {
+                      console.log(`Found raw fill value(s) in node: ${node.name} (${String(node.type)})`);
+                      
+                      // Get bound variables for fills if they exist
+                      const boundVars = ('boundVariables' in node && node.boundVariables && node.boundVariables['fills']) 
+                                    ? node.boundVariables['fills'] 
+                                    : [];
+                      
+                      // Process each fill to determine if it's raw
+                      for (let i = 0; i < fills.length; i++) {
+                        const fill = fills[i];
+                        
+                        // Skip invisible fills
+                        if (fill.visible === false) continue;
+                        
+                        // Check if this specific fill has a bound variable
+                        let isBound = false;
+                        
+                        if (Array.isArray(boundVars) && boundVars.length > 0) {
+                          // Safely check each condition separately
+                          if (i < boundVars.length) {
+                            const binding = boundVars[i];
+                            if (binding && typeof binding === 'object') {
+                              // Now safely check for id property
+                              if ('id' in binding && binding.id) {
+                                isBound = true;
+                              }
+                            }
+                          }
+                        }
+                        
+                        // Process each unbound fill
+                        if (!isBound) {
+                          results.push({
+                            nodeId: node.id,
+                            nodeName: node.name,
+                            location: getNodePath(node),
+                            property: `fills[${i}]`,
+                            type: 'raw-value',
+                            currentValue: fill,
+                            isVisible: isVisible
+                          });
+                        }
+                      }
+                    }
+                  }
+                } catch (error) {
+                  console.warn(`Error processing fills in node ${node.name}:`, error);
+                }
+              }
+              
+              // Check stroke
+              if (hasValidStroke(node) && isRawValue(node, 'strokes')) {
+                console.log(`Found raw stroke value in node: ${node.name} (${String(node.type)})`);
                 
-                // Add each fill individually for better tracking
-                for (let i = 0; i < fills.length; i++) {
-                  const fill = fills[i];
+                // Use a safe way to determine visibility
+                const isNodeVisible = getNodeVisibility(node);
+                
+                results.push({
+                  nodeId: node.id,
+                  nodeName: node.name,
+                  location: getNodePath(node),
+                  property: 'strokes',
+                  type: 'raw-value',
+                  currentValue: (node as any).strokes,
+                  isVisible: isNodeVisible
+                });
+              }
+              
+              // Check effects (shadows, blurs)
+              const effects = (node as any).effects;
+              
+              if (node && effects && effects.length > 0 && isRawValue(node, 'effects')) {
+                console.log(`Found raw effects in node: ${node.name}`);
+                results.push({
+                  nodeId: node.id,
+                  nodeName: node.name,
+                  location: getNodePath(node),
+                  property: 'effects',
+                  type: 'raw-value',
+                  currentValue: effects,
+                  isVisible: getNodeVisibility(node)
+                });
+              }
+              
+              // Check for autolayout properties in Frame nodes
+              if (node.type === 'FRAME') {
+                // Debug log for autolayout detection
+                console.log(`Checking frame for autolayout: ${node.name}, layoutMode: ${(node as FrameNode).layoutMode}`);
+                
+                try {
+                  // Check for vertical spacing (gap value)
+                  if ((node as FrameNode).layoutMode !== 'NONE') {
+                    const spacing = (node as FrameNode).itemSpacing;
+                    console.log(`Frame ${node.name} has spacing: ${spacing}, vertical: ${(node as FrameNode).layoutMode === 'VERTICAL'}`);
+                    
+                    // Only report raw value if the spacing is non-zero and is a raw value (not from a variable)
+                    if (spacing > 0 && isRawValue(node, 'itemSpacing')) {
+                      console.log(`Found raw gap value in node: ${node.name} (${(node as FrameNode).layoutMode})`);
+                      results.push({
+                        nodeId: node.id,
+                        nodeName: node.name,
+                        location: getNodePath(node),
+                        property: 'itemSpacing',
+                        type: 'raw-value',
+                        currentValue: (node as FrameNode).itemSpacing,
+                        isVisible: getNodeVisibility(node)
+                      });
+                    }
+                  }
                   
-                  // Skip invisible fills
-                  if (fill.visible === false) continue;
-                  
+                  // Check padding values if this is a Frame with padding and non-NONE layout
+                  if (hasPadding(node as FrameNode) && (node as FrameNode).layoutMode !== 'NONE') {
+                    // Left padding
+                    if ((node as FrameNode).paddingLeft > 0 && isRawValue(node, 'paddingLeft')) {
+                      console.log(`Found raw paddingLeft value in node: ${node.name}`);
+                      results.push({
+                        nodeId: node.id,
+                        nodeName: node.name,
+                        location: getNodePath(node),
+                        property: 'paddingLeft',
+                        type: 'raw-value',
+                        currentValue: (node as FrameNode).paddingLeft,
+                        isVisible: getNodeVisibility(node)
+                      });
+                    }
+                    
+                    // Right padding
+                    if ((node as FrameNode).paddingRight > 0 && isRawValue(node, 'paddingRight')) {
+                      console.log(`Found raw paddingRight value in node: ${node.name}`);
+                      results.push({
+                        nodeId: node.id,
+                        nodeName: node.name,
+                        location: getNodePath(node),
+                        property: 'paddingRight',
+                        type: 'raw-value',
+                        currentValue: (node as FrameNode).paddingRight,
+                        isVisible: getNodeVisibility(node)
+                      });
+                    }
+                    
+                    // Top padding
+                    if ((node as FrameNode).paddingTop > 0 && isRawValue(node, 'paddingTop')) {
+                      console.log(`Found raw paddingTop value in node: ${node.name}`);
+                      results.push({
+                        nodeId: node.id,
+                        nodeName: node.name,
+                        location: getNodePath(node),
+                        property: 'paddingTop',
+                        type: 'raw-value',
+                        currentValue: (node as FrameNode).paddingTop,
+                        isVisible: getNodeVisibility(node)
+                      });
+                    }
+                    
+                    // Bottom padding
+                    if ((node as FrameNode).paddingBottom > 0 && isRawValue(node, 'paddingBottom')) {
+                      console.log(`Found raw paddingBottom value in node: ${node.name}`);
+                      results.push({
+                        nodeId: node.id,
+                        nodeName: node.name,
+                        location: getNodePath(node),
+                        property: 'paddingBottom',
+                        type: 'raw-value',
+                        currentValue: (node as FrameNode).paddingBottom,
+                        isVisible: getNodeVisibility(node)
+                      });
+                    }
+                  }
+                } catch (error) {
+                  console.warn(`Error checking autolayout properties for node ${node.name}:`, error);
+                }
+              }
+              
+              // Check corner radius
+              if (hasCornerRadius(node) && typeof node.cornerRadius === 'number' && node.cornerRadius > 0 && isRawValue(node, 'cornerRadius')) {
+                console.log(`Found raw corner radius value in node: ${node.name}`);
+                results.push({
+                  nodeId: node.id,
+                  nodeName: node.name,
+                  location: getNodePath(node),
+                  property: 'cornerRadius',
+                  type: 'raw-value',
+                  currentValue: node.cornerRadius,
+                  isVisible: getNodeVisibility(node)
+                });
+              }
+              
+              // Check individual corner radii if supported by this node type
+              if (hasIndividualCornerRadii(node)) {
+                // Top left
+                if (node.topLeftRadius > 0 && isRawValue(node, 'topLeftRadius')) {
+                  console.log(`Found raw topLeftRadius value in node: ${node.name}`);
                   results.push({
                     nodeId: node.id,
                     nodeName: node.name,
                     location: getNodePath(node),
-                    property: `fills[${i}]`,
+                    property: 'topLeftRadius',
                     type: 'raw-value',
-                    currentValue: fill,
-                    isVisible: node.visible !== false
+                    currentValue: node.topLeftRadius,
+                    isVisible: getNodeVisibility(node)
+                  });
+                }
+                
+                // Top right
+                if (node.topRightRadius > 0 && isRawValue(node, 'topRightRadius')) {
+                  console.log(`Found raw topRightRadius value in node: ${node.name}`);
+                  results.push({
+                    nodeId: node.id,
+                    nodeName: node.name,
+                    location: getNodePath(node),
+                    property: 'topRightRadius',
+                    type: 'raw-value',
+                    currentValue: node.topRightRadius,
+                    isVisible: getNodeVisibility(node)
+                  });
+                }
+                
+                // Bottom left
+                if (node.bottomLeftRadius > 0 && isRawValue(node, 'bottomLeftRadius')) {
+                  console.log(`Found raw bottomLeftRadius value in node: ${node.name}`);
+                  results.push({
+                    nodeId: node.id,
+                    nodeName: node.name,
+                    location: getNodePath(node),
+                    property: 'bottomLeftRadius',
+                    type: 'raw-value',
+                    currentValue: node.bottomLeftRadius,
+                    isVisible: getNodeVisibility(node)
+                  });
+                }
+                
+                // Bottom right
+                if (node.bottomRightRadius > 0 && isRawValue(node, 'bottomRightRadius')) {
+                  console.log(`Found raw bottomRightRadius value in node: ${node.name}`);
+                  results.push({
+                    nodeId: node.id,
+                    nodeName: node.name,
+                    location: getNodePath(node),
+                    property: 'bottomRightRadius',
+                    type: 'raw-value',
+                    currentValue: node.bottomRightRadius,
+                    isVisible: getNodeVisibility(node)
                   });
                 }
               }
-            }
-          }
-          
-          // Check stroke
-          if (hasValidStroke(node) && isRawValue(node, 'strokes')) {
-            console.log(`Found raw stroke value in node: ${node.name} (${String(node.type)})`);
-            results.push({
-              nodeId: node.id,
-              nodeName: node.name,
-              location: getNodePath(node),
-              property: 'strokes',
-              type: 'raw-value',
-              currentValue: (node as any).strokes,
-              isVisible: node.visible !== false
-            });
-          }
-          
-          // Check effects (shadows, blurs)
-          if (hasValidEffect(node) && isRawValue(node, 'effects')) {
-            console.log(`Found raw effect value in node: ${node.name} (${String(node.type)})`);
-            results.push({
-              nodeId: node.id,
-              nodeName: node.name,
-              location: getNodePath(node),
-              property: 'effects',
-              type: 'raw-value',
-              currentValue: (node as any).effects,
-              isVisible: node.visible !== false
-            });
-          }
-          
-          // Check for autolayout properties in Frame nodes
-          if (hasLayoutMode(node) && node.layoutMode !== 'NONE') {
-            // Check for gap value
-            if (node.itemSpacing > 0 && isRawValue(node, 'itemSpacing')) {
-              console.log(`Found raw gap value in node: ${node.name} (${String(node.layoutMode)})`);
-              results.push({
-                nodeId: node.id,
-                nodeName: node.name,
-                location: getNodePath(node),
-                property: 'itemSpacing',
-                type: 'raw-value',
-                currentValue: node.itemSpacing,
-                isVisible: node.visible !== false
-              });
-            }
-            
-            // Check padding values if this is a Frame with padding
-            if (hasPadding(node)) {
-              // Left padding
-              if (node.paddingLeft > 0 && isRawValue(node, 'paddingLeft')) {
-                console.log(`Found raw paddingLeft value in node: ${node.name}`);
+              break;
+              
+            case 'TEXT':
+              // Check text styles
+              if (isRawValue(node, 'fillStyleId')) {
+                console.log(`Found raw text style in node: ${node.name} (${String(node.type)})`);
                 results.push({
                   nodeId: node.id,
                   nodeName: node.name,
                   location: getNodePath(node),
-                  property: 'paddingLeft',
+                  property: 'fillStyleId',
                   type: 'raw-value',
-                  currentValue: node.paddingLeft,
-                  isVisible: node.visible !== false
+                  currentValue: node.characters,
+                  isVisible: getNodeVisibility(node)
                 });
               }
               
-              // Right padding
-              if (node.paddingRight > 0 && isRawValue(node, 'paddingRight')) {
-                console.log(`Found raw paddingRight value in node: ${node.name}`);
+              // Check font properties
+              if (isRawValue(node, 'fontName')) {
+                console.log(`Found raw font name in node: ${node.name}`);
                 results.push({
                   nodeId: node.id,
                   nodeName: node.name,
                   location: getNodePath(node),
-                  property: 'paddingRight',
+                  property: 'fontName',
                   type: 'raw-value',
-                  currentValue: node.paddingRight,
-                  isVisible: node.visible !== false
+                  currentValue: node.fontName,
+                  isVisible: getNodeVisibility(node)
                 });
               }
               
-              // Top padding
-              if (node.paddingTop > 0 && isRawValue(node, 'paddingTop')) {
-                console.log(`Found raw paddingTop value in node: ${node.name}`);
+              // Check for font size
+              if (isRawValue(node, 'fontSize')) {
+                console.log(`Found raw font size in node: ${node.name}: ${String(node.fontSize)}`);
                 results.push({
                   nodeId: node.id,
                   nodeName: node.name,
                   location: getNodePath(node),
-                  property: 'paddingTop',
+                  property: 'fontSize',
                   type: 'raw-value',
-                  currentValue: node.paddingTop,
-                  isVisible: node.visible !== false
+                  currentValue: node.fontSize,
+                  isVisible: getNodeVisibility(node)
                 });
               }
               
-              // Bottom padding
-              if (node.paddingBottom > 0 && isRawValue(node, 'paddingBottom')) {
-                console.log(`Found raw paddingBottom value in node: ${node.name}`);
+              // Check for font weight if it exists
+              if ('fontWeight' in node && isRawValue(node, 'fontWeight')) {
+                console.log(`Found raw font weight in node: ${node.name}`);
                 results.push({
                   nodeId: node.id,
                   nodeName: node.name,
                   location: getNodePath(node),
-                  property: 'paddingBottom',
+                  property: 'fontWeight',
                   type: 'raw-value',
-                  currentValue: node.paddingBottom,
-                  isVisible: node.visible !== false
+                  currentValue: (node as any).fontWeight,
+                  isVisible: getNodeVisibility(node)
                 });
               }
-            }
+              
+              // Check for line height
+              if ('lineHeight' in node && isRawValue(node, 'lineHeight')) {
+                console.log(`Found raw line height in node: ${node.name}`);
+                results.push({
+                  nodeId: node.id,
+                  nodeName: node.name,
+                  location: getNodePath(node),
+                  property: 'lineHeight',
+                  type: 'raw-value',
+                  currentValue: (node as any).lineHeight,
+                  isVisible: getNodeVisibility(node)
+                });
+              }
+              
+              // Check for letter spacing
+              if ('letterSpacing' in node && isRawValue(node, 'letterSpacing')) {
+                console.log(`Found raw letter spacing in node: ${node.name}`);
+                results.push({
+                  nodeId: node.id,
+                  nodeName: node.name,
+                  location: getNodePath(node),
+                  property: 'letterSpacing',
+                  type: 'raw-value',
+                  currentValue: (node as any).letterSpacing,
+                  isVisible: getNodeVisibility(node)
+                });
+              }
+              break;
           }
-          
-          // Check corner radius
-          if (hasCornerRadius(node) && typeof node.cornerRadius === 'number' && node.cornerRadius > 0 && isRawValue(node, 'cornerRadius')) {
-            console.log(`Found raw corner radius value in node: ${node.name}`);
-            results.push({
-              nodeId: node.id,
-              nodeName: node.name,
-              location: getNodePath(node),
-              property: 'cornerRadius',
-              type: 'raw-value',
-              currentValue: node.cornerRadius,
-              isVisible: node.visible !== false
-            });
-          }
-          
-          // Check individual corner radii if supported by this node type
-          if (hasIndividualCornerRadii(node)) {
-            // Top left
-            if (node.topLeftRadius > 0 && isRawValue(node, 'topLeftRadius')) {
-              console.log(`Found raw topLeftRadius value in node: ${node.name}`);
-              results.push({
-                nodeId: node.id,
-                nodeName: node.name,
-                location: getNodePath(node),
-                property: 'topLeftRadius',
-                type: 'raw-value',
-                currentValue: node.topLeftRadius,
-                isVisible: node.visible !== false
-              });
-            }
-            
-            // Top right
-            if (node.topRightRadius > 0 && isRawValue(node, 'topRightRadius')) {
-              console.log(`Found raw topRightRadius value in node: ${node.name}`);
-              results.push({
-                nodeId: node.id,
-                nodeName: node.name,
-                location: getNodePath(node),
-                property: 'topRightRadius',
-                type: 'raw-value',
-                currentValue: node.topRightRadius,
-                isVisible: node.visible !== false
-              });
-            }
-            
-            // Bottom left
-            if (node.bottomLeftRadius > 0 && isRawValue(node, 'bottomLeftRadius')) {
-              console.log(`Found raw bottomLeftRadius value in node: ${node.name}`);
-              results.push({
-                nodeId: node.id,
-                nodeName: node.name,
-                location: getNodePath(node),
-                property: 'bottomLeftRadius',
-                type: 'raw-value',
-                currentValue: node.bottomLeftRadius,
-                isVisible: node.visible !== false
-              });
-            }
-            
-            // Bottom right
-            if (node.bottomRightRadius > 0 && isRawValue(node, 'bottomRightRadius')) {
-              console.log(`Found raw bottomRightRadius value in node: ${node.name}`);
-              results.push({
-                nodeId: node.id,
-                nodeName: node.name,
-                location: getNodePath(node),
-                property: 'bottomRightRadius',
-                type: 'raw-value',
-                currentValue: node.bottomRightRadius,
-                isVisible: node.visible !== false
-              });
-            }
-          }
-          break;
-          
-        case 'TEXT':
-          // Check text styles
-          if (isRawValue(node, 'fillStyleId')) {
-            console.log(`Found raw text style in node: ${node.name} (${String(node.type)})`);
-            results.push({
-              nodeId: node.id,
-              nodeName: node.name,
-              location: getNodePath(node),
-              property: 'fillStyleId',
-              type: 'raw-value',
-              currentValue: node.characters,
-              isVisible: node.visible !== false
-            });
-          }
-          
-          // Check font properties
-          if (isRawValue(node, 'fontName')) {
-            console.log(`Found raw font name in node: ${node.name}`);
-            results.push({
-              nodeId: node.id,
-              nodeName: node.name,
-              location: getNodePath(node),
-              property: 'fontName',
-              type: 'raw-value',
-              currentValue: node.fontName,
-              isVisible: node.visible !== false
-            });
-          }
-          
-          // Check for font size
-          if (isRawValue(node, 'fontSize')) {
-            console.log(`Found raw font size in node: ${node.name}: ${String(node.fontSize)}`);
-            results.push({
-              nodeId: node.id,
-              nodeName: node.name,
-              location: getNodePath(node),
-              property: 'fontSize',
-              type: 'raw-value',
-              currentValue: node.fontSize,
-              isVisible: node.visible !== false
-            });
-          }
-          
-          // Check for font weight if it exists
-          if ('fontWeight' in node && isRawValue(node, 'fontWeight')) {
-            console.log(`Found raw font weight in node: ${node.name}`);
-            results.push({
-              nodeId: node.id,
-              nodeName: node.name,
-              location: getNodePath(node),
-              property: 'fontWeight',
-              type: 'raw-value',
-              currentValue: (node as any).fontWeight,
-              isVisible: node.visible !== false
-            });
-          }
-          
-          // Check for line height
-          if ('lineHeight' in node && isRawValue(node, 'lineHeight')) {
-            console.log(`Found raw line height in node: ${node.name}`);
-            results.push({
-              nodeId: node.id,
-              nodeName: node.name,
-              location: getNodePath(node),
-              property: 'lineHeight',
-              type: 'raw-value',
-              currentValue: (node as any).lineHeight,
-              isVisible: node.visible !== false
-            });
-          }
-          
-          // Check for letter spacing
-          if ('letterSpacing' in node && isRawValue(node, 'letterSpacing')) {
-            console.log(`Found raw letter spacing in node: ${node.name}`);
-            results.push({
-              nodeId: node.id,
-              nodeName: node.name,
-              location: getNodePath(node),
-              property: 'letterSpacing',
-              type: 'raw-value',
-              currentValue: (node as any).letterSpacing,
-              isVisible: node.visible !== false
-            });
-          }
-          break;
+        }
       }
       
-      // Process children recursively if they exist
-      if ('children' in node) {
+      // Process children regardless of scanning order
+      // This ensures we catch all nested elements even if parent doesn't match criteria
+      if (hasChildren) {
+        console.log(`Processing children of ${node.name} for ${scanType}`);
         await processNodes(node.children);
       }
     }

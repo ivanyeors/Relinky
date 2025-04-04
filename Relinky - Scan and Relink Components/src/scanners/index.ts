@@ -112,7 +112,7 @@ export async function runScanner(
     case 'raw-values':
       // For raw values, we need to select the appropriate specialized scanner based on scanType
       switch (scanType) {
-        case 'vertical-gap':
+        case 'gap':
           return scanForGap(scanType, selectedFrameIds, progressCallback, ignoreHiddenLayers);
         
         case 'horizontal-padding':
@@ -176,9 +176,10 @@ export function groupScanResults(
     case 'raw-values':
       // Group by specific scan type
       switch (scanType) {
+        case 'gap':
         case 'verticalGap':
         case 'horizontalGap':
-          return groupGapResults(results);
+          return groupGapResults(results as any);
         
         case 'horizontalPadding':
         case 'verticalPadding':

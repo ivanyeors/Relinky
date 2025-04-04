@@ -2304,6 +2304,32 @@ gap: var(--spacing-xs);
    filter: brightness(0.95);
 }
 
+/* Animation for progress bar during scanning */
+@keyframes progress-animation {
+   0% {
+      width: 0%;
+   }
+   100% {
+      width: 100%;
+   }
+}
+
+/* When scanning is in progress */
+.progress-bar.scanning .progress-fill {
+   animation: progress-animation 30s ease-out;
+   transition: width 0.3s ease;
+}
+
+/* When scan is complete with no issues */
+.progress-bar.completed-no-issues .progress-fill {
+   background-color: var(--figma-color-bg-success) !important;
+   width: 100% !important;
+}
+
+.progress-bar.completed-no-issues .progress-text {
+   font-weight: 600;
+}
+
 /* Padding Filter
    ------------------------------------------------------------------------- */
 .padding-filter {

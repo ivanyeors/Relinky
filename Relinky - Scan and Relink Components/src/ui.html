@@ -241,14 +241,18 @@
 
                 <!-- 2. Progress Bar -->
                 <div class="progress-container">
-                  <div class="progress-bar">
+                  <div class="progress-bar"
+                       :class="{
+                         'scanning': isScanning,
+                         'completed-no-issues': !isScanning && scanProgress === 100 && !hasResults
+                       }">
                     <div class="progress-fill" 
                          :style="{ 
                            width: `${scanProgress}%`,
                            background: getProgressBarColor('default')
                          }"
                     ></div>
-                    <span class="progress-text" v-if="canStartScan || isScanning">{{ getProgressStatus() }}</span>
+                    <span class="progress-text" v-if="canStartScan || isScanning || scanProgress === 100">{{ getProgressStatus() }}</span>
                   </div>
                 </div>
 
@@ -351,8 +355,8 @@
                     <button class="filter-btn" :class="{ active: paddingFilterType === 'right' }" @click="setPaddingFilter('right')">Right Padding</button>
                   </div>
 
-                  <!-- Gap Filter (Only shows with vertical-gap scan type) -->
-                  <div id="gap-filter" v-if="selectedScanType === 'vertical-gap'" class="padding-filter">
+                  <!-- Gap Filter (Only shows with gap scan type) -->
+                  <div id="gap-filter" v-if="selectedScanType === 'gap'" class="padding-filter">
                     <button class="filter-btn" :class="{ active: gapFilterType === 'all' }" @click="setGapFilter('all')">All Gaps</button>
                     <button class="filter-btn" :class="{ active: gapFilterType === 'vertical' }" @click="setGapFilter('vertical')">Vertical Gaps</button>
                     <button class="filter-btn" :class="{ active: gapFilterType === 'horizontal' }" @click="setGapFilter('horizontal')">Horizontal Gaps</button>
@@ -459,8 +463,9 @@
                           <template v-else-if="group.refs && group.refs[0]">
                             <div class="typography-labels">
                               <span class="label value" v-if="group.refs[0].currentValue !== undefined">{{ formatValue(group.refs[0].currentValue) }}</span>
-                              <span v-if="group.refs[0] && group.refs[0].type === 'gap' && group.refs[0].currentValue !== undefined" class="label gap">{{ group.refs[0].currentValue }}px</span>
-                              <span v-if="group.refs[0] && group.refs[0].type === 'verticalGap' && group.refs[0].currentValue !== undefined" class="label vertical-gap">{{ group.refs[0].currentValue }}px</span>
+                              <span v-if="group.refs[0] && group.refs[0].type === 'gap' && group.refs[0].currentValue !== undefined" class="label gap">
+                                {{ group.refs[0].gapType === 'vertical' ? 'Vertical' : 'Horizontal' }} Gap: {{ group.refs[0].currentValue }}px
+                              </span>
                               <span v-if="group.refs[0] && group.refs[0].type === 'horizontalPadding' && group.refs[0].currentValue !== undefined" class="label horizontal-padding">{{ group.refs[0].currentValue }}px</span>
                               <span v-if="group.refs[0] && group.refs[0].type === 'verticalPadding' && group.refs[0].currentValue !== undefined" class="label vertical-padding">{{ group.refs[0].currentValue }}px</span>
                               <!-- Add library type badge -->
@@ -569,14 +574,18 @@
                     
                     <!-- Scan Controls -->
                     <div class="progress-container">
-                      <div class="progress-bar">
+                      <div class="progress-bar"
+                           :class="{
+                             'scanning': isVariableScanning,
+                             'completed-no-issues': !isVariableScanning && variableScanProgress === 100 && linkedVariables.length === 0
+                           }">
                         <div class="progress-fill" 
                              :style="{ 
                                width: `${variableScanProgress}%`,
                                background: getProgressBarColor('variables')
                              }"
                         ></div>
-                        <span class="progress-text" v-if="canStartVariableScan || isVariableScanning">{{ getVariableProgressStatus() }}</span>
+                        <span class="progress-text" v-if="canStartVariableScan || isVariableScanning || variableScanProgress === 100">{{ getVariableProgressStatus() }}</span>
                       </div>
                     </div>
                     
