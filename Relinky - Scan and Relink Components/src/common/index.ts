@@ -13,6 +13,7 @@ export interface MissingReference {
   location: string;
   variableName?: string;
   variableValue?: any;
+  variableType?: string;  // Add variableType property to store the variable's type
   preview?: string;
   isInactiveLibrary?: boolean;  // From inactive library
   isUnlinked?: boolean;         // Raw value (no variable/style)
@@ -95,6 +96,7 @@ export interface PluginMessage {
   references?: Record<string, MissingReference[]>;
   results?: MissingReference[]; // For raw results that need grouping
   variables?: MissingReference[]; // For debug-results message
+  variableTypes?: string[]; // Array of variable types to filter by (e.g. 'color', 'number', etc.)
   isDebugScan?: boolean; // Flag for debug scan results
   status?: 'success' | 'error'; // For scan-complete message
   scanEntirePage?: boolean;
