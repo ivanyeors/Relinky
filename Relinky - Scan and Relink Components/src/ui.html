@@ -324,35 +324,35 @@
                   </div>
 
                   <!-- Add scan results description -->
-                  <div class="scan-results-description">
-                    <p v-if="selectedScanType === 'team-library'">
+                  <div class="scan-results-description p-2 rounded m-2 mb-3 bg-secondary">
+                    <p v-if="selectedScanType === 'team-library'" class="text-secondary">
                       These are team library variables across your design that can be relinked.
                     </p>
-                    <p v-else-if="selectedScanType === 'local-library'">
+                    <p v-else-if="selectedScanType === 'local-library'" class="text-secondary">
                       These are local variables in your document that can be relinked.
                     </p>
-                    <p v-else-if="selectedScanType === 'fill'">
+                    <p v-else-if="selectedScanType === 'fill'" class="text-secondary">
                       Fill colors found in your design. Grouped by similar values.
                     </p>
-                    <p v-else-if="selectedScanType === 'stroke'">
+                    <p v-else-if="selectedScanType === 'stroke'" class="text-secondary">
                       Stroke colors found in your design. Grouped by similar values.
                     </p>
-                    <p v-else-if="selectedScanType === 'typography'">
+                    <p v-else-if="selectedScanType === 'typography'" class="text-secondary">
                       Typography styles found in your design. Grouped by similar styles.
                     </p>
-                    <p v-else-if="selectedScanType === 'corner-radius'">
+                    <p v-else-if="selectedScanType === 'corner-radius'" class="text-secondary">
                       Corner radius values found in your design. Grouped by similar values.
                     </p>
-                    <p v-else-if="selectedScanType === 'vertical-padding'">
+                    <p v-else-if="selectedScanType === 'vertical-padding'" class="text-secondary">
                       Vertical padding values found in your design. Use filters to see specific padding types.
                     </p>
-                    <p v-else-if="selectedScanType === 'horizontal-padding'">
+                    <p v-else-if="selectedScanType === 'horizontal-padding'" class="text-secondary">
                       Horizontal padding values found in your design. Use filters to see specific padding types.
                     </p>
-                    <p v-else-if="selectedScanType === 'gap'">
+                    <p v-else-if="selectedScanType === 'gap'" class="text-secondary">
                       Gap values found in your design. Use filters to see specific gap types.
                     </p>
-                    <p v-else>
+                    <p v-else class="text-secondary">
                       Select groups to see where these values are used and select nodes.
                     </p>
                   </div>
@@ -449,6 +449,7 @@
                                     :class="{
                                       'label': true, 
                                       'library-type': true,
+                                      'ml-xs': true,
                                       'unlinked-reference': !group.refs[0].isTeamLibrary && !group.refs[0].isLocalLibrary && !group.refs[0].isMissingLibrary,
                                       'team-library-reference': group.refs[0].isTeamLibrary,
                                       'local-library-reference': group.refs[0].isLocalLibrary,
@@ -467,6 +468,7 @@
                                   :class="{
                                     'label': true, 
                                     'library-type': true,
+                                    'ml-xs': true,
                                     'unlinked-reference': !group.refs[0].isTeamLibrary && !group.refs[0].isLocalLibrary && !group.refs[0].isMissingLibrary,
                                     'team-library-reference': group.refs[0].isTeamLibrary,
                                     'local-library-reference': group.refs[0].isLocalLibrary,
@@ -478,7 +480,7 @@
                           
                           <template v-else-if="group.refs && group.refs[0]">
                             <div class="typography-labels">
-                              <span class="label value" v-if="group.refs[0].currentValue !== undefined">{{ formatValue(group.refs[0].currentValue) }}</span>
+                              <span class="label value font-medium" v-if="group.refs[0].currentValue !== undefined">{{ formatValue(group.refs[0].currentValue) }}</span>
                               <span v-if="group.refs[0] && group.refs[0].type === 'gap' && group.refs[0].currentValue !== undefined" class="label gap">
                                 {{ group.refs[0].gapType === 'vertical' ? 'Vertical' : 'Horizontal' }} Gap: {{ group.refs[0].currentValue }}px
                               </span>
@@ -489,6 +491,7 @@
                                     :class="{
                                       'label': true, 
                                       'library-type': true,
+                                      'ml-xs': true,
                                       'unlinked-reference': !group.refs[0].isTeamLibrary && !group.refs[0].isLocalLibrary && !group.refs[0].isMissingLibrary,
                                       'team-library-reference': group.refs[0].isTeamLibrary,
                                       'local-library-reference': group.refs[0].isLocalLibrary,
@@ -528,8 +531,9 @@
                           <div class="reference-info">
                             <div class="reference-name">{{ ref.nodeName }}</div>
                             <div class="reference-location">{{ ref.location }}</div>
-                            <div v-if="ref.variableName" class="reference-variable">{{ ref.variableName }}</div>
-                            <div v-if="ref.libraryName" class="reference-library">{{ ref.libraryName }}</div>
+                            <div v-if="ref.variableName" class="reference-variable text-brand font-medium mt-xs">{{ ref.variableName }}</div>
+                            <!-- Don't display library name for missing library variables to simplify the UI -->
+                            <div v-if="ref.libraryName && !ref.isMissingLibrary" class="reference-library">{{ ref.libraryName }}</div>
                           </div>
                           <button 
                             class="button secondary-button small"
@@ -866,27 +870,6 @@
       </div>
     </div>
   </template>
-
-  <style>
-    /* Remove all the added styles here - we should only reference styles from styles.css */
-  </style>
-
-  <!-- Add styles for scan results description -->
-  <style>
-    .scan-results-description {
-      background: var(--figma-color-bg-secondary);
-      border-radius: 6px;
-      margin: 8px 0 12px 0;
-      padding: 10px 12px;
-    }
-    
-    .scan-results-description p {
-      color: var(--figma-color-text-secondary);
-      font-size: 12px;
-      line-height: 1.4;
-      margin: 0;
-    }
-  </style>
 
 </body>
 </html>

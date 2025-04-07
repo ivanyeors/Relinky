@@ -1508,12 +1508,15 @@ function initializeApp() {
         if (typeof value === 'object') {
           // Special handling for objects
           if (value.libraryName !== undefined || value.variableName !== undefined) {
-            // It's a library variable reference
-            const parts = [];
-            if (value.variableName) parts.push(value.variableName);
-            if (value.libraryName) parts.push(`(${value.libraryName})`);
-            if (value.errorDetails) parts.push(`Error: ${value.errorDetails.substring(0, 50)}`);
-            return parts.join(' ');
+            // It's a library variable reference - just return the variable name only
+            if (value.variableName) {
+              return value.variableName;
+            }
+            // Only if variableName is missing, then show library name
+            if (value.libraryName) {
+              return 'Variable from ' + value.libraryName;
+            }
+            return 'Unknown variable';
           }
           
           // Special handling for color objects
