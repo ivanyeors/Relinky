@@ -239,12 +239,14 @@ interface ScanForTokensMessage {
   // New properties for the two-level scan approach
   sourceType: 'raw-values' | 'team-library' | 'local-library' | 'missing-library';
   tokenType?: string | null;
+  variableTypes?: string[];
 }
 
 interface ScanVariablesMessage {
   type: 'scan-variables';
   scanTypes: string[];
   ignoreHiddenLayers: boolean;
+  variableTypes?: string[]; // Array of variable types to filter by
 }
 
 interface UnlinkVariableMessage {
@@ -319,77 +321,55 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
 
   // Handle scan request for values
   if (msg.type === 'scan-for-tokens') {
-    // Reset scan cancellation flag
-    scanners.cancelScan();
-    
-    console.log('Starting scan for tokens:', {
-      scanType: msg.scanType,
-      scanEntirePage: msg.scanEntirePage,
-      selectedFrameIds: msg.selectedFrameIds,
-      isLibraryVariableScan: msg.isLibraryVariableScan,
-      sourceType: msg.sourceType
-    });
-    
-    // Get nodes to scan
-    let nodesToScan: SceneNode[] = [];
-    
-    // Check if we should scan the entire page
-    if (msg.scanEntirePage) {
-      nodesToScan = Array.from(figma.currentPage.children);
-      console.log('Scanning entire page:', nodesToScan.length, 'top-level nodes');
-    } else if (msg.selectedFrameIds && msg.selectedFrameIds.length > 0) {
-      // Get selected nodes from IDs
-      nodesToScan = await Promise.all(
-        msg.selectedFrameIds.map(id => figma.getNodeByIdAsync(id))
-      ).then(nodes => nodes.filter((node): node is SceneNode => node !== null && 'type' in node));
-      
-      console.log('Scanning selected frames:', nodesToScan.length, 'nodes');
-    } else {
-      // Fallback to current selection
-      nodesToScan = Array.from(figma.currentPage.selection);
-      console.log('Using current selection:', nodesToScan.length, 'nodes');
-      
-      if (nodesToScan.length === 0) {
-        // Nothing selected, scan the whole page
-        nodesToScan = Array.from(figma.currentPage.children);
-        console.log('No selection, defaulting to entire page:', nodesToScan.length, 'top-level nodes');
-      }
-    }
-    
-    // Start the scan using the appropriate scanner module
     try {
-      // Prepare progress update handler
-      const updateProgress = (progress: number) => {
-        figma.ui.postMessage({
-          type: 'scan-progress',
-          progress,
-          isScanning: true
-        });
-      };
+      // Reset any previous scan state
+      scanners.resetCancellation();
       
-      // Default to 'fill' if scanType is undefined and 'raw-values' if sourceType is undefined
-      const scanType = msg.scanType || 'fill';
-      const sourceType = msg.sourceType || 'raw-values';
+      // Extract scan parameters
+      const scanType = msg.scanType as ScanType || 'typography';
+      const scanEntirePage = msg.scanEntirePage || false;
+      const selectedFrameIds = scanEntirePage ? [] : (msg.selectedFrameIds || []);
+      const ignoreHiddenLayers = msg.ignoreHiddenLayers || false;
+      const sourceType = msg.sourceType as 'raw-values' | 'team-library' | 'local-library' | 'missing-library' || 'raw-values';
+      const variableTypes = msg.variableTypes as string[] || []; // Get variable types for filtering
       
-      // Run the scan based on the source type
-      let results: MissingReference[] = [];
+      console.log(`Starting ${sourceType} scan for ${scanType} with ${selectedFrameIds.length} selected frames`);
+      if (variableTypes.length > 0) {
+        console.log(`Filtering by variable types: ${variableTypes.join(', ')}`);
+      }
       
-      results = await scanners.runScanner(
-        sourceType as 'raw-values' | 'team-library' | 'local-library' | 'missing-library',
-        scanType as ScanType,
-        msg.selectedFrameIds || [],
-        updateProgress,
-        msg.ignoreHiddenLayers || false
+      // Notify UI that scanning has started
+      figma.ui.postMessage({
+        type: 'scan-started',
+        scanType,
+        sourceType
+      });
+      
+      // Run the scan using our scanner utility
+      const scanResults = await scanners.runScanner(
+        sourceType,
+        scanType,
+        selectedFrameIds,
+        (progress: number) => {
+          // Send progress updates to UI
+          figma.ui.postMessage({
+            type: 'scan-progress',
+            progress,
+            isScanning: true
+          });
+        },
+        ignoreHiddenLayers,
+        variableTypes // Pass variable types to the scanner
       );
       
       // Group the results for UI display
-      if (results.length > 0) {
-        console.log(`Scan found ${results.length} results, grouping...`);
+      if (scanResults.length > 0) {
+        console.log(`Scan found ${scanResults.length} results, grouping...`);
         
         // Group using the appropriate grouping function
         const groupedResults = scanners.groupScanResults(
-          sourceType as 'raw-values' | 'team-library' | 'local-library' | 'missing-library', 
-          results
+          sourceType, 
+          scanResults
         );
         
         console.log(`Results grouped into ${Object.keys(groupedResults).length} categories`);
@@ -616,7 +596,8 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
         'fill', // default scan type 
         [], // scan the whole page
         () => {}, // Skip progress updates for this scan
-        false // don't ignore hidden layers
+        false, // don't ignore hidden layers
+        msg.variableTypes || [] // Pass variable types filter
       );
       
       // Scan for local library variables
@@ -625,7 +606,8 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
         'fill', // default scan type
         [], // scan the whole page
         () => {}, // Skip progress updates for this scan
-        false // don't ignore hidden layers
+        false, // don't ignore hidden layers
+        msg.variableTypes || [] // Pass variable types filter
       );
       
       // Scan for missing library variables
@@ -634,7 +616,8 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
         'fill', // default scan type
         [], // scan the whole page
         () => {}, // Skip progress updates for this scan
-        false // don't ignore hidden layers
+        false, // don't ignore hidden layers
+        msg.variableTypes || [] // Pass variable types filter
       );
       
       // Collect variables from all library types to show in UI

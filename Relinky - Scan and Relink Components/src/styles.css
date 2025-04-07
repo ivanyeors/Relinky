@@ -2592,3 +2592,20 @@ gap: var(--spacing-xs);
   color: white;
 }
 
+/* Variable type filter section */
+.variable-filter-section {
+  margin-top: var(--spacing-md);
+  padding-top: var(--spacing-sm);
+  border-top: 1px solid var(--figma-color-border);
+}
+
+.filter-hint {
+  font-size: 11px;
+  color: var(--figma-color-text-secondary);
+  margin-top: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background-color: var(--figma-color-bg-secondary);
+  border-radius: var(--border-radius-sm);
+  text-align: center;
+}
+

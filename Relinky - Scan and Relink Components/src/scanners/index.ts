@@ -93,6 +93,7 @@ export function getFontWeightFromNode(node: TextNode): number {
  * @param selectedFrameIds - Array of frame IDs to scan
  * @param progressCallback - Callback for scan progress
  * @param ignoreHiddenLayers - Whether to ignore hidden layers
+ * @param variableTypes - Array of variable types to filter by (optional)
  * @returns Promise<MissingReference[]> - Scan results
  */
 export async function runScanner(
@@ -100,7 +101,8 @@ export async function runScanner(
   scanType: ScanType,
   selectedFrameIds: string[] = [],
   progressCallback: (progress: number) => void = () => {},
-  ignoreHiddenLayers: boolean = false
+  ignoreHiddenLayers: boolean = false,
+  variableTypes: string[] = []
 ): Promise<MissingReference[]> {
   console.log(`Running ${sourceType} scanner with scan type ${scanType}`);
   
@@ -141,7 +143,8 @@ export async function runScanner(
       return scanForLocalLibraryVariables(progressCallback, selectedFrameIds, ignoreHiddenLayers);
     
     case 'missing-library':
-      return scanForMissingLibraryVariables(progressCallback, selectedFrameIds, ignoreHiddenLayers);
+      // Pass the variableTypes to the missing library scanner
+      return scanForMissingLibraryVariables(progressCallback, selectedFrameIds, ignoreHiddenLayers, variableTypes);
     
     default:
       console.error(`Unknown scanner type: ${sourceType}`);
