@@ -281,16 +281,6 @@
                   >
                     Stop
                   </button>
-                  
-                  <!-- Debug button - only show for library variable scans -->
-                  <button 
-                    v-if="!isScanning && selectedScanType && ['team-library', 'local-library', 'missing-library'].includes(selectedScanType)"
-                    @click="debugDocumentVariables()" 
-                    class="button secondary-button"
-                    title="Debug variable detection"
-                  >
-                    Debug Variables
-                  </button>
                 </div>
               </div>
             </div>
@@ -330,15 +320,41 @@
                       >
                         Clear
                       </button>
-                      <!-- Add debug button -->
-                      <button 
-                        class="button secondary-button"
-                        @click="debugResults"
-                        title="Debug scan results"
-                      >
-                        Debug
-                      </button>
                     </div>
+                  </div>
+
+                  <!-- Add scan results description -->
+                  <div class="scan-results-description">
+                    <p v-if="selectedScanType === 'team-library'">
+                      These are team library variables across your design that can be relinked.
+                    </p>
+                    <p v-else-if="selectedScanType === 'local-library'">
+                      These are local variables in your document that can be relinked.
+                    </p>
+                    <p v-else-if="selectedScanType === 'fill'">
+                      Fill colors found in your design. Grouped by similar values.
+                    </p>
+                    <p v-else-if="selectedScanType === 'stroke'">
+                      Stroke colors found in your design. Grouped by similar values.
+                    </p>
+                    <p v-else-if="selectedScanType === 'typography'">
+                      Typography styles found in your design. Grouped by similar styles.
+                    </p>
+                    <p v-else-if="selectedScanType === 'corner-radius'">
+                      Corner radius values found in your design. Grouped by similar values.
+                    </p>
+                    <p v-else-if="selectedScanType === 'vertical-padding'">
+                      Vertical padding values found in your design. Use filters to see specific padding types.
+                    </p>
+                    <p v-else-if="selectedScanType === 'horizontal-padding'">
+                      Horizontal padding values found in your design. Use filters to see specific padding types.
+                    </p>
+                    <p v-else-if="selectedScanType === 'gap'">
+                      Gap values found in your design. Use filters to see specific gap types.
+                    </p>
+                    <p v-else>
+                      Select groups to see where these values are used and select nodes.
+                    </p>
                   </div>
 
                   <!-- Padding Filter (Only shows with vertical-padding scan type) -->
@@ -853,6 +869,23 @@
 
   <style>
     /* Remove all the added styles here - we should only reference styles from styles.css */
+  </style>
+
+  <!-- Add styles for scan results description -->
+  <style>
+    .scan-results-description {
+      background: var(--figma-color-bg-secondary);
+      border-radius: 6px;
+      margin: 8px 0 12px 0;
+      padding: 10px 12px;
+    }
+    
+    .scan-results-description p {
+      color: var(--figma-color-text-secondary);
+      font-size: 12px;
+      line-height: 1.4;
+      margin: 0;
+    }
   </style>
 
 </body>
