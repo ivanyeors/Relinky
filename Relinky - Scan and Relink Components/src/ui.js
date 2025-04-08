@@ -444,9 +444,49 @@ function initializeApp() {
         return this.hasResults && this.selectedScanType === this.lastScannedType;
       },
       filteredResults() {
-        // Start with the current results and return directly
-        // No special filtering for missing-library anymore
-        return { ...this.groupedReferences };
+        console.log('Computing filteredResults with groupedReferences:', {
+          hasGroupedReferences: !!this.groupedReferences,
+          groupCount: this.groupedReferences ? Object.keys(this.groupedReferences).length : 0
+        });
+        
+        // If no grouped references, return empty object
+        if (!this.groupedReferences || typeof this.groupedReferences !== 'object') {
+          console.log('No valid groupedReferences, returning empty object');
+          return {};
+        }
+        
+        // Log the actual data to help debug
+        for (const [key, group] of Object.entries(this.groupedReferences)) {
+          console.log(`Group ${key}:`, {
+            hasRefs: group && group.refs ? true : false,
+            refCount: group && group.refs ? group.refs.length : 0,
+            firstRef: group && group.refs && group.refs.length > 0 ? group.refs[0] : null
+          });
+        }
+        
+        // Make a deep copy with all nested properties
+        const result = {};
+        for (const [key, group] of Object.entries(this.groupedReferences)) {
+          if (group && (group.refs || Array.isArray(group))) {
+            // Handle both formats (object with refs array or direct array)
+            const refs = group.refs || group;
+            
+            // Only include group if it has valid references
+            if (Array.isArray(refs) && refs.length > 0) {
+              // Create a proper group object
+              result[key] = {
+                refs: [...refs]  // Make a copy of the refs array
+              };
+            }
+          }
+        }
+        
+        console.log('Filtered results:', {
+          resultCount: Object.keys(result).length,
+          firstGroupRefs: Object.values(result)[0]?.refs?.length || 0
+        });
+        
+        return result;
       },
       filteredVariables() {
         return this.variables.filter(variable => {
@@ -480,7 +520,7 @@ function initializeApp() {
         return this.linkedVariables && this.linkedVariables.length > 0 && !this.isVariableScanning && this.variableScanComplete;
       },
       groupedVariables() {
-        if (!this.linkedVariables || !Array.isArray(this.linkedVariables) || this.linkedVariables.length === 0) {
+        if (!this.linkedVariables?.length) {
           console.log('No linked variables to display');
           return {};
         }
@@ -568,6 +608,11 @@ function initializeApp() {
                           variable.isMissingLibrary ? 'missing-library' : 'unknown',
               variables: []
             };
+          }
+          
+          // Ensure variables array exists before pushing
+          if (!groups[groupKey].variables) {
+            groups[groupKey].variables = [];
           }
           
           groups[groupKey].variables.push(variable);
@@ -852,10 +897,21 @@ function initializeApp() {
       },
       handleScanComplete(msg) {
         console.log('Scan complete - full message:', msg);
-         
+        
         // Update states
         this.isScanning = false;
         this.scanComplete = true;
+        
+        // Detailed logging for better debugging
+        console.log('Message structure:', {
+          type: msg.type,
+          hasReferences: !!msg.references,
+          refKeys: msg.references ? Object.keys(msg.references).length : 0,
+          hasResults: !!msg.results,
+          resultCount: msg.results ? (Array.isArray(msg.results) ? msg.results.length : 'not an array') : 0,
+          scanType: msg.scanType,
+          sourceType: msg.sourceType
+        });
         
         // Special handling for missing library scans
         if (msg.type === 'scan-complete' && msg.scanType === 'missing-library') {
@@ -869,93 +925,29 @@ function initializeApp() {
             
             console.log(`Stored ${msg.results.length} missing library references`);
             
-            // Force update the UI state to show results
-            if (!this.groupedReferences || Object.keys(this.groupedReferences).length === 0) {
-              // Create a simple group structure if none exists
-              this.groupedReferences = {'missing-library-group': msg.results};
+            // Group the results and store them properly
+            const grouped = this.groupByValue(msg.results);
+            if (Object.keys(grouped).length > 0) {
+              console.log(`Grouped ${msg.results.length} missing library results into ${Object.keys(grouped).length} groups`);
+              this.groupedReferences = grouped;
+            } else {
+              console.warn('Failed to group missing library results');
             }
           }
         }
         
-        // Process other scan types with existing logic
-        if (msg.type === 'scan-complete') {
-          if (msg.scanType === 'vertical-padding') {
-            // For vertical padding, identify top vs bottom padding if not already set
-            if (msg.results && Array.isArray(msg.results)) {
-              msg.results.forEach(result => {
-                // Check if result has paddingTop or paddingBottom property
-                if (result.property === 'paddingTop') {
-                  result.paddingType = 'top';
-                } else if (result.property === 'paddingBottom') {
-                  result.paddingType = 'bottom';
-                } else {
-                  // For backwards compatibility
-                  result.paddingType = 'all';
-                }
-              });
-            }
-          } else if (msg.scanType === 'horizontal-padding') {
-            // For horizontal padding, identify left vs right padding if not already set
-            if (msg.results && Array.isArray(msg.results)) {
-              msg.results.forEach(result => {
-                // Check if result has paddingLeft or paddingRight property
-                if (result.property === 'paddingLeft') {
-                  result.paddingType = 'left';
-                } else if (result.property === 'paddingRight') {
-                  result.paddingType = 'right';
-                } else {
-                  // For backwards compatibility
-                  result.paddingType = 'all';
-                }
-              });
-            }
-          } else if (msg.scanType === 'corner-radius') {
-            // For corner radius, identify which corner if not already set
-            if (msg.results && Array.isArray(msg.results)) {
-              msg.results.forEach(result => {
-                // Check which corner radius property this is
-                if (result.property === 'topLeftRadius') {
-                  result.cornerType = 'top-left';
-                } else if (result.property === 'topRightRadius') {
-                  result.cornerType = 'top-right';
-                } else if (result.property === 'bottomLeftRadius') {
-                  result.cornerType = 'bottom-left';
-                } else if (result.property === 'bottomRightRadius') {
-                  result.cornerType = 'bottom-right';
-                } else {
-                  // For backwards compatibility
-                  result.cornerType = 'all';
-                }
-              });
-            }
-          } else if (msg.scanType === 'local-library') {
-            console.log('Processing local-library scan results');
-            // Special handling for local library variables
-            if (msg.results && Array.isArray(msg.results)) {
-              console.log(`Found ${msg.results.length} local library references`);
-              
-              // Add groupKey if missing to ensure proper grouping
-              msg.results.forEach(result => {
-                if (!result.groupKey) {
-                  const variable = result.currentValue || {};
-                  const variableName = variable.variableName || result.variableName || 'Unknown';
-                  const collectionName = variable.collectionName || 'Unknown Collection';
-                  
-                  // Create a descriptive group key
-                  result.groupKey = `local:${variableName}:${collectionName}`;
-                }
-                
-                // Ensure isLocalLibrary flag is set
-                result.isLocalLibrary = true;
-              });
-            }
-          }
+        // Group the results if they're in array form
+        if (msg.results && Array.isArray(msg.results) && msg.results.length > 0) {
+          console.log(`Processing ${msg.results.length} scan results as array`);
           
-          // Group the results if they're in array form
-          if (msg.results && Array.isArray(msg.results)) {
-            console.log(`Processing ${msg.results.length} scan results as array`);
-            
-            // Import the scanner module to group results
+          // Try to group them directly rather than sending another message
+          const grouped = this.groupByValue(msg.results);
+          if (Object.keys(grouped).length > 0) {
+            console.log(`Directly grouped ${msg.results.length} results into ${Object.keys(grouped).length} groups`);
+            this.groupedReferences = grouped;
+          } else {
+            // Fallback to the original approach - send to plugin for grouping
+            console.log('Falling back to plugin grouping');
             parent.postMessage({
               pluginMessage: {
                 type: 'group-results',
@@ -963,46 +955,64 @@ function initializeApp() {
                 scanType: msg.scanType
               }
             }, '*');
-            
-            // Don't update groupedReferences yet - wait for the grouped response
-            return;
-          } else if (msg.references && typeof msg.references === 'object') {
-            console.log(`Processing scan results as grouped references`);
-            
-            // Check if we have local library results
+          }
+        } else if (msg.references && typeof msg.references === 'object') {
+          console.log(`Processing scan results as grouped references`);
+          
+          // Check if the references are in the expected format
+          let validGroups = 0;
+          let validRefs = 0;
+          
+          for (const key in msg.references) {
+            const group = msg.references[key];
+            if (group && (group.refs || Array.isArray(group))) {
+              validGroups++;
+              const refs = group.refs || group;
+              if (Array.isArray(refs)) {
+                validRefs += refs.length;
+              }
+            }
+          }
+          
+          console.log(`References validation: ${validGroups} valid groups with ${validRefs} total references`);
+          
+          // Check if we have local library results
+          if (msg.scanType === 'local-library') {
+            // For local library scan, check if there are any groups with local library references
             let hasLocalLibraryRefs = false;
             
-            if (msg.scanType === 'local-library') {
-              // For local library scan, check if there are any groups with local library references
-              Object.values(msg.references).forEach(group => {
-                const refs = group.refs || (Array.isArray(group) ? group : []);
-                if (refs.length > 0 && refs.some(ref => ref.isLocalLibrary)) {
-                  hasLocalLibraryRefs = true;
-                }
-              });
-              
-              console.log(`Local library scan has references: ${hasLocalLibraryRefs}`);
-            }
-            
-            // Update the grouped references
-            this.groupedReferences = msg.references;
-            
-            console.log('Updated groupedReferences:', {
-              keys: Object.keys(this.groupedReferences).length,
-              hasLocalReferences: hasLocalLibraryRefs,
-              scanType: msg.scanType
+            Object.values(msg.references).forEach(group => {
+              const refs = group.refs || (Array.isArray(group) ? group : []);
+              if (refs.length > 0 && refs.some(ref => ref.isLocalLibrary)) {
+                hasLocalLibraryRefs = true;
+              }
             });
-          } else {
-            console.warn('No valid results found in message. Type:', msg.type);
-            if (msg.type === 'scan-complete') {
-              console.log('Scan complete message details:', { 
-                hasReferences: !!msg.references,
-                referencesLength: msg.references ? Object.keys(msg.references).length : 0,
-                hasResults: !!msg.results,
-                resultsLength: msg.results ? msg.results.length : 0
-              });
-            }
-            this.groupedReferences = {}; // Reset to empty object
+            
+            console.log(`Local library scan has references: ${hasLocalLibraryRefs}`);
+          }
+          
+          // Update the grouped references
+          this.groupedReferences = msg.references;
+          
+          console.log('Updated groupedReferences:', {
+            keys: Object.keys(this.groupedReferences).length,
+            scanType: msg.scanType
+          });
+        } else {
+          console.warn('No valid results found in message. Type:', msg.type);
+          if (msg.type === 'scan-complete') {
+            console.log('Scan complete message details:', { 
+              hasReferences: !!msg.references,
+              referencesLength: msg.references ? Object.keys(msg.references).length : 0,
+              hasResults: !!msg.results,
+              resultsLength: msg.results ? msg.results.length : 0
+            });
+          }
+          
+          // Don't reset groupedReferences if we completed a scan but didn't get new data
+          // This way we keep existing results if the new scan didn't find anything
+          if (!this.groupedReferences || Object.keys(this.groupedReferences).length === 0) {
+            this.groupedReferences = {}; // Only reset if it was empty already
           }
         }
         
@@ -1018,8 +1028,6 @@ function initializeApp() {
           hasResults: this.hasResults
         });
         
-        console.log('showScanResults should be:', !this.isScanning && this.hasResults && this.scanComplete);
-        
         // Test the filtering logic
         const filteredCount = Object.keys(this.filteredResults).length;
         console.log(`After filtering: ${filteredCount} groups available to display`);
@@ -1032,22 +1040,6 @@ function initializeApp() {
         
         this.showSuccessToast = true;
         setTimeout(() => { this.showSuccessToast = false; }, 3000);
-        
-        // After a short delay to ensure the results section has been rendered,
-        // scroll to it if we have results
-        if (this.hasResults) {
-          setTimeout(() => {
-            const resultsSection = document.querySelector('.results-section');
-            if (resultsSection) {
-              // Add animation class
-              resultsSection.classList.add('scan-complete');
-              resultsSection.classList.add('scroll-target');
-              
-              // Scroll to the results
-              resultsSection.scrollIntoView({ behavior: 'smooth' });
-            }
-          }, 300);
-        }
       },
       handleScanError(error) {
         this.isScanning = false;
@@ -1473,18 +1465,44 @@ function initializeApp() {
       // Add the missing groupByValue method that's used but not defined
       groupByValue(results) {
         console.log('groupByValue called with results:', results);
-        // Check if results is valid
-        if (!results || !Array.isArray(results) || results.length === 0) {
-          console.log('Invalid or empty results, returning empty object');
+        
+        // If results is undefined or not an array or empty, return empty object
+        if (!results?.length) {
+          console.log('Results is not a valid array or is empty, returning empty object');
           return {};
         }
         
-        // Group results by their values
+        console.log(`Grouping ${results.length} results`);
+        
         const grouped = {};
         
+        // Ensure each result has required properties for display
+        results = results.map(result => {
+          // Create a copy to avoid mutating the original
+          const copy = { ...result };
+          
+          // Ensure the result has a nodeId
+          if (!copy.nodeId && copy.id) {
+            copy.nodeId = copy.id;
+          }
+          
+          // Ensure it has a name for display
+          if (!copy.nodeName && copy.name) {
+            copy.nodeName = copy.name;
+          }
+          
+          // Make sure currentValue is populated
+          if (copy.currentValue === undefined && copy.value !== undefined) {
+            copy.currentValue = copy.value;
+          }
+          
+          return copy;
+        });
+        
+        // Group results by type and value
         results.forEach((result, index) => {
           if (!result || typeof result !== 'object') {
-            console.warn(`Skipping invalid result at index ${index}:`, result);
+            console.log(`Skipping invalid result at index ${index}`);
             return;
           }
           
@@ -1518,26 +1536,14 @@ function initializeApp() {
             // Make type a more prominent part of the key to ensure separation between fill and stroke
             if (typeKey === 'fill') {
               // For fill types, ensure the type is clearly marked
-              key = `fill-color:${colorValue}:${result.nodeId || ''}`;
+              key = `fill-color:${colorValue}`;
             } else if (typeKey === 'stroke') {
               // For stroke types, ensure the type is clearly marked
-              key = `stroke-color:${colorValue}:${result.nodeId || ''}`;
+              key = `stroke-color:${colorValue}`;
             } else {
               // Generic color handling
               key = `color:${colorValue}`;
             }
-          } else if (typeKey === 'spacing-h-padding' || typeKey === 'horizontal-padding' || typeKey === 'horizontalPadding') {
-            // Normalize type for consistency
-            typeKey = 'horizontal-padding';
-            const paddingValue = typeof value === 'number' ? value : (value && value.value ? value.value : 0);
-            const paddingType = result.paddingType || result.property || 'all';
-            key = `${typeKey}:${paddingValue}:${paddingType}`;
-          } else if (typeKey === 'spacing-v-padding' || typeKey === 'vertical-padding' || typeKey === 'verticalPadding') {
-            // Normalize type for consistency
-            typeKey = 'vertical-padding';
-            const paddingValue = typeof value === 'number' ? value : (value && value.value ? value.value : 0);
-            const paddingType = result.paddingType || result.property || 'all';
-            key = `${typeKey}:${paddingValue}:${paddingType}`;
           } else if (typeKey === 'spacing-gap' || typeKey === 'gap' || typeKey === 'verticalGap' || typeKey === 'vertical-gap' || typeKey === 'horizontalGap') {
             // Normalize type for consistency
             typeKey = 'vertical-gap';
@@ -1562,16 +1568,31 @@ function initializeApp() {
           // Make sure the result has the correct type property
           result.type = typeKey;
           
-          // Initialize array if key doesn't exist
+          // Initialize array if key doesn't exist with a valid refs array
           if (!grouped[key]) {
             grouped[key] = { refs: [] };
+          }
+          
+          // Ensure refs array exists (defensive programming)
+          if (!grouped[key].refs) {
+            grouped[key].refs = [];
           }
           
           // Add result to the array
           grouped[key].refs.push(result);
         });
         
-        console.log('Grouped results by value:', grouped);
+        // Log groups and their sizes
+        for (const [key, group] of Object.entries(grouped)) {
+          const refCount = group?.refs?.length || 0;
+          console.log(`Group ${key}: ${refCount} items`);
+        }
+        
+        console.log('Grouped results by value:', {
+          groupCount: Object.keys(grouped).length,
+          totalRefs: Object.values(grouped).reduce((sum, group) => sum + (group?.refs?.length || 0), 0)
+        });
+        
         return grouped;
       },
       
@@ -1608,18 +1629,21 @@ function initializeApp() {
         this.variableCollections = data.collections || [];
       },
       selectVariable(variableId) {
-        if (!variableId) return;
-        
-        try {
-          parent.postMessage({
-            pluginMessage: this.makeSerializable({
-              type: 'select-variable-nodes',
-              variableId
-            })
-          }, '*');
-        } catch (error) {
-          console.error('Failed to select variable nodes:', error);
+        if (!variableId) {
+          console.warn('Cannot select variable: No variable ID provided');
+          return;
         }
+        
+        // Set the selected variable ID for UI highlighting
+        this.selectedVariableId = variableId;
+        
+        // Send a message to the plugin to select nodes using this variable
+        parent.postMessage({
+          pluginMessage: {
+            type: 'select-variable-nodes',
+            variableId: variableId
+          }
+        }, '*');
       },
       updateVariableFilters(filters) {
         this.variableFilters = {
@@ -1910,21 +1934,28 @@ function initializeApp() {
       },
       // Select all variables in a group
       selectAllVariablesInGroup(variables) {
-        if (!variables || variables.length === 0) return;
-        
-        const variableIds = variables.map(v => v.id);
-        
-        try {
-          // Request selection
-          parent.postMessage({
-            pluginMessage: this.makeSerializable({
-              type: 'select-variable-group-nodes',
-              variableIds
-            })
-          }, '*');
-        } catch (error) {
-          console.error('Failed to select variables:', error);
+        if (!variables?.length) {
+          console.warn('Cannot select variables: No valid variables array provided');
+          return;
         }
+        
+        // Extract all variable IDs
+        const variableIds = variables
+          .filter(v => v && v.id) // Filter out invalid variables
+          .map(v => v.id);
+        
+        if (!variableIds?.length) {
+          console.warn('No valid variable IDs found in the group');
+          return;
+        }
+        
+        // Send a message to the plugin to select nodes using these variables
+        parent.postMessage({
+          pluginMessage: {
+            type: 'select-variable-group-nodes',
+            variableIds: variableIds
+          }
+        }, '*');
       },
       // Unlink a specific variable from all its usages
       unlinkVariable(variableId) {
@@ -1977,57 +2008,66 @@ function initializeApp() {
       async selectGroup(refs, event) {
         console.log('Selecting group with refs:', refs);
         
-        if (!refs || (refs.length === 0 && !refs.refs)) {
-          console.log('No references provided to selectGroup method');
+        // Prevent event bubbling
+        if (event) {
+          event.stopPropagation();
+        }
+        
+        // Check for null, undefined, empty array, or invalid refs object using optional chaining
+        if (!refs || (!refs?.length && !refs?.refs?.length)) {
+          console.warn('No valid references provided to selectGroup method');
           return;
         }
         
         // Handle both array and object with refs property
         const refsArray = Array.isArray(refs) ? refs : (refs.refs || []);
         
-        if (refsArray.length === 0) {
-          console.log('No references to select after processing');
+        if (!refsArray?.length) {
+          console.warn('No references to select after processing');
           return;
         }
         
-        try {
-          // Get all node IDs from the references
-          const nodeIds = refsArray.map(ref => ref.nodeId).filter(Boolean);
-          
-          if (nodeIds.length === 0) {
-            console.warn('No valid node IDs found in references');
-            return;
-          }
-          
-          console.log('Selecting nodes with IDs:', nodeIds);
-          
-          // Send a message to the plugin to select these nodes
-          parent.postMessage({
-            pluginMessage: this.makeSerializable({
-              type: 'select-group',
-              nodeIds: nodeIds
-            })
-          }, '*');
-        } catch (err) {
-          console.error('Error selecting group:', err);
+        // Extract only valid nodeIds
+        const nodeIds = refsArray
+          .filter(ref => ref && ref.nodeId) // Filter out invalid refs
+          .map(ref => ref.nodeId);
+        
+        if (!nodeIds?.length) {
+          console.warn('No valid node IDs found in references');
+          return;
         }
+        
+        console.log(`Sending ${nodeIds.length} node IDs for selection`);
+        
+        // Send message to plugin for node selection
+        parent.postMessage({
+          pluginMessage: {
+            type: 'select-group',
+            nodeIds: nodeIds
+          }
+        }, '*');
       },
       
       // Add selectNode method
       selectNode(nodeId, event) {
-        if (!nodeId) return;
-        
-        try {
-          // Send node ID to plugin
-          parent.postMessage({
-            pluginMessage: this.makeSerializable({
-              type: 'select-node',
-              nodeId: nodeId
-            })
-          }, '*');
-        } catch (err) {
-          console.error('Error selecting node:', err);
+        // Prevent event propagation if provided
+        if (event) {
+          event.stopPropagation();
         }
+        
+        // Check for null/undefined nodeId
+        if (!nodeId) {
+          console.warn('Cannot select node: No node ID provided');
+          return;
+        }
+        
+        // Send node ID to plugin
+        parent.postMessage({
+          pluginMessage: {
+            type: 'select-node',
+            nodeId: nodeId
+          }
+        }, '*');
       },
       
       // Add a new method to process debug results

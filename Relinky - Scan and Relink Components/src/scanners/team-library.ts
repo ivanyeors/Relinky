@@ -22,7 +22,8 @@ async function isTeamLibraryVariable(variableId: string): Promise<boolean> {
     const variable = await figma.variables.getVariableByIdAsync(variableId);
     if (!variable || !variable.variableCollectionId) return false;
     
-    const collection = figma.variables.getVariableCollectionById(variable.variableCollectionId);
+    // Use the async version as required by Figma API
+    const collection = await figma.variables.getVariableCollectionByIdAsync(variable.variableCollectionId);
     return !!collection && collection.remote;
   } catch (err) {
     console.error(`Error checking team library variable ${variableId}:`, err);
@@ -97,9 +98,14 @@ export async function scanForTeamLibraryVariables(
   const allVariables = await figma.variables.getLocalVariablesAsync();
   const variablesMap = new Map(allVariables.map(v => [v.id, v]));
   
-  // Get collections for better naming
+  // Get collections for better naming - using async version
   const collections = await figma.variables.getLocalVariableCollectionsAsync();
-  const collectionsMap = new Map(collections.map(c => [c.id, c]));
+  const collectionsMap = new Map<string, VariableCollection>();
+  
+  // Store collections in the map
+  for (const collection of collections) {
+    collectionsMap.set(collection.id, collection);
+  }
   
   // Nodes with boundVariables
   const nodes = nodesToScan.flatMap(node => {
@@ -161,40 +167,58 @@ export async function scanForTeamLibraryVariables(
         
         // Only include if it's a team library variable
         if (isTeamVar) {
-          // Look up variable information
-          const variable = variablesMap.get(variableId);
-          const collection = variable ? collectionsMap.get(variable.variableCollectionId) : null;
-          
-          // Determine node type and create the reference
-          const nodeType = node.type.toLowerCase();
-          
-          // Create group key for consistent grouping
-          const groupKey = `${nodeType}-team-library-${variableId}`;
-          
-          // Create a reference object for this variable
-          const reference: LibraryReference = {
-            nodeId: node.id,
-            nodeName: node.name,
-            location: getNodePath(node),
-            property: property,
-            type: nodeType as ScanType,
-            currentValue: { 
+          try {
+            // Look up variable information
+            const variable = variablesMap.get(variableId);
+            let collection = null;
+            
+            if (variable && variable.variableCollectionId) {
+              // Try to get from cache first
+              collection = collectionsMap.get(variable.variableCollectionId);
+              
+              // If not in cache, try to fetch it
+              if (!collection) {
+                try {
+                  collection = await figma.variables.getVariableCollectionByIdAsync(variable.variableCollectionId);
+                } catch (e) {
+                  console.log(`Could not get collection for: ${variable.variableCollectionId}`);
+                }
+              }
+            }
+            
+            // Determine node type and create the reference
+            const nodeType = node.type.toLowerCase();
+            
+            // Create group key for consistent grouping
+            const groupKey = `${nodeType}-team-library-${variableId}`;
+            
+            // Create a reference object for this variable
+            const reference: LibraryReference = {
+              nodeId: node.id,
+              nodeName: node.name,
+              location: getNodePath(node),
+              property: property,
+              type: nodeType as ScanType,
+              currentValue: { 
+                variableId: variableId,
+                variableName: variable?.name || 'Unknown',
+                variableType: variable?.resolvedType || 'UNKNOWN',
+                collectionName: collection?.name || 'Team Library'
+              },
               variableId: variableId,
               variableName: variable?.name || 'Unknown',
+              variableNodeId: node.id,
               variableType: variable?.resolvedType || 'UNKNOWN',
-              collectionName: collection?.name || 'Team Library'
-            },
-            variableId: variableId,
-            variableName: variable?.name || 'Unknown',
-            variableNodeId: node.id,
-            variableType: variable?.resolvedType || 'UNKNOWN',
-            isTeamLibrary: true,
-            isVisible: node.visible !== false,
-            libraryName: collection?.name || 'Team Library',
-            groupKey
-          };
-          
-          results.push(reference);
+              isTeamLibrary: true,
+              isVisible: node.visible !== false,
+              libraryName: collection?.name || 'Team Library',
+              groupKey
+            };
+            
+            results.push(reference);
+          } catch (err) {
+            console.error(`Error processing team library variable ${variableId}:`, err);
+          }
         }
       }
       
@@ -218,40 +242,58 @@ export async function scanForTeamLibraryVariables(
             
             // Only include if it's a team library variable
             if (isTeamVar) {
-              // Look up variable information
-              const variable = variablesMap.get(variableId);
-              const collection = variable ? collectionsMap.get(variable.variableCollectionId) : null;
-              
-              // Determine node type and create the reference
-              const nodeType = node.type.toLowerCase();
-              
-              // Create group key for consistent grouping
-              const groupKey = `${nodeType}-team-library-${variableId}-array-${j}`;
-              
-              // Create a reference object for this variable
-              const reference: LibraryReference = {
-                nodeId: node.id,
-                nodeName: node.name,
-                location: getNodePath(node),
-                property: `${property}[${j}]`,
-                type: nodeType as ScanType,
-                currentValue: {
+              try {
+                // Look up variable information
+                const variable = variablesMap.get(variableId);
+                let collection = null;
+                
+                if (variable && variable.variableCollectionId) {
+                  // Try to get from cache first
+                  collection = collectionsMap.get(variable.variableCollectionId);
+                  
+                  // If not in cache, try to fetch it
+                  if (!collection) {
+                    try {
+                      collection = await figma.variables.getVariableCollectionByIdAsync(variable.variableCollectionId);
+                    } catch (e) {
+                      console.log(`Could not get collection for: ${variable.variableCollectionId}`);
+                    }
+                  }
+                }
+                
+                // Determine node type and create the reference
+                const nodeType = node.type.toLowerCase();
+                
+                // Create group key for consistent grouping
+                const groupKey = `${nodeType}-team-library-${variableId}-array-${j}`;
+                
+                // Create a reference object for this variable
+                const reference: LibraryReference = {
+                  nodeId: node.id,
+                  nodeName: node.name,
+                  location: getNodePath(node),
+                  property: `${property}[${j}]`,
+                  type: nodeType as ScanType,
+                  currentValue: {
+                    variableId: variableId,
+                    variableName: variable?.name || 'Unknown',
+                    variableType: variable?.resolvedType || 'UNKNOWN',
+                    collectionName: collection?.name || 'Team Library'
+                  },
                   variableId: variableId,
                   variableName: variable?.name || 'Unknown',
+                  variableNodeId: node.id,
                   variableType: variable?.resolvedType || 'UNKNOWN',
-                  collectionName: collection?.name || 'Team Library'
-                },
-                variableId: variableId,
-                variableName: variable?.name || 'Unknown',
-                variableNodeId: node.id,
-                variableType: variable?.resolvedType || 'UNKNOWN',
-                isTeamLibrary: true,
-                isVisible: node.visible !== false,
-                libraryName: collection?.name || 'Team Library',
-                groupKey
-              };
-              
-              results.push(reference);
+                  isTeamLibrary: true,
+                  isVisible: node.visible !== false,
+                  libraryName: collection?.name || 'Team Library',
+                  groupKey
+                };
+                
+                results.push(reference);
+              } catch (err) {
+                console.error(`Error processing team library variable ${variableId} in array:`, err);
+              }
             }
           }
         }

@@ -165,16 +165,48 @@ export async function scanForRawValues(
         }
         
         // Type-safe check if the property is not in boundVariables
-        // @ts-ignore - Figma API doesn't provide complete typings for all possible property names
-        const boundVariable = node.boundVariables[propertyName];
-        if (!boundVariable) {
+        const boundVariables = node.boundVariables as Record<string, any> | undefined;
+        if (!boundVariables || !(propertyName in boundVariables)) {
           console.log(`Property ${propertyName} is not bound on node ${node.name}, considering it raw`);
           return true;
         }
         
-        // The property is bound to something, so it's not a raw value
-        console.log(`Property ${propertyName} is bound on node ${node.name}, not a raw value`);
-        return false;
+        // Check if the property has a valid binding
+        const binding = boundVariables[propertyName];
+        if (!binding) {
+          console.log(`Property ${propertyName} has no binding on node ${node.name}, considering it raw`);
+          return true;
+        }
+        
+        // Handle array binding cases (like fills[0])
+        if (Array.isArray(binding)) {
+          // If the binding array is empty, the property is effectively raw
+          if (binding.length === 0) {
+            console.log(`Property ${propertyName} has empty binding array on node ${node.name}, considering it raw`);
+            return true;
+          }
+          
+          // If any array element has a valid binding ID, the property is bound
+          const hasValidBinding = binding.some(item => item && typeof item === 'object' && 'id' in item && item.id);
+          if (!hasValidBinding) {
+            console.log(`Property ${propertyName} has no valid binding in array on node ${node.name}, considering it raw`);
+            return true;
+          }
+          
+          // The property has at least one valid binding
+          console.log(`Property ${propertyName} has valid binding in array on node ${node.name}, not a raw value`);
+          return false;
+        }
+        
+        // For non-array bindings, check if there's a valid ID
+        if (typeof binding === 'object' && binding && 'id' in binding && binding.id) {
+          console.log(`Property ${propertyName} is bound on node ${node.name}, not a raw value`);
+          return false;
+        }
+        
+        // Default to raw if binding doesn't have an ID
+        console.log(`Property ${propertyName} has invalid binding on node ${node.name}, considering it raw`);
+        return true;
       }
       
       // If the node doesn't have boundVariables property at all, 
@@ -477,48 +509,29 @@ export async function scanForRawValues(
                     if (fills.length > 0 && isRawValue(node, 'fills')) {
                       console.log(`Found raw fill value(s) in node: ${node.name} (${String(node.type)})`);
                       
-                      // Get bound variables for fills if they exist
-                      const boundVars = ('boundVariables' in node && node.boundVariables && node.boundVariables['fills']) 
-                                    ? node.boundVariables['fills'] 
-                                    : [];
-                      
-                      // Process each fill to determine if it's raw
+                      // Process each fill individually to avoid array length issues
                       for (let i = 0; i < fills.length; i++) {
                         const fill = fills[i];
                         
                         // Skip invisible fills
                         if (fill.visible === false) continue;
                         
-                        // Check if this specific fill has a bound variable
-                        let isBound = false;
-                        
-                        if (Array.isArray(boundVars) && boundVars.length > 0) {
-                          // Safely check each condition separately
-                          if (i < boundVars.length) {
-                            const binding = boundVars[i];
-                            if (binding && typeof binding === 'object') {
-                              // Now safely check for id property
-                              if ('id' in binding && binding.id) {
-                                isBound = true;
-                              }
-                            }
-                          }
-                        }
-                        
-                        // Process each unbound fill
-                        if (!isBound) {
-                          results.push({
-                            nodeId: node.id,
-                            nodeName: node.name,
-                            location: getNodePath(node),
-                            property: `fills[${i}]`,
-                            type: 'raw-value',
-                            currentValue: fill,
-                            isVisible: isVisible
-                          });
-                        }
+                        // Add each fill as a separate result to avoid complex binding checks
+                        results.push({
+                          nodeId: node.id,
+                          nodeName: node.name,
+                          location: getNodePath(node),
+                          property: `fills[${i}]`,
+                          type: 'raw-value',
+                          currentValue: fill,
+                          isVisible: isVisible
+                        });
                       }
                     }
+                  } else if (fills === undefined || fills === null) {
+                    console.log(`Node ${node.name} has no fills, skipping fill check`);
+                  } else {
+                    console.log(`Node ${node.name} has fills of unknown type: ${typeof fills}, skipping`);
                   }
                 } catch (error) {
                   console.warn(`Error processing fills in node ${node.name}:`, error);
@@ -526,37 +539,91 @@ export async function scanForRawValues(
               }
               
               // Check stroke
-              if (hasValidStroke(node) && isRawValue(node, 'strokes')) {
-                console.log(`Found raw stroke value in node: ${node.name} (${String(node.type)})`);
-                
-                // Use a safe way to determine visibility
-                const isNodeVisible = getNodeVisibility(node);
-                
-                results.push({
-                  nodeId: node.id,
-                  nodeName: node.name,
-                  location: getNodePath(node),
-                  property: 'strokes',
-                  type: 'raw-value',
-                  currentValue: (node as any).strokes,
-                  isVisible: isNodeVisible
-                });
+              if (scanType === 'stroke' && 'strokes' in node) {
+                try {
+                  const strokes = node.strokes as Paint[] | readonly Paint[] | PluginAPI['mixed'];
+                  
+                  // Skip mixed strokes
+                  if (strokes === figma.mixed) {
+                    console.log(`Node ${node.name} has mixed strokes, skipping stroke check`);
+                  }
+                  // Process array of strokes
+                  else if (Array.isArray(strokes)) {
+                    // Check if there are valid strokes and if they're raw values
+                    if (strokes.length > 0 && isRawValue(node, 'strokes')) {
+                      console.log(`Found raw stroke value in node: ${node.name} (${String(node.type)})`);
+                      
+                      // Process each stroke individually
+                      for (let i = 0; i < strokes.length; i++) {
+                        const stroke = strokes[i];
+                        
+                        // Skip invisible strokes
+                        if (stroke.visible === false) continue;
+                        
+                        // Check if the stroke weight is greater than 0
+                        let hasWeight = false;
+                        if ('strokeWeight' in node) {
+                          const weight = node.strokeWeight;
+                          hasWeight = weight !== figma.mixed && typeof weight === 'number' && weight > 0;
+                        }
+                        
+                        // Only add strokes that are visible and have weight
+                        if (hasWeight) {
+                          results.push({
+                            nodeId: node.id,
+                            nodeName: node.name,
+                            location: getNodePath(node),
+                            property: `strokes[${i}]`,
+                            type: 'raw-value',
+                            currentValue: stroke,
+                            isVisible: isVisible
+                          });
+                        }
+                      }
+                    }
+                  }
+                } catch (error) {
+                  console.warn(`Error processing strokes in node ${node.name}:`, error);
+                }
               }
               
               // Check effects (shadows, blurs)
-              const effects = (node as any).effects;
-              
-              if (node && effects && effects.length > 0 && isRawValue(node, 'effects')) {
-                console.log(`Found raw effects in node: ${node.name}`);
-                results.push({
-                  nodeId: node.id,
-                  nodeName: node.name,
-                  location: getNodePath(node),
-                  property: 'effects',
-                  type: 'raw-value',
-                  currentValue: effects,
-                  isVisible: getNodeVisibility(node)
-                });
+              if ((scanType === 'stroke' || scanType === 'fill') && 'effects' in node) {
+                try {
+                  const effects = node.effects as Effect[] | readonly Effect[] | PluginAPI['mixed'];
+                  
+                  // Skip mixed effects
+                  if (effects === figma.mixed) {
+                    console.log(`Node ${node.name} has mixed effects, skipping effect check`);
+                  }
+                  // Process array of effects
+                  else if (Array.isArray(effects)) {
+                    // Check if there are valid effects and if they're raw values
+                    if (effects.length > 0 && isRawValue(node, 'effects')) {
+                      console.log(`Found raw effects in node: ${node.name}`);
+                      
+                      // Process each effect individually
+                      for (let i = 0; i < effects.length; i++) {
+                        const effect = effects[i];
+                        
+                        // Skip invisible effects
+                        if (effect.visible === false) continue;
+                        
+                        results.push({
+                          nodeId: node.id,
+                          nodeName: node.name,
+                          location: getNodePath(node),
+                          property: `effects[${i}]`,
+                          type: 'raw-value',
+                          currentValue: effect,
+                          isVisible: isVisible
+                        });
+                      }
+                    }
+                  }
+                } catch (error) {
+                  console.warn(`Error processing effects in node ${node.name}:`, error);
+                }
               }
               
               // Check for autolayout properties in Frame nodes
@@ -723,88 +790,104 @@ export async function scanForRawValues(
               break;
               
             case 'TEXT':
-              // Check text styles
-              if (isRawValue(node, 'fillStyleId')) {
-                console.log(`Found raw text style in node: ${node.name} (${String(node.type)})`);
-                results.push({
-                  nodeId: node.id,
-                  nodeName: node.name,
-                  location: getNodePath(node),
-                  property: 'fillStyleId',
-                  type: 'raw-value',
-                  currentValue: node.characters,
-                  isVisible: getNodeVisibility(node)
-                });
-              }
-              
-              // Check font properties
-              if (isRawValue(node, 'fontName')) {
-                console.log(`Found raw font name in node: ${node.name}`);
-                results.push({
-                  nodeId: node.id,
-                  nodeName: node.name,
-                  location: getNodePath(node),
-                  property: 'fontName',
-                  type: 'raw-value',
-                  currentValue: node.fontName,
-                  isVisible: getNodeVisibility(node)
-                });
-              }
-              
-              // Check for font size
-              if (isRawValue(node, 'fontSize')) {
-                console.log(`Found raw font size in node: ${node.name}: ${String(node.fontSize)}`);
-                results.push({
-                  nodeId: node.id,
-                  nodeName: node.name,
-                  location: getNodePath(node),
-                  property: 'fontSize',
-                  type: 'raw-value',
-                  currentValue: node.fontSize,
-                  isVisible: getNodeVisibility(node)
-                });
-              }
-              
-              // Check for font weight if it exists
-              if ('fontWeight' in node && isRawValue(node, 'fontWeight')) {
-                console.log(`Found raw font weight in node: ${node.name}`);
-                results.push({
-                  nodeId: node.id,
-                  nodeName: node.name,
-                  location: getNodePath(node),
-                  property: 'fontWeight',
-                  type: 'raw-value',
-                  currentValue: (node as any).fontWeight,
-                  isVisible: getNodeVisibility(node)
-                });
-              }
-              
-              // Check for line height
-              if ('lineHeight' in node && isRawValue(node, 'lineHeight')) {
-                console.log(`Found raw line height in node: ${node.name}`);
-                results.push({
-                  nodeId: node.id,
-                  nodeName: node.name,
-                  location: getNodePath(node),
-                  property: 'lineHeight',
-                  type: 'raw-value',
-                  currentValue: (node as any).lineHeight,
-                  isVisible: getNodeVisibility(node)
-                });
-              }
-              
-              // Check for letter spacing
-              if ('letterSpacing' in node && isRawValue(node, 'letterSpacing')) {
-                console.log(`Found raw letter spacing in node: ${node.name}`);
-                results.push({
-                  nodeId: node.id,
-                  nodeName: node.name,
-                  location: getNodePath(node),
-                  property: 'letterSpacing',
-                  type: 'raw-value',
-                  currentValue: (node as any).letterSpacing,
-                  isVisible: getNodeVisibility(node)
-                });
+              // Check text styles - only for typography scan types
+              if (scanType === 'typography') {
+                // Check text color - we should check fills property for this
+                if ('fills' in node && node.fills !== figma.mixed) {
+                  const textFills = node.fills as Paint[] | readonly Paint[] | undefined;
+                  
+                  if (Array.isArray(textFills) && textFills.length > 0 && isRawValue(node, 'fills')) {
+                    console.log(`Found raw text color in node: ${node.name}`);
+                    
+                    // Add each fill as a separate result
+                    for (let i = 0; i < textFills.length; i++) {
+                      const fill = textFills[i];
+                      
+                      // Skip invisible fills
+                      if (fill.visible === false) continue;
+                      
+                      results.push({
+                        nodeId: node.id,
+                        nodeName: node.name,
+                        location: getNodePath(node),
+                        property: `fills[${i}]`,
+                        type: 'raw-value',
+                        currentValue: fill,
+                        isVisible: getNodeVisibility(node)
+                      });
+                    }
+                  }
+                }
+                
+                // Check font properties - safely handle mixed values
+                if (node.fontName !== figma.mixed && isRawValue(node, 'fontName')) {
+                  console.log(`Found raw font name in node: ${node.name}`);
+                  results.push({
+                    nodeId: node.id,
+                    nodeName: node.name,
+                    location: getNodePath(node),
+                    property: 'fontName',
+                    type: 'raw-value',
+                    currentValue: node.fontName,
+                    isVisible: getNodeVisibility(node)
+                  });
+                }
+                
+                // Check for font size - safely handle mixed values
+                if (node.fontSize !== figma.mixed && isRawValue(node, 'fontSize')) {
+                  console.log(`Found raw font size in node: ${node.name}: ${String(node.fontSize)}`);
+                  results.push({
+                    nodeId: node.id,
+                    nodeName: node.name,
+                    location: getNodePath(node),
+                    property: 'fontSize',
+                    type: 'raw-value',
+                    currentValue: node.fontSize,
+                    isVisible: getNodeVisibility(node)
+                  });
+                }
+                
+                // Check for font weight if it exists - safely handle mixed values
+                if ('fontWeight' in node && node.fontWeight !== figma.mixed && isRawValue(node, 'fontWeight')) {
+                  console.log(`Found raw font weight in node: ${node.name}`);
+                  results.push({
+                    nodeId: node.id,
+                    nodeName: node.name,
+                    location: getNodePath(node),
+                    property: 'fontWeight',
+                    type: 'raw-value',
+                    currentValue: node.fontWeight,
+                    isVisible: getNodeVisibility(node)
+                  });
+                }
+                
+                // Check for line height - safely handle mixed values
+                if ('lineHeight' in node && node.lineHeight !== figma.mixed && isRawValue(node, 'lineHeight')) {
+                  console.log(`Found raw line height in node: ${node.name}`);
+                  results.push({
+                    nodeId: node.id,
+                    nodeName: node.name,
+                    location: getNodePath(node),
+                    property: 'lineHeight',
+                    type: 'raw-value',
+                    currentValue: node.lineHeight,
+                    isVisible: getNodeVisibility(node)
+                  });
+                }
+                
+                // Check for letter spacing - safely handle mixed values
+                if ('letterSpacing' in node && node.letterSpacing !== figma.mixed && isRawValue(node, 'letterSpacing')) {
+                  console.log(`Found raw letter spacing in node: ${node.name}`);
+                  results.push({
+                    nodeId: node.id,
+                    nodeName: node.name,
+                    location: getNodePath(node),
+                    property: 'letterSpacing',
+                    type: 'raw-value',
+                    currentValue: node.letterSpacing,
+                    isVisible: getNodeVisibility(node)
+                  });
+                }
               }
               break;
           }
@@ -861,52 +944,82 @@ export function groupRawValueResults(
     
     // Handle different types of values for better grouping
     if (result.property === 'fills' || result.property.startsWith('fills[')) {
-      // For fills, group by the first item's type and color
-      const value = Array.isArray(result.currentValue) ? result.currentValue : [result.currentValue];
+      // For fills, group by the type and color
+      const value = result.currentValue;
       
-      if (value.length > 0) {
-        const firstItem = value[0];
-        if (firstItem && firstItem.type === 'SOLID') {
-          // For solid fills, use the color as key
-          if (firstItem.color) {
+      if (value) {
+        // Handle single fill item (which is the case after our modifications)
+        if (typeof value === 'object' && 'type' in value) {
+          const fill = value as Paint;
+          if (fill.type === 'SOLID' && fill.color) {
+            // For solid fills, use the color as key
+            const color = fill.color as RGBA | RGB;
+            const colorKey = `r:${color.r.toFixed(2)},g:${color.g.toFixed(2)},b:${color.b.toFixed(2)}`;
+            const opacityKey = 'a' in color ? `,a:${color.a.toFixed(2)}` : '';
+            groupKey = `${result.property}-${fill.type}-${colorKey}${opacityKey}`;
+          } else if (fill.type) {
+            // For other fill types, just use the type
+            groupKey = `${result.property}-${fill.type}`;
+          } else {
+            groupKey = `${result.property}-unknown-fill-type`;
+          }
+        } 
+        // Handle array of fills (legacy case)
+        else if (Array.isArray(value) && value.length > 0) {
+          const firstItem = value[0];
+          if (firstItem && firstItem.type === 'SOLID' && firstItem.color) {
             const color = firstItem.color as RGBA | RGB;
             const colorKey = `r:${color.r.toFixed(2)},g:${color.g.toFixed(2)},b:${color.b.toFixed(2)}`;
             const opacityKey = 'a' in color ? `,a:${color.a.toFixed(2)}` : '';
             groupKey = `${result.property}-${firstItem.type}-${colorKey}${opacityKey}`;
+          } else if (firstItem && firstItem.type) {
+            groupKey = `${result.property}-${firstItem.type}`;
           } else {
-            groupKey = `${result.property}-${firstItem.type}-unknown-color`;
+            groupKey = `${result.property}-unknown-fill`;
           }
-        } else if (firstItem && firstItem.type) {
-          // For other fill types, just use the type
-          groupKey = `${result.property}-${firstItem.type}`;
         } else {
-          groupKey = `${result.property}-unknown`;
+          groupKey = `${result.property}-complex-fill`;
         }
       } else {
-        groupKey = `${result.property}-empty`;
+        groupKey = `${result.property}-empty-fill`;
       }
     } else if (result.property === 'strokes' || result.property.startsWith('strokes[')) {
       // For strokes, similar to fills but with stroke type
-      const value = Array.isArray(result.currentValue) ? result.currentValue : [result.currentValue];
-      if (value.length > 0) {
-        const firstItem = value[0];
-        if (firstItem && firstItem.type === 'SOLID') {
-          // For solid strokes, use the color as key
-          if (firstItem.color) {
+      const value = result.currentValue;
+      
+      if (value) {
+        // Handle single stroke item
+        if (typeof value === 'object' && 'type' in value) {
+          const stroke = value as Paint;
+          if (stroke.type === 'SOLID' && stroke.color) {
+            const color = stroke.color as RGBA | RGB;
+            const colorKey = `r:${color.r.toFixed(2)},g:${color.g.toFixed(2)},b:${color.b.toFixed(2)}`;
+            const opacityKey = 'a' in color ? `,a:${color.a.toFixed(2)}` : '';
+            groupKey = `${result.property}-${stroke.type}-${colorKey}${opacityKey}`;
+          } else if (stroke.type) {
+            groupKey = `${result.property}-${stroke.type}`;
+          } else {
+            groupKey = `${result.property}-unknown-stroke-type`;
+          }
+        }
+        // Handle array of strokes (legacy case)
+        else if (Array.isArray(value) && value.length > 0) {
+          const firstItem = value[0];
+          if (firstItem && firstItem.type === 'SOLID' && firstItem.color) {
             const color = firstItem.color as RGBA | RGB;
             const colorKey = `r:${color.r.toFixed(2)},g:${color.g.toFixed(2)},b:${color.b.toFixed(2)}`;
             const opacityKey = 'a' in color ? `,a:${color.a.toFixed(2)}` : '';
             groupKey = `${result.property}-${firstItem.type}-${colorKey}${opacityKey}`;
+          } else if (firstItem && firstItem.type) {
+            groupKey = `${result.property}-${firstItem.type}`;
           } else {
-            groupKey = `${result.property}-${firstItem.type}-unknown-color`;
+            groupKey = `${result.property}-unknown-stroke`;
           }
-        } else if (firstItem && firstItem.type) {
-          groupKey = `${result.property}-${firstItem.type}`;
         } else {
-          groupKey = `${result.property}-unknown`;
+          groupKey = `${result.property}-complex-stroke`;
         }
       } else {
-        groupKey = `${result.property}-empty`;
+        groupKey = `${result.property}-empty-stroke`;
       }
     } else if (result.property === 'fontName') {
       // For fonts, group by family and style
@@ -916,14 +1029,29 @@ export function groupRawValueResults(
       } else {
         groupKey = `${result.property}-unknown-font`;
       }
-    } else if (result.property === 'effects') {
+    } else if (result.property === 'effects' || result.property.startsWith('effects[')) {
       // For effects, try to group by effect type
-      const value = result.currentValue as Effect[];
-      if (Array.isArray(value) && value.length > 0) {
-        const firstEffect = value[0];
-        groupKey = `${result.property}-${firstEffect.type}`;
+      const value = result.currentValue;
+      
+      if (value) {
+        // Handle single effect item
+        if (typeof value === 'object' && 'type' in value) {
+          const effect = value as Effect;
+          groupKey = `${result.property}-${effect.type}`;
+        }
+        // Handle array of effects (legacy case)
+        else if (Array.isArray(value) && value.length > 0) {
+          const firstEffect = value[0];
+          if (firstEffect && firstEffect.type) {
+            groupKey = `${result.property}-${firstEffect.type}`;
+          } else {
+            groupKey = `${result.property}-unknown-effect-type`;
+          }
+        } else {
+          groupKey = `${result.property}-complex-effect`;
+        }
       } else {
-        groupKey = `${result.property}-unknown-effect`;
+        groupKey = `${result.property}-empty-effect`;
       }
     } else if (result.property.includes('padding') || 
                result.property === 'itemSpacing' || 
