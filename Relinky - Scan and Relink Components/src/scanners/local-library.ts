@@ -22,6 +22,27 @@ function getNodePath(node: BaseNode): string {
 }
 
 /**
+ * Checks if a variable is a local library variable (not team library)
+ * @param variableId The ID of the variable to check
+ * @returns Promise<boolean> True if it's a local variable, false otherwise
+ */
+async function isLocalLibraryVariable(variableId: string): Promise<boolean> {
+  try {
+    const variable = await figma.variables.getVariableByIdAsync(variableId);
+    if (!variable || !variable.variableCollectionId) return false;
+    
+    // Use the async version as required by Figma API
+    const collection = await figma.variables.getVariableCollectionByIdAsync(variable.variableCollectionId);
+    
+    // Local variables have collections that are not remote
+    return !!collection && !collection.remote;
+  } catch (err) {
+    console.error(`Error checking local library variable ${variableId}:`, err);
+    return false;
+  }
+}
+
+/**
  * Scan for local library variables in the document
  * 
  * @param progressCallback - Callback function for progress updates
@@ -41,6 +62,9 @@ export async function scanForLocalLibraryVariables(
   
   // Cache to store previously scanned results to improve performance
   const scannedNodesCache = new Map<string, boolean>();
+  
+  // Cache for variable IDs that have been checked
+  const variableCache = new Map<string, boolean>();
   
   // Get nodes to scan
   let nodesToScan: SceneNode[] = [];
@@ -85,6 +109,19 @@ export async function scanForLocalLibraryVariables(
   // Counter for typography variables found
   let typographyVarsFound = 0;
   
+  // Get all local variables for reference
+  const allVariables = await figma.variables.getLocalVariablesAsync();
+  const variablesMap = new Map(allVariables.map(v => [v.id, v]));
+  
+  // Get all collections for reference - using async
+  const collections = await figma.variables.getLocalVariableCollectionsAsync();
+  const collectionsMap = new Map<string, VariableCollection>();
+  
+  // Store collections in the map
+  for (const collection of collections) {
+    collectionsMap.set(collection.id, collection);
+  }
+  
   // Function to process a node and check for local variables
   const processNode = async (node: SceneNode) => {
     // Check if scan was cancelled
@@ -107,91 +144,110 @@ export async function scanForLocalLibraryVariables(
     
     // Check for variable bindings
     if ('boundVariables' in node && node.boundVariables) {
-      // Special handling for text nodes to detect typography variables
-      if (node.type === 'TEXT') {
-        // Process text node properties that might be bound to typography variables
-        for (const [property, binding] of Object.entries(node.boundVariables)) {
-          // Check if scan was cancelled
-          if (isScancelled()) {
-            return;
-          }
-          
-          // Check if this is a typography-related property
-          const isTypographyProperty = property === 'fontName' || 
-                                      property === 'fontSize' || 
-                                      property === 'fontWeight' ||
-                                      property === 'letterSpacing' ||
-                                      property === 'lineHeight' ||
-                                      property === 'paragraphIndent' ||
-                                      property === 'paragraphSpacing';
-          
-          if (isTypographyProperty && binding && typeof binding === 'object' && 'id' in binding) {
-            // Create a reference object for typography variable
-            const variableId = binding.id as string;
-            
-            // Determine properties for the typography variable
-            let fontFamily = 'Unknown';
-            let fontWeight = 'Regular';
-            let fontSize = 16;
-            
-            // Get typography properties
-            if (node.type === 'TEXT') {
-              fontFamily = getFontFamilyFromNode(node);
-              fontWeight = getFontWeightFromNode(node).toString();
-              fontSize = node.fontSize as number;
-            }
-            
-            // Create a unique group key for this typography variable
-            const groupKey = `typography-local-library-${fontFamily}-${fontWeight}-${fontSize}`;
-            
-            // Create the reference object
-            const reference: MissingReference = {
-              nodeId: node.id,
-              nodeName: node.name,
-              property,
-              type: 'typography',
-              location: getNodePath(node),
-              currentValue: {
-                variableId,
-                fontFamily,
-                fontWeight, 
-                fontSize
-              },
-              isLocalLibrary: true,
-              groupKey,
-              isVisible: node.visible !== false
-            };
-            
-            // Add to results
-            results.push(reference);
-            typographyVarsFound++;
-          }
-        }
-      }
-      
-      // Process other variable bindings
+      // Process all variable bindings
       for (const [property, binding] of Object.entries(node.boundVariables)) {
         // Check if scan was cancelled
         if (isScancelled()) {
           return;
         }
         
+        // Process single variable binding
         if (binding && typeof binding === 'object' && 'id' in binding) {
           const variableId = binding.id as string;
           
-          // Check if this is a local variable (not from a library)
-          const variable = await figma.variables.getVariableByIdAsync(variableId);
-          if (variable && variable.variableCollectionId) {
-            const collection = figma.variables.getVariableCollectionById(variable.variableCollectionId);
+          // Check if we've already determined if this is a local variable
+          let isLocalVar = variableCache.get(variableId);
+          
+          // If not in cache, check and cache the result
+          if (isLocalVar === undefined) {
+            isLocalVar = await isLocalLibraryVariable(variableId);
+            variableCache.set(variableId, isLocalVar);
+          }
+          
+          // Only proceed if it's a local variable
+          if (isLocalVar) {
+            // Look up variable information
+            const variable = variablesMap.get(variableId);
+            let collection = null;
             
-            // Only process if it's a local variable (not a team library variable)
-            if (collection && !collection.remote) {
+            if (variable && variable.variableCollectionId) {
+              // Try to get from cache first
+              collection = collectionsMap.get(variable.variableCollectionId);
+              
+              // If not in cache, try to fetch it
+              if (!collection) {
+                try {
+                  collection = await figma.variables.getVariableCollectionByIdAsync(variable.variableCollectionId);
+                } catch (e) {
+                  console.log(`Could not get collection for: ${variable.variableCollectionId}`);
+                }
+              }
+            }
+            
+            // Special handling for typography variables
+            if (node.type === 'TEXT' && (
+                property === 'fontName' || 
+                property === 'fontSize' || 
+                property === 'fontWeight' ||
+                property === 'letterSpacing' ||
+                property === 'lineHeight' ||
+                property === 'paragraphIndent' ||
+                property === 'paragraphSpacing')) {
+              
+              // Get typography properties
+              let fontFamily = getFontFamilyFromNode(node);
+              let fontWeight = getFontWeightFromNode(node).toString();
+              let fontSize = node.fontSize as number;
+              
+              // Create a unique group key for this typography variable
+              const groupKey = `typography-local-library-${fontFamily}-${fontWeight}-${fontSize}`;
+              
+              // Create the reference object for typography
+              const reference: MissingReference = {
+                nodeId: node.id,
+                nodeName: node.name,
+                property,
+                type: 'typography',
+                location: getNodePath(node),
+                currentValue: {
+                  variableId,
+                  fontFamily,
+                  fontWeight, 
+                  fontSize,
+                  variableName: variable?.name || 'Unknown',
+                  collectionName: collection?.name || 'Local Variables'
+                },
+                isLocalLibrary: true,
+                groupKey,
+                isVisible: node.visible !== false
+              };
+              
+              // Add to results
+              results.push(reference);
+              typographyVarsFound++;
+              
+            } else {
               // Determine the type of variable
-              let varType = 'color';
-              if (variable.resolvedType === 'COLOR') varType = 'color';
-              else if (variable.resolvedType === 'FLOAT') varType = 'number';
-              else if (variable.resolvedType === 'STRING') varType = 'string';
-              else if (variable.resolvedType === 'BOOLEAN') varType = 'boolean';
+              let varType: ScanType = 'fill';
+              
+              if (variable) {
+                if (variable.resolvedType === 'COLOR') {
+                  if (property.includes('fill')) varType = 'fill';
+                  else if (property.includes('stroke')) varType = 'stroke';
+                  else varType = 'fill'; // Default for colors
+                } 
+                else if (variable.resolvedType === 'FLOAT') {
+                  if (property.includes('cornerRadius')) varType = 'corner-radius';
+                  else if (property.includes('itemSpacing')) varType = 'gap';
+                  else if (property.includes('padding')) {
+                    if (property.includes('horizontal')) varType = 'horizontal-padding';
+                    else varType = 'vertical-padding';
+                  } 
+                  else varType = 'corner-radius'; // Default for numbers as corner-radius
+                }
+                else if (variable.resolvedType === 'STRING') varType = 'typography'; // Map strings to typography
+                else if (variable.resolvedType === 'BOOLEAN') varType = 'fill'; // Map booleans to fill as default
+              }
               
               // Create a unique group key for this variable
               const groupKey = `${varType}-local-library-${variableId}`;
@@ -205,8 +261,8 @@ export async function scanForLocalLibraryVariables(
                 location: getNodePath(node),
                 currentValue: {
                   variableId,
-                  variableName: variable.name,
-                  collectionName: collection.name
+                  variableName: variable?.name || 'Unknown',
+                  collectionName: collection?.name || 'Local Variables'
                 },
                 isLocalLibrary: true,
                 groupKey,
@@ -215,6 +271,75 @@ export async function scanForLocalLibraryVariables(
               
               // Add to results
               results.push(reference);
+            }
+          }
+        }
+        
+        // Process array of bindings (e.g., fills)
+        else if (binding && Array.isArray(binding)) {
+          for (let j = 0; j < binding.length; j++) {
+            const item = binding[j];
+            
+            if (item && typeof item === 'object' && 'id' in item) {
+              const variableId = item.id as string;
+              
+              // Check if we've already determined if this is a local variable
+              let isLocalVar = variableCache.get(variableId);
+              
+              // If not in cache, check and cache the result
+              if (isLocalVar === undefined) {
+                isLocalVar = await isLocalLibraryVariable(variableId);
+                variableCache.set(variableId, isLocalVar);
+              }
+              
+              // Only proceed if it's a local variable
+              if (isLocalVar) {
+                // Look up variable information
+                const variable = variablesMap.get(variableId);
+                let collection = null;
+                
+                if (variable && variable.variableCollectionId) {
+                  // Try to get from cache first
+                  collection = collectionsMap.get(variable.variableCollectionId);
+                  
+                  // If not in cache, try to fetch it
+                  if (!collection) {
+                    try {
+                      collection = await figma.variables.getVariableCollectionByIdAsync(variable.variableCollectionId);
+                    } catch (e) {
+                      console.log(`Could not get collection for: ${variable.variableCollectionId}`);
+                    }
+                  }
+                }
+                
+                // Determine type based on property name
+                let varType: ScanType = 'fill';
+                if (property.includes('fill')) varType = 'fill';
+                else if (property.includes('stroke')) varType = 'stroke';
+                
+                // Create a unique group key for this variable in an array
+                const groupKey = `${varType}-local-library-${variableId}-array-${j}`;
+                
+                // Create the reference object
+                const reference: MissingReference = {
+                  nodeId: node.id,
+                  nodeName: node.name,
+                  property: `${property}[${j}]`,
+                  type: varType,
+                  location: getNodePath(node),
+                  currentValue: {
+                    variableId,
+                    variableName: variable?.name || 'Unknown',
+                    collectionName: collection?.name || 'Local Variables'
+                  },
+                  isLocalLibrary: true,
+                  groupKey,
+                  isVisible: node.visible !== false
+                };
+                
+                // Add to results
+                results.push(reference);
+              }
             }
           }
         }
@@ -230,7 +355,7 @@ export async function scanForLocalLibraryVariables(
     
     // Update progress
     nodesProcessed++;
-    const progress = totalNodes > 0 ? nodesProcessed / totalNodes : 0;
+    const progress = Math.min(100, Math.round((nodesProcessed / totalNodes) * 100));
     progressCallback(progress);
   };
   

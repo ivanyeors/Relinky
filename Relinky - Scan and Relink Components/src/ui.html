@@ -400,20 +400,31 @@
 
                   <!-- Results Container -->
                   <div class="results-container">
+                    <!-- Debug info - will only show in dev tools but helpful for troubleshooting -->
+                    <div style="display:none">
+                      {{ console.log('Rendering filteredResults:', Object.keys(filteredResults).length, 'groups') }}
+                    </div>
+                    
+                    <!-- Actual results display -->
                     <div v-for="(group, groupKey) in filteredResults" 
                          :key="groupKey" 
                          class="value-group"
                     >
+                      <!-- Debugging info for each group -->
+                      <div style="display:none">
+                        {{ console.log(`Rendering group ${groupKey}:`, group?.refs?.length || 0, 'refs') }}
+                      </div>
+                      
                       <!-- Group Header -->
                       <div class="value-group-header" 
                            @click="toggleGroup(groupKey)"
                            :class="{
                              'expanded': isGroupExpanded(groupKey),
                              'library-scan': isLibraryVariableScan,
-                             'unlinked-reference': group.refs && group.refs[0] && !group.refs[0].isTeamLibrary && !group.refs[0].isLocalLibrary && !group.refs[0].isMissingLibrary,
-                             'team-library-reference': group.refs && group.refs[0] && group.refs[0].isTeamLibrary,
-                             'local-library-reference': group.refs && group.refs[0] && group.refs[0].isLocalLibrary,
-                             'missing-library-reference': group.refs && group.refs[0] && group.refs[0].isMissingLibrary
+                             'unlinked-reference': group.refs?.[0] && !group.refs[0].isTeamLibrary && !group.refs[0].isLocalLibrary && !group.refs[0].isMissingLibrary,
+                             'team-library-reference': group.refs?.[0] && group.refs[0].isTeamLibrary,
+                             'local-library-reference': group.refs?.[0] && group.refs[0].isLocalLibrary,
+                             'missing-library-reference': group.refs?.[0] && group.refs[0].isMissingLibrary
                            }"
                       >
                         <div class="group-info">
@@ -422,7 +433,7 @@
                           </span>
                           
                           <!-- Library type badge - show prominently for library scans -->
-                          <span v-if="isLibraryVariableScan && group.refs && group.refs[0]" 
+                          <span v-if="isLibraryVariableScan && group.refs?.[0]" 
                                 :class="{
                                   'library-badge': true,
                                   'unlinked-reference': !group.refs[0].isTeamLibrary && !group.refs[0].isLocalLibrary && !group.refs[0].isMissingLibrary,
@@ -434,7 +445,7 @@
                           </span>
                           
                           <!-- Add typography-specific template -->
-                          <template v-if="group.refs && group.refs[0] && group.refs[0].type === 'typography' && group.refs[0].currentValue">
+                          <template v-if="group.refs?.[0]?.type === 'typography' && group.refs[0]?.currentValue">
                             <div class="typography-labels">
                               <span class="label font-family" v-if="group.refs[0].currentValue && group.refs[0].currentValue.fontFamily">
                                 {{ group.refs[0].currentValue.fontFamily }}
@@ -461,9 +472,9 @@
                             </div>
                           </template>
                           
-                          <!-- Keep existing templates for other types -->
-                          <template v-else-if="group.refs && group.refs[0] && (group.refs[0].type === 'fill' || group.refs[0].type === 'stroke') && group.refs[0].currentValue">
-                            <color-preview :color="group.refs[0].currentValue" />
+                          <!-- Keep existing templates for other types - with optional chaining -->
+                          <template v-else-if="group.refs?.[0]?.type === 'fill' || group.refs?.[0]?.type === 'stroke'">
+                            <color-preview v-if="group.refs[0].currentValue" :color="group.refs[0].currentValue" />
                             <!-- Add library type badge -->
                             <span v-if="!isLibraryVariableScan" 
                                   :class="{
@@ -479,14 +490,14 @@
                             </span>
                           </template>
                           
-                          <template v-else-if="group.refs && group.refs[0]">
+                          <template v-else-if="group.refs?.[0]">
                             <div class="typography-labels">
                               <span class="label value font-medium" v-if="group.refs[0].currentValue !== undefined">{{ formatValue(group.refs[0].currentValue) }}</span>
-                              <span v-if="group.refs[0] && group.refs[0].type === 'gap' && group.refs[0].currentValue !== undefined" class="label gap">
+                              <span v-if="group.refs[0].type === 'gap' && group.refs[0].currentValue !== undefined" class="label gap">
                                 {{ group.refs[0].gapType === 'vertical' ? 'Vertical' : 'Horizontal' }} Gap: {{ group.refs[0].currentValue }}px
                               </span>
-                              <span v-if="group.refs[0] && group.refs[0].type === 'horizontalPadding' && group.refs[0].currentValue !== undefined" class="label horizontal-padding">{{ group.refs[0].currentValue }}px</span>
-                              <span v-if="group.refs[0] && group.refs[0].type === 'verticalPadding' && group.refs[0].currentValue !== undefined" class="label vertical-padding">{{ group.refs[0].currentValue }}px</span>
+                              <span v-if="group.refs[0].type === 'horizontalPadding' && group.refs[0].currentValue !== undefined" class="label horizontal-padding">{{ group.refs[0].currentValue }}px</span>
+                              <span v-if="group.refs[0].type === 'verticalPadding' && group.refs[0].currentValue !== undefined" class="label vertical-padding">{{ group.refs[0].currentValue }}px</span>
                               <!-- Add library type badge -->
                               <span v-if="!isLibraryVariableScan" 
                                     :class="{
@@ -504,10 +515,11 @@
                           </template>
                         </div>
                         <div class="group-actions">
-                          <span class="label instance-count">{{ group.refs.length }}×</span>
+                          <span class="label instance-count">{{ group.refs?.length || 0 }}×</span>
                           <button 
                             class="button secondary-button small"
                             @click.stop="selectGroup(group.refs, $event)"
+                            :disabled="!(group.refs?.length > 0)"
                           >
                             Select All
                           </button>
@@ -519,7 +531,7 @@
                            class="value-group-details"
                            @click.stop
                       >
-                        <div v-for="ref in group.refs" 
+                        <div v-for="ref in (group.refs || [])" 
                              :key="ref.nodeId" 
                              class="reference-item"
                              :class="{
@@ -530,8 +542,8 @@
                              }"
                         >
                           <div class="reference-info">
-                            <div class="reference-name">{{ ref.nodeName }}</div>
-                            <div class="reference-location">{{ ref.location }}</div>
+                            <div class="reference-name">{{ ref.nodeName || ref.name || 'Unnamed Node' }}</div>
+                            <div class="reference-location">{{ ref.location || 'Unknown Location' }}</div>
                             <div v-if="ref.variableName" class="reference-variable text-brand font-medium mt-xs">{{ ref.variableName }}</div>
                             <!-- Don't display library name for missing library variables to simplify the UI -->
                             <div v-if="ref.libraryName && !ref.isMissingLibrary" class="reference-library">{{ ref.libraryName }}</div>
@@ -696,17 +708,17 @@
                               <span class="label variable-type">{{ formatVariableType(group.type) }}</span>
                             </div>
                             <!-- Add color preview for color type -->
-                            <template v-if="(group.type && group.type.toUpperCase() === 'COLOR') && group.variables.length > 0">
+                            <template v-if="(group.type && group.type.toUpperCase() === 'COLOR') && (!group.variables?.length ? false : true)">
                               <div class="color-preview-list">
-                                <div v-for="(variable, index) in group.variables.slice(0, 3)" :key="index" class="group-color-preview">
+                                <div v-for="(variable, index) in (group.variables || []).slice(0, 3)" :key="index" class="group-color-preview">
                                   <color-preview :color="normalizeColorValue(variable.value)" />
                                 </div>
-                                <span v-if="group.variables.length > 3" class="more-colors-indicator">+{{ group.variables.length - 3 }}</span>
+                                <span v-if="group.variables?.length > 3" class="more-colors-indicator">+{{ group.variables.length - 3 }}</span>
                               </div>
                             </template>
                           </div>
                           <div class="group-actions">
-                            <span class="label instance-count">{{ group.variables.length }}×</span>
+                            <span class="label instance-count">{{ group.variables?.length || 0 }}×</span>
                             <button 
                               class="button secondary-button"
                               @click.stop="selectAllVariablesInGroup(group.variables)"
@@ -719,7 +731,7 @@
                         <!-- Group Variables -->
                         <div v-if="isGroupExpanded(groupKey)" 
                             class="value-group-details">
-                          <div v-for="variable in group.variables" 
+                          <div v-for="variable in (group.variables || [])" 
                                :key="variable.id" 
                                class="variable-card"
                                :class="{ 'selected': selectedVariableId === variable.id }">
