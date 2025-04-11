@@ -1,0 +1,12 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+1. Project Structure Guidelines
+Organize your code in a clear directory structure with dedicated folders for each type of content
+Keep components in their own folders with related files (TypeScript, CSS) together
+Separate global styles, utilities, services, and types into their own directories
+Store all assets (images, icons) in a dedicated assets folder
+Keep main plugin pages/views in a pages directory
+This structure helps prevent code duplication and makes it easier to find and maintain files

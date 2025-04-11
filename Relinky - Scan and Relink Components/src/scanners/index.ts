@@ -144,7 +144,8 @@ export async function runScanner(
     
     case 'missing-library':
       // Pass the variableTypes to the missing library scanner
-      return scanForMissingLibraryVariables(progressCallback, selectedFrameIds, ignoreHiddenLayers, variableTypes);
+      const missingLibResult = await scanForMissingLibraryVariables(progressCallback, selectedFrameIds, ignoreHiddenLayers, variableTypes);
+      return missingLibResult.results;
     
     default:
       console.error(`Unknown scanner type: ${sourceType}`);

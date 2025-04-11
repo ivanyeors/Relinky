@@ -14,6 +14,7 @@ export interface MissingReference {
   variableName?: string;
   variableValue?: any;
   variableType?: string;  // Add variableType property to store the variable's type
+  variableCategory?: string; // Add variableCategory property for filtering
   preview?: string;
   isInactiveLibrary?: boolean;  // From inactive library
   isUnlinked?: boolean;         // Raw value (no variable/style)
