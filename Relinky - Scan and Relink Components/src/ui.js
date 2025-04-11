@@ -117,24 +117,55 @@ function initializeApp() {
     },
     data() {
       return {
-        activeTab: 'tokens',
-        selectedScanType: null,
-        selectedSourceType: null, // New: Selected library source type
-        scanEntirePage: false,
+        // Make icons available to all templates
+        icons,
+        // UI state
         isScanning: false,
-        scanProgress: 0,
-        scanError: false,
         scanComplete: false,
-        groupedReferences: {},
-        expandedGroups: new Set(),
-        hasSelection: false,
-        selectedCount: 0,
-        hasInstances: false,
-        isWatching: false,
-        isLibraryVariableScan: false, // Whether the current scan is a library variable scan
-        paddingFilterType: 'all', // Filter type for padding (all, top, bottom, left, right)
-        radiusFilterType: 'all', // Filter type for corner radius (all, top-left, top-right, bottom-left, bottom-right)
-        gapFilterType: 'all', // Filter type for gap (all, vertical, horizontal)
+        scanProgress: 0,
+        showSuccessToast: false,
+        successMessage: '',
+        showErrorToast: false,
+        errorMessage: '',
+        activeTab: 'tokens',
+        // Basic plugin state
+        selectedScanType: null, // Currently selected token scan type
+        selectedSourceType: 'raw-values', // Source type for scanning (raw, team-library, local-library)
+        selectedFrameIds: [], // List of selected frame IDs, empty means scan entire page
+        // Results state
+        groupedReferences: {}, // Grouped scan results
+        expandedGroups: new Set(), // Groups currently expanded
+        scanType: null, // Type of scan that produced the results
+        isTokenScan: false, // Whether the scan was for tokens
+        isLibraryVariableScan: false, // Whether the scan was for library variables
+        ignoreHiddenLayers: false, // Whether to ignore hidden layers when scanning
+        // Library token state
+        hasLibraryResults: false,
+        activeLibraryTokens: [],
+        inactiveLibraryTokens: [],
+        linkedVariables: [],
+        variableFilters: {
+          type: 'all',
+          collection: 'all',
+          search: '',
+          libraryType: 'all'
+        },
+        isVariableScanning: false,
+        variableScanComplete: false,
+        variableScanProgress: 0,
+        selectedVariable: null,
+        selectedVariableScanTypes: ['all'],
+        selectedVariableTypes: [], // Legacy array for backward compatibility
+        selectedVariableTypeFilter: 'all', // New single selection variable type filter
+        availableVariableTypes: [], // Array to store available variable types from scan results
+        // Add a flag to control visibility of variable filters
+        showVariableTypeFilters: false,
+        // Filter type for padding (all, top, bottom, left, right)
+        paddingFilterType: 'all',
+        // Filter type for corner radius (all, top-left, top-right, bottom-left, bottom-right)
+        radiusFilterType: 'all',
+        // Filter type for gap (all, vertical, horizontal)
+        gapFilterType: 'all',
         tokenScanOptions: [
           {
             value: 'typography',
@@ -197,51 +228,12 @@ function initializeApp() {
             icon: 'missing'
           }
         ],
-        showSuccessToast: false,
-        successMessage: '',
-        selectingNodeIds: new Set(), // Track which groups are being selected
-        libraryResults: {},  // Separate results for library scan
-        variableAnalysis: null,
-        isAnalyzing: false,
         showSettings: false,
-        ignoreHiddenLayers: false,
-        // Use the imported icons
-        icons,
         windowSize: {
           width: 400,
           height: 600
         },
         isResizing: false,
-        selectedFrameIds: [],
-        inactiveLibraryTokens: [],
-        activeLibraryTokens: [],
-        selectedTokenScanType: 'all',
-        libraryTokenScanOptions: [
-          {
-            value: 'all',
-            label: 'All Library Tokens',
-            description: 'Find all tokens from inactive libraries',
-            icon: 'tokens'
-          },
-          {
-            value: 'colors',
-            label: 'Color Tokens',
-            description: 'Find color tokens from inactive libraries',
-            icon: 'fill'
-          },
-          {
-            value: 'typography',
-            label: 'Typography Tokens',
-            description: 'Find typography tokens from inactive libraries',
-            icon: 'typography'
-          },
-          {
-            value: 'spacing',
-            label: 'Spacing Tokens',
-            description: 'Find spacing tokens from inactive libraries',
-            icon: 'spacing'
-          }
-        ],
         selectedLibraryTokenScanType: 'all', // Default to 'all' instead of empty
         isLibraryScanning: false,
         libraryScanProgress: 0,
@@ -253,12 +245,14 @@ function initializeApp() {
         lastScannedType: null, // Add this to track the last scan type
         showHiddenOnly: false,
         variables: [],
-        variableFilters: {
-          type: 'all',
-          collection: 'all',
-          search: '',
-          libraryType: 'all'  // Add new filter for library type
-        },
+        variableTypeOptions: [
+          { value: 'color', label: 'Colors' },
+          { value: 'typography', label: 'Typography' },
+          { value: 'spacing', label: 'Spacing' },
+          { value: 'radius', label: 'Corner Radius' },
+          { value: 'effect', label: 'Effects' },
+          { value: 'layout', label: 'Layout' }
+        ],
         isLoadingVariables: false,
         selectedVariableId: null,
         variableScanOptions: [
@@ -303,9 +297,11 @@ function initializeApp() {
         selectedVariableTypes: [], // Array to store selected variable types for filtering
         variableTypeOptions: [
           { value: 'color', label: 'Colors' },
-          { value: 'number', label: 'Numbers/Spacing' },
-          { value: 'string', label: 'Text/Typography' },
-          { value: 'boolean', label: 'Boolean Values' }
+          { value: 'typography', label: 'Typography' },
+          { value: 'spacing', label: 'Spacing' },
+          { value: 'radius', label: 'Corner Radius' },
+          { value: 'effect', label: 'Effects' },
+          { value: 'layout', label: 'Layout' }
         ],
       }
     },
@@ -316,15 +312,21 @@ function initializeApp() {
       canStartScan() {
         const hasSourceType = !!this.selectedSourceType;
         const hasScanType = !!this.selectedScanType;
+        const isMissingLibrary = this.selectedSourceType === 'missing-library';
         
         console.log('Can start scan?', {
           hasSourceType,
           hasScanType,
+          isMissingLibrary,
           isScanning: this.isScanning
         });
         
-        // Only allow scan if both source type and scan type are selected
-        // and we're not already scanning
+        // Special case for missing-library: allow scanning without selecting a scan type
+        if (isMissingLibrary) {
+          return hasSourceType && !this.isScanning;
+        }
+        
+        // For other scan types, require both source type and scan type
         return hasSourceType && hasScanType && !this.isScanning;
       },
       hasResults() {
@@ -473,6 +475,42 @@ function initializeApp() {
             
             // Only include group if it has valid references
             if (Array.isArray(refs) && refs.length > 0) {
+              // Check if we should filter by variable type
+              const shouldFilterByType = this.scanType === 'missing-library' && 
+                                        this.selectedVariableTypeFilter !== 'all';
+              
+              if (shouldFilterByType) {
+                // For missing library variables, check if the first reference's type matches the filter
+                const firstRef = refs[0];
+                const variableType = firstRef.variableType || firstRef.variableCategory || '';
+                
+                // Handle special case: merge typography and "other" types
+                if (this.selectedVariableTypeFilter === 'typography') {
+                  // Include both explicit typography variables and 'other' or string variables
+                  // as they are often typography-related
+                  const isTypography = variableType === 'typography' || 
+                                     variableType === 'other' || 
+                                     variableType === 'STRING' ||
+                                     variableType === 'string' ||
+                                     variableType === 'Text';
+                  
+                  if (!isTypography) {
+                    // Skip if not typography-related
+                    console.log(`Filtering out group ${key} with type ${variableType}, not typography-related`);
+                    continue;
+                  } else {
+                    console.log(`Including group ${key} with type ${variableType}, matched as typography-related`);
+                  }
+                } 
+                else if (variableType.toLowerCase() !== this.selectedVariableTypeFilter.toLowerCase()) {
+                  // Skip this group if it doesn't match the selected variable type filter
+                  console.log(`Filtering out group ${key} with type ${variableType}, not matching filter: ${this.selectedVariableTypeFilter}`);
+                  continue;
+                } else {
+                  console.log(`Including group ${key} with type ${variableType}, matches selected filter: ${this.selectedVariableTypeFilter}`);
+                }
+              }
+              
               // Create a proper group object
               result[key] = {
                 refs: [...refs]  // Make a copy of the refs array
@@ -743,7 +781,13 @@ function initializeApp() {
         
         if (ref.isTeamLibrary) return 'Team Library';
         if (ref.isLocalLibrary) return 'Local Variables';
-        if (ref.isMissingLibrary) return 'Missing Variables';
+        if (ref.isMissingLibrary) {
+          // For missing variables, show the variable name or value if available
+          if (ref.currentValue && ref.currentValue.variableName) {
+            return ref.currentValue.variableName;
+          }
+          return 'Missing Variable';
+        }
         if (ref.isInactiveLibrary) return 'Inactive Library';
         return 'Unlinked Value';
       },
@@ -771,15 +815,23 @@ function initializeApp() {
         }, '*');
       },
       startScan(isRescan = false) {
-        // Reset error states
-        this.scanError = false;
+        console.log(`Starting scan with type: ${this.selectedScanType}, source: ${this.selectedSourceType}`);
+        console.log('Selected frame IDs:', this.selectedFrameIds);
+        
+        // Clear any previous results if not a rescan
+        if (!isRescan) {
+          this.groupedReferences = {};
+          this.expandedGroups = new Set();
+          this.scanComplete = false;
+          
+          // Reset variable type filters for missing library scans
+          this.selectedVariableTypes = [];
+          this.showVariableTypeFilters = false;
+        }
+        
+        // Set scanning state
         this.isScanning = true;
         this.scanProgress = 0;
-        
-        // Clear any existing results if it's not a rescan
-        if (!isRescan) {
-          this.clearResults();
-        }
         
         // Reset animation classes and scroll state
         const tokenTypeSection = document.querySelector('.token-type-section');
@@ -1284,6 +1336,38 @@ function initializeApp() {
         this.isScanning = false;
         this.scanComplete = true;
         this.scanProgress = 100;
+        
+        // Process and store available variable types if they exist
+        if (msg.availableTypes && Array.isArray(msg.availableTypes)) {
+          this.availableVariableTypes = msg.availableTypes;
+          console.log('Available variable types:', this.availableVariableTypes);
+          
+          // Only show variable type filters if there are results and available types
+          if (Object.keys(this.groupedReferences).length > 0 && this.availableVariableTypes.length > 0) {
+            this.showVariableTypeFilters = true;
+          }
+        } else {
+          // Convert availableTypes from Set to Array if needed
+          if (msg.availableTypes && typeof msg.availableTypes === 'object') {
+            try {
+              // Try to extract availableTypes if it's sent as a Set-like object
+              this.availableVariableTypes = Array.from(msg.availableTypes);
+              console.log('Converted available types:', this.availableVariableTypes);
+              
+              // Only show variable type filters if there are results and available types
+              if (Object.keys(this.groupedReferences).length > 0 && this.availableVariableTypes.length > 0) {
+                this.showVariableTypeFilters = true;
+              }
+            } catch (e) {
+              console.warn('Could not convert availableTypes to array:', e);
+              this.availableVariableTypes = [];
+              this.showVariableTypeFilters = false;
+            }
+          } else {
+            this.availableVariableTypes = [];
+            this.showVariableTypeFilters = false;
+          }
+        }
         
         console.log(`Processed ${Object.keys(msg.references).length} missing library reference groups`);
         
@@ -2273,9 +2357,13 @@ function initializeApp() {
       clearResults() {
         console.log('Clearing previous scan results');
         this.groupedReferences = {};
-        this.expandedGroups.clear();
+        this.scanType = null;
+        this.isTokenScan = false;
+        this.isLibraryVariableScan = false;
         this.scanComplete = false;
         this.scanProgress = 0;
+        this.selectedVariableTypes = [];
+        this.showVariableTypeFilters = false;
       },
       // Add this method with the other selection methods
 
@@ -2301,6 +2389,23 @@ function initializeApp() {
         
         console.log(`Selected variable types: ${this.selectedVariableTypes.join(', ')}`);
       },
+      
+      // New method for single-selection variable type filter
+      selectVariableTypeFilter(value) {
+        console.log(`Select variable type filter: ${value}`);
+        
+        // Set the selected filter to the chosen value
+        this.selectedVariableTypeFilter = value;
+        
+        // For backward compatibility, update the selectedVariableTypes array
+        if (value === 'all') {
+          this.selectedVariableTypes = [];
+        } else {
+          this.selectedVariableTypes = [value];
+        }
+        
+        console.log(`Selected variable type filter: ${this.selectedVariableTypeFilter}`);
+      },
       // Add helper method to map variable types to categories
       mapTypeToCategory(type) {
         switch (type) {
@@ -2310,6 +2415,15 @@ function initializeApp() {
           case 'BOOLEAN': return 'boolean';
           default: return type.toLowerCase();
         }
+      },
+      showError(message) {
+        this.errorMessage = message;
+        this.showErrorToast = true;
+      },
+      
+      getVariableTypeIcon(type) {
+        // Use the imported function from icons.js
+        return icons.getVariableTypeIcon(type);
       }
     },
     watch: {
@@ -2363,6 +2477,9 @@ function initializeApp() {
       this.selectedVariableTypes = this.selectedVariableTypes || [];
       this.linkedVariables = this.linkedVariables || [];
       this.selectedVariableScanTypes = this.selectedVariableScanTypes || ['all'];
+      
+      // Initialize the variable type filter to 'all' by default
+      this.selectedVariableTypeFilter = 'all';
     }
   }).mount('#app');
 

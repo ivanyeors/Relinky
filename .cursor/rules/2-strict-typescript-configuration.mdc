@@ -1,0 +1,45 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+2. TypeScript Guidelines
+Always define clear interfaces for component props to ensure type safety
+Use type definitions for complex data structures
+Enable strict TypeScript checking in your configuration
+Use enums for sets of related constants
+Take advantage of TypeScript's type system to catch errors early
+Make sure all variables and functions have proper type definitions
+Use union types when a value can be one of several specific types
+
+--- examples ---
+
+1. Type Definitions
+
+   // Define interfaces for component props
+   interface ComponentProps {
+     title: string;
+     onClick: (id: string) => void;
+   }
+
+   // Use type for complex unions
+   type Status = 'idle' | 'loading' | 'success' | 'error';
+
+2. Strict TypeScript Configuration
+   {
+     "compilerOptions": {
+       "strict": true,
+       "noImplicitAny": true,
+       "strictNullChecks": true,
+       "noUnusedLocals": true,
+       "noUnusedParameters": true
+     }
+   }
+
+3. Use Enums for Constants
+   enum MessageType {
+     SUCCESS = 'SUCCESS',
+     ERROR = 'ERROR',
+     WARNING = 'WARNING'
+   }
+

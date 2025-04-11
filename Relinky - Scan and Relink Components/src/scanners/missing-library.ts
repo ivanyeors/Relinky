@@ -4,6 +4,56 @@
 import { MissingReference, ScanType } from '../common';
 import { isScancelled } from './index';
 
+// Define variable type categories for better filtering
+export interface VariableTypeMetadata {
+  type: string;
+  displayName: string;
+  properties: string[];
+}
+
+export const VARIABLE_TYPE_CATEGORIES: VariableTypeMetadata[] = [
+  {
+    type: 'typography',
+    displayName: 'Typography',
+    properties: ['fontName', 'fontSize', 'fontWeight', 'letterSpacing', 'lineHeight', 'textCase', 'textDecoration']
+  },
+  {
+    type: 'color',
+    displayName: 'Colors',
+    properties: ['fill', 'fills', 'stroke', 'strokes', 'backgroundColor']
+  },
+  {
+    type: 'spacing',
+    displayName: 'Spacing',
+    properties: ['padding', 'paddingTop', 'paddingBottom', 'paddingLeft', 'paddingRight', 'itemSpacing', 'gap']
+  },
+  {
+    type: 'radius',
+    displayName: 'Corner Radius',
+    properties: ['cornerRadius', 'topLeftRadius', 'topRightRadius', 'bottomLeftRadius', 'bottomRightRadius']
+  },
+  {
+    type: 'effect',
+    displayName: 'Effects',
+    properties: ['effects', 'blur', 'shadow']
+  },
+  {
+    type: 'layout',
+    displayName: 'Layout',
+    properties: ['width', 'height', 'layoutMode', 'layoutAlign', 'layoutGrow']
+  }
+];
+
+// Helper function to determine variable category from property
+function getVariableCategory(property: string): string {
+  for (const category of VARIABLE_TYPE_CATEGORIES) {
+    if (category.properties.some(prop => property.toLowerCase().includes(prop.toLowerCase()))) {
+      return category.type;
+    }
+  }
+  return 'other';
+}
+
 /**
  * Checks if a variable is from a missing library
  */
@@ -58,24 +108,26 @@ function shouldIncludeNode(node: SceneNode, ignoreHiddenLayers: boolean): boolea
 
 /**
  * Scan for missing library variables in the document
- * 
- * @param progressCallback - Callback function for progress updates
- * @param selectedFrameIds - Array of frame IDs to scan (if empty, scans entire page)
- * @param ignoreHiddenLayers - Whether to ignore hidden layers during scanning
- * @param variableTypes - Array of variable types to scan for (if empty, scans for all types)
- * @returns Promise<MissingReference[]> - Array of references to missing library variables
+ * Returns both the results and available variable types for filtering
  */
 export async function scanForMissingLibraryVariables(
   progressCallback: (progress: number) => void = () => {},
   selectedFrameIds: string[] | undefined = undefined,
   ignoreHiddenLayers: boolean = false,
   variableTypes: string[] = []
-): Promise<MissingReference[]> {
-  console.log('Starting missing library variables scan:', {
-    selectedFrameIds: selectedFrameIds?.length ?? 'entire page',
-    ignoreHiddenLayers,
-    variableTypes: variableTypes.length > 0 ? variableTypes : 'all types'
-  });
+): Promise<{
+  results: MissingReference[],
+  availableTypes: Set<string>
+}> {
+  console.log('Starting missing library variables scan');
+  
+  const results: MissingReference[] = [];
+  const availableTypes = new Set<string>();
+  const filterByTypes = variableTypes.length > 0;
+  
+  if (filterByTypes) {
+    console.log(`Filtering missing variables by types:`, variableTypes);
+  }
   
   // Get nodes to scan
   let nodesToScan: SceneNode[] = [];
@@ -93,12 +145,6 @@ export async function scanForMissingLibraryVariables(
     nodesToScan = Array.from(figma.currentPage.children);
     console.log('Scanning entire page:', nodesToScan.length, 'top-level nodes');
   }
-  
-  // Results array
-  const results: MissingReference[] = [];
-  
-  // Cache for already checked variable IDs
-  const checkedVariableIds = new Map<string, {isMissing: boolean, error?: string, resolvedType?: string}>();
   
   // Nodes with boundVariables and/or missingVariables
   const nodes = nodesToScan.flatMap(node => {
@@ -130,12 +176,8 @@ export async function scanForMissingLibraryVariables(
   
   console.log(`Found ${nodes.length} nodes to scan for missing library variables`);
   
-  // Helper function to check if variable type matches filter
-  const matchesTypeFilter = (resolvedType?: string): boolean => true;
-  
   // Process each node
   for (let i = 0; i < nodes.length; i++) {
-    // Check if scan was cancelled
     if (isScancelled()) {
       console.log('Missing library scan cancelled');
       break;
@@ -143,38 +185,22 @@ export async function scanForMissingLibraryVariables(
     
     const node = nodes[i];
     
-    // First check missingVariables property if available
+    // Handle missingVariables property
     if ('missingVariables' in node && node.missingVariables) {
       for (const [property, missingInfo] of Object.entries(node.missingVariables)) {
-        // Check if scan was cancelled
-        if (isScancelled()) {
-          break;
-        }
+        if (isScancelled()) break;
         
-        // Create a reference for each missing variable
         if (missingInfo) {
-          // Extract library info if available
           const libraryName = missingInfo.libraryName || 'Unknown Library';
           const variableName = missingInfo.variableName || 'Unknown Variable';
           
-          // Try to infer variable type from the property name
-          const inferredType = (() => {
-            // Common property names that might help infer the variable type
-            if (/fill|color|background/i.test(property)) return 'COLOR';
-            if (/size|width|height|padding|margin|spacing|gap/i.test(property)) return 'FLOAT';
-            if (/text|font|content/i.test(property)) return 'STRING';
-            if (/visible|enabled|active/i.test(property)) return 'BOOLEAN';
-            return undefined;
-          })();
+          // Determine variable category
+          const variableCategory = getVariableCategory(property);
+          availableTypes.add(variableCategory);
           
-          // Skip if type doesn't match filter
-          if (!matchesTypeFilter(inferredType)) continue;
-          
-          // Create a group key based on the library and variable name
           const groupKey = `missing-library-${libraryName}-${variableName}`;
           
-          // Create the reference object
-          const reference: MissingReference = {
+          results.push({
             nodeId: node.id,
             nodeName: node.name,
             location: getNodePath(node),
@@ -183,46 +209,28 @@ export async function scanForMissingLibraryVariables(
             currentValue: {
               libraryName,
               variableName,
-              variableType: inferredType
+              variableType: variableCategory
             },
             isMissingLibrary: true,
             groupKey,
             isVisible: node.visible !== false,
             libraryName,
-            variableType: inferredType
-          };
-          
-          // Add to results
-          results.push(reference);
+            variableCategory, // Add category for filtering
+            variableType: variableCategory
+          });
         }
       }
     }
     
-    // Also check boundVariables for potentially missing references
+    // Handle boundVariables
     if ('boundVariables' in node && node.boundVariables) {
-      // Process each property binding
       for (const [property, binding] of Object.entries(node.boundVariables)) {
-        // Check if scan was cancelled
-        if (isScancelled()) {
-          break;
-        }
+        if (isScancelled()) break;
         
-        // Handle direct variable binding
-        if (binding && typeof binding === 'object' && 'id' in binding) {
-          const variableId = binding.id as string;
+        const processBinding = async (variableId: string, arrayIndex?: number) => {
+          const checkResult = await isMissingLibraryVariable(variableId);
           
-          // Check cache first to avoid duplicate lookups
-          let checkResult = checkedVariableIds.get(variableId);
-          
-          // If not in cache, check and cache the result
-          if (checkResult === undefined) {
-            checkResult = await isMissingLibraryVariable(variableId);
-            checkedVariableIds.set(variableId, checkResult);
-          }
-          
-          // Only include if it's a missing library variable and matches the type filter
-          if (checkResult.isMissing && matchesTypeFilter(checkResult.resolvedType)) {
-            // Try to get variable info, might fail for missing variables
+          if (checkResult.isMissing) {
             let variableName = 'Unknown Variable';
             let libraryName = 'Missing Library';
             
@@ -230,16 +238,12 @@ export async function scanForMissingLibraryVariables(
               const variable = await figma.variables.getVariableByIdAsync(variableId);
               if (variable) {
                 variableName = variable.name;
-                
-                // Try to infer library name from variable key or ID
                 if (variable.key) {
                   const libraryId = variable.key.split(':')[0];
                   libraryName = `Library ${libraryId}`;
                 }
               }
             } catch (err) {
-              console.log(`Unable to get variable info for ${variableId}`);
-              // Extract library ID from the variable ID if possible
               const idParts = variableId.split(':');
               if (idParts.length > 1) {
                 libraryName = `Library ${idParts[0]}`;
@@ -247,98 +251,45 @@ export async function scanForMissingLibraryVariables(
               }
             }
             
-            // Create group key for consistent grouping
-            const groupKey = `missing-library-${libraryName}-${variableName}`;
+            // Determine variable category
+            const variableCategory = getVariableCategory(property);
+            availableTypes.add(variableCategory);
+            
+            const groupKey = arrayIndex !== undefined ? 
+              `missing-library-${libraryName}-${variableName}-array-${arrayIndex}` :
+              `missing-library-${libraryName}-${variableName}`;
             
             results.push({
               nodeId: node.id,
               nodeName: node.name,
               location: getNodePath(node),
-              property,
+              property: arrayIndex !== undefined ? `${property}[${arrayIndex}]` : property,
               type: 'missing',
               currentValue: {
                 variableId,
                 libraryName,
                 variableName,
-                variableType: checkResult.resolvedType,
+                variableType: variableCategory,
                 errorDetails: checkResult.error
               },
               isMissingLibrary: true,
               groupKey,
               isVisible: node.visible !== false,
               libraryName,
-              variableType: checkResult.resolvedType
+              variableCategory, // Add category for filtering
+              variableType: variableCategory
             });
           }
-        }
+        };
         
-        // Handle array of bindings (e.g., fills)
-        else if (binding && typeof binding === 'object' && Array.isArray(binding)) {
-          // Process each item in the array
-          for (let j = 0; j < binding.length; j++) {
-            const item = binding[j];
-            
-            if (item && typeof item === 'object' && 'id' in item) {
-              const variableId = item.id as string;
-              
-              // Check cache first to avoid duplicate lookups
-              let checkResult = checkedVariableIds.get(variableId);
-              
-              // If not in cache, check and cache the result
-              if (checkResult === undefined) {
-                checkResult = await isMissingLibraryVariable(variableId);
-                checkedVariableIds.set(variableId, checkResult);
-              }
-              
-              // Only include if it's a missing library variable and matches the type filter
-              if (checkResult.isMissing && matchesTypeFilter(checkResult.resolvedType)) {
-                // Try to get variable info, might fail for missing variables
-                let variableName = 'Unknown Variable';
-                let libraryName = 'Missing Library';
-                
-                try {
-                  const variable = await figma.variables.getVariableByIdAsync(variableId);
-                  if (variable) {
-                    variableName = variable.name;
-                    
-                    // Try to infer library name from variable key or ID
-                    if (variable.key) {
-                      const libraryId = variable.key.split(':')[0];
-                      libraryName = `Library ${libraryId}`;
-                    }
-                  }
-                } catch (err) {
-                  console.log(`Unable to get variable info for ${variableId}`);
-                  // Extract library ID from the variable ID if possible
-                  const idParts = variableId.split(':');
-                  if (idParts.length > 1) {
-                    libraryName = `Library ${idParts[0]}`;
-                    variableName = `Variable ${idParts[1]}`;
-                  }
-                }
-                
-                // Create group key for consistent grouping
-                const groupKey = `missing-library-${libraryName}-${variableName}-array-${j}`;
-                
-                results.push({
-                  nodeId: node.id,
-                  nodeName: node.name,
-                  location: getNodePath(node),
-                  property: `${property}[${j}]`,
-                  type: 'missing',
-                  currentValue: {
-                    variableId,
-                    libraryName,
-                    variableName,
-                    variableType: checkResult.resolvedType,
-                    errorDetails: checkResult.error
-                  },
-                  isMissingLibrary: true,
-                  groupKey,
-                  isVisible: node.visible !== false,
-                  libraryName,
-                  variableType: checkResult.resolvedType
-                });
+        if (binding && typeof binding === 'object') {
+          if ('id' in binding) {
+            await processBinding(binding.id as string);
+          } else if (Array.isArray(binding)) {
+            for (let j = 0; j < binding.length; j++) {
+              const item = binding[j];
+              if (item && typeof item === 'object' && 'id' in item) {
+                await processBinding(item.id as string, j);
               }
             }
           }
@@ -346,29 +297,50 @@ export async function scanForMissingLibraryVariables(
       }
     }
     
-    // Update progress
     progressCallback(Math.round((i + 1) / nodes.length * 100));
   }
   
-  console.log(`Missing library scan complete. Found ${results.length} missing library variables`);
+  console.log(`Missing library scan complete. Found ${results.length} missing library variables in ${availableTypes.size} categories`);
   
-  return results;
+  // Filter results by variable type if types are specified
+  let filteredResults = results;
+  if (filterByTypes) {
+    console.log(`Before filtering: ${results.length} results with categories:`, 
+      [...new Set(results.map(r => r.variableCategory))]);
+    
+    filteredResults = results.filter(result => {
+      const matchesType = variableTypes.includes(result.variableType || '') || 
+                         variableTypes.includes(result.variableCategory || '');
+      
+      if (!matchesType) {
+        console.log(`Filtering out result with category: ${result.variableCategory}, type: ${result.variableType}, property: ${result.property}`);
+      }
+      
+      return matchesType;
+    });
+    
+    console.log(`Filtered to ${filteredResults.length} results based on selected variable types:`, variableTypes);
+    console.log(`Remaining categories:`, [...new Set(filteredResults.map(r => r.variableCategory))]);
+  }
+  
+  return { results: filteredResults, availableTypes };
 }
 
 /**
- * Group missing library variable scan results by library and variable
- * 
- * @param results - Array of missing library variable references to group
- * @returns Record<string, MissingReference[]> - Grouped references
+ * Group missing library variable scan results with type filtering support
  */
 export function groupMissingLibraryResults(
-  results: MissingReference[]
+  results: MissingReference[],
+  selectedTypes?: string[]
 ): Record<string, MissingReference[]> {
   const groups: Record<string, MissingReference[]> = {};
   
-  // Group by the groupKey property if available, otherwise create one
-  results.forEach(result => {
-    // Use existing groupKey or create one
+  // Filter results by selected types if provided
+  const filteredResults = selectedTypes && selectedTypes.length > 0 
+    ? results.filter(result => selectedTypes.includes(result.variableCategory || 'other'))
+    : results;
+  
+  filteredResults.forEach(result => {
     const groupKey = result.groupKey || (() => {
       const libraryName = result.currentValue?.libraryName || 'Unknown Library';
       const variableName = result.currentValue?.variableName || 'Unknown Variable';
@@ -382,7 +354,7 @@ export function groupMissingLibraryResults(
     groups[groupKey].push(result);
   });
   
-  console.log(`Grouped ${results.length} missing library results into ${Object.keys(groups).length} groups`);
+  console.log(`Grouped ${filteredResults.length} missing library results into ${Object.keys(groups).length} groups`);
   
   return groups;
 } 

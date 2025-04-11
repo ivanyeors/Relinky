@@ -200,7 +200,7 @@
                 </div>
 
                 <!-- Token Type Selection - Only show after source type is selected with a smooth transition -->
-                <div v-if="selectedSourceType" class="scan-cards token-type-section">
+                <div v-if="selectedSourceType && selectedSourceType !== 'missing-library'" class="scan-cards token-type-section">
                   <div class="scan-card-section-divider">Variable Type</div>
                   
                   <!-- Design Token Cards -->
@@ -357,6 +357,61 @@
                       Select groups to see where these values are used and select nodes.
                     </p>
                   </div>
+                  
+                  <!-- Variable Type Filter Section - only show after scan results for missing library variables -->
+                  <div v-if="showVariableTypeFilters && scanType === 'missing-library'" class="variable-filter-section">
+                    <div class="scan-card-section-divider">Filter by Variable Type</div>
+                    <div class="scan-cards">
+                      <!-- Add "All" option that's selected by default -->
+                      <div class="scan-card"
+                           :class="{ 
+                             'selected': selectedVariableTypeFilter === 'all',
+                             'interactive': true
+                           }"
+                           role="option"
+                           :aria-selected="selectedVariableTypeFilter === 'all'"
+                           tabindex="0"
+                           @click="selectVariableTypeFilter('all')"
+                      >
+                        <div class="scan-card-icon svg-icon">
+                          <div class="icon" v-html="icons.variable"></div>
+                        </div>
+                        
+                        <div class="scan-card-content">
+                          <div class="scan-card-text">
+                            <div class="scan-card-title">All Types</div>
+                            <div class="scan-card-description">Show all variable types</div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <!-- Individual Variable Type Cards -->
+                      <div v-for="type in availableVariableTypes" 
+                           :key="type" 
+                           class="scan-card"
+                           :class="{ 
+                             'selected': selectedVariableTypeFilter === type,
+                             'interactive': true
+                           }"
+                           role="option"
+                           :aria-selected="selectedVariableTypeFilter === type"
+                           tabindex="0"
+                           @click="selectVariableTypeFilter(type)"
+                      >
+                        <div class="scan-card-icon svg-icon">
+                          <!-- Using appropriate icon based on variable type -->
+                          <div class="icon" v-html="getVariableTypeIcon(type)"></div>
+                        </div>
+                        
+                        <div class="scan-card-content">
+                          <div class="scan-card-text">
+                            <div class="scan-card-title">{{ type }}</div>
+                            <div class="scan-card-description">Filter by {{ type.toLowerCase() }} variables</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
 
                   <!-- Padding Filter (Only shows with vertical-padding scan type) -->
                   <div id="padding-filter" v-if="selectedScanType === 'vertical-padding'" class="padding-filter">
@@ -441,7 +496,13 @@
                                   'local-library-reference': group.refs[0].isLocalLibrary,
                                   'missing-library-reference': group.refs[0].isMissingLibrary
                                 }">
-                            {{ getReferenceDisplayType(group.refs[0]) }}
+                            <!-- For missing library variables, show the variable value -->
+                            <template v-if="group.refs[0].isMissingLibrary && group.refs[0].currentValue">
+                              {{ group.refs[0].currentValue.variableName || formatValue(group.refs[0].currentValue) }}
+                            </template>
+                            <template v-else>
+                              {{ getReferenceDisplayType(group.refs[0]) }}
+                            </template>
                           </span>
                           
                           <!-- Add typography-specific template -->
@@ -467,7 +528,13 @@
                                       'local-library-reference': group.refs[0].isLocalLibrary,
                                       'missing-library-reference': group.refs[0].isMissingLibrary
                                     }">
-                                {{ getReferenceDisplayType(group.refs[0]) }}
+                                <!-- For missing library variables, show the variable value -->
+                                <template v-if="group.refs[0].isMissingLibrary && group.refs[0].currentValue">
+                                  {{ group.refs[0].currentValue.variableName || formatValue(group.refs[0].currentValue) }}
+                                </template>
+                                <template v-else>
+                                  {{ getReferenceDisplayType(group.refs[0]) }}
+                                </template>
                               </span>
                             </div>
                           </template>
@@ -486,7 +553,13 @@
                                     'local-library-reference': group.refs[0].isLocalLibrary,
                                     'missing-library-reference': group.refs[0].isMissingLibrary
                                   }">
-                              {{ getReferenceDisplayType(group.refs[0]) }}
+                              <!-- For missing library variables, show the variable value -->
+                              <template v-if="group.refs[0].isMissingLibrary && group.refs[0].currentValue">
+                                {{ group.refs[0].currentValue.variableName || formatValue(group.refs[0].currentValue) }}
+                              </template>
+                              <template v-else>
+                                {{ getReferenceDisplayType(group.refs[0]) }}
+                              </template>
                             </span>
                           </template>
                           
@@ -509,7 +582,13 @@
                                       'local-library-reference': group.refs[0].isLocalLibrary,
                                       'missing-library-reference': group.refs[0].isMissingLibrary
                                     }">
-                                {{ getReferenceDisplayType(group.refs[0]) }}
+                                <!-- For missing library variables, show the variable value -->
+                                <template v-if="group.refs[0].isMissingLibrary && group.refs[0].currentValue">
+                                  {{ group.refs[0].currentValue.variableName || formatValue(group.refs[0].currentValue) }}
+                                </template>
+                                <template v-else>
+                                  {{ getReferenceDisplayType(group.refs[0]) }}
+                                </template>
                               </span>
                             </div>
                           </template>
@@ -744,7 +823,7 @@
                                            variable.isMissingLibrary ? 'missing-library-reference' : 'unknown-reference']">
                                 {{ variable.isTeamLibrary ? 'Team Library' : 
                                    variable.isLocalLibrary ? 'Local Variables' : 
-                                   variable.isMissingLibrary ? 'Missing Variables' : 'Unknown' }}
+                                   variable.isMissingLibrary ? (variable.value ? formatVariableValue(variable.value, variable.type) : variable.variableName || 'Missing Variable') : 'Unknown' }}
                               </span>
                             </div>
                             <div class="variable-card-content">

@@ -321,87 +321,97 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
 
   // Handle scan request for values
   if (msg.type === 'scan-for-tokens') {
+    // First, clear any existing watch
+    stopWatchingDocument();
+    
+    // Extract scan parameters with fallbacks for backward compatibility
+    const scanType = msg.scanType || '';
+    const selectedFrameIds = msg.selectedFrameIds || [];
+    const ignoreHiddenLayers = msg.ignoreHiddenLayers || false;
+    const isRescan = msg.isRescan || false;
+    const sourceType = msg.sourceType || 'raw-values'; // Default to raw-values
+    
+    // Reset cancellation flag at the start of a new scan
+    scanners.resetCancellation();
+    
     try {
-      // Reset any previous scan state
-      scanners.resetCancellation();
+      // Notify UI that scan has started
+      figma.ui.postMessage({ type: 'scan-started' });
       
-      // Extract scan parameters
-      const scanType = msg.scanType as ScanType || 'typography';
-      const scanEntirePage = msg.scanEntirePage || false;
-      const selectedFrameIds = scanEntirePage ? [] : (msg.selectedFrameIds || []);
-      const ignoreHiddenLayers = msg.ignoreHiddenLayers || false;
-      const sourceType = msg.sourceType as 'raw-values' | 'team-library' | 'local-library' | 'missing-library' || 'raw-values';
-      const variableTypes = msg.variableTypes as string[] || []; // Get variable types for filtering
-      
-      console.log(`Starting ${sourceType} scan for ${scanType} with ${selectedFrameIds.length} selected frames`);
-      if (variableTypes.length > 0) {
-        console.log(`Filtering by variable types: ${variableTypes.join(', ')}`);
-      }
-      
-      // Notify UI that scanning has started
-      figma.ui.postMessage({
-        type: 'scan-started',
-        scanType,
-        sourceType
+      console.log(`Starting scan: ${sourceType} - ${scanType}`, {
+        sourceType,
+        scanType, 
+        selectedFrameIds: selectedFrameIds.length, 
+        ignoreHiddenLayers,
+        variableTypes: msg.variableTypes || [] // Log variable types
       });
       
-      // Run the scan using our scanner utility
-      const scanResults = await scanners.runScanner(
-        sourceType,
-        scanType,
-        selectedFrameIds,
-        (progress: number) => {
-          // Send progress updates to UI
-          figma.ui.postMessage({
-            type: 'scan-progress',
-            progress,
-            isScanning: true
+      // Track progress with a callback
+      let lastProgress = 0;
+      const progressCallback = (progress: number) => {
+        // Only send updates if progress has changed significantly (at least 1%)
+        if (Math.abs(progress - lastProgress) >= 1 || progress >= 100) {
+          lastProgress = progress;
+          figma.ui.postMessage({ 
+            type: 'scan-progress', 
+            progress, 
+            isScanning: progress < 100
           });
-        },
+        }
+      };
+      
+      // Use the scanner runner to get the proper scanner based on source type
+      const results = await scanners.runScanner(
+        sourceType,
+        scanType as common.ScanType,
+        selectedFrameIds,
+        progressCallback,
         ignoreHiddenLayers,
-        variableTypes // Pass variable types to the scanner
+        msg.variableTypes || [] // Pass variable types filter
       );
       
-      // Group the results for UI display
-      if (scanResults.length > 0) {
-        console.log(`Scan found ${scanResults.length} results, grouping...`);
-        
-        // Group using the appropriate grouping function
-        const groupedResults = scanners.groupScanResults(
-          sourceType, 
-          scanResults
+      // Group the results based on source type
+      const grouped = scanners.groupScanResults(sourceType, results);
+      
+      // Handle missing library variables differently to include availableTypes
+      if (sourceType === 'missing-library') {
+        // Get the full missingLibResult with availableTypes
+        const missingLibResult = await scanners.scanForMissingLibraryVariables(
+          progressCallback, 
+          selectedFrameIds, 
+          ignoreHiddenLayers, 
+          msg.variableTypes || []
         );
         
-        console.log(`Results grouped into ${Object.keys(groupedResults).length} categories`);
-        
-        // Send the grouped references
+        // Send the complete result to the UI
         figma.ui.postMessage({
-          type: 'missing-references-result',
-          scanType: scanType,
-          sourceType: sourceType,
-          references: groupedResults,
-          isLibraryVariableScan: msg.isLibraryVariableScan
+          type: 'missing-library-result',
+          references: grouped,
+          availableTypes: Array.from(missingLibResult.availableTypes),
+          count: results.length
         });
       } else {
-        console.log('Scan found no results');
-        
-        // Send empty results
+        // For other source types, send grouped results as before
         figma.ui.postMessage({
           type: 'scan-complete',
-          scanType: scanType,
-          sourceType: sourceType,
-          results: [],
-          isLibraryVariableScan: msg.isLibraryVariableScan
+          references: grouped,
+          count: results.length,
+          sourceType,
+          scanType
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error during scan:', error);
+      
       figma.ui.postMessage({
         type: 'scan-error',
-        message: error instanceof Error ? error.message : 'An error occurred during the scan',
-        scanType: msg.scanType,
-        sourceType: msg.sourceType
+        message: `Scan failed: ${error.message || 'Unknown error'}`
       });
+    }
+    
+    // Start watching if not a rescan
+    if (!isRescan && !scanners.isScancelled()) {
+      startWatchingDocument(msg.scanType as common.ScanType, msg.scanEntirePage);
     }
   }
 
