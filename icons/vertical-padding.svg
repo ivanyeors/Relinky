@@ -1,0 +1,14 @@
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="24" height="24" fill="#1E1E1E"/>
+<g id="Section 1">
+<path d="M-219 -54C-219 -55.1046 -218.105 -56 -217 -56H482C483.105 -56 484 -55.1046 484 -54V296C484 297.105 483.105 298 482 298H-217C-218.105 298 -219 297.105 -219 296V-54Z" fill="#444444"/>
+<path d="M-217 -55H482V-57H-217V-55ZM483 -54V296H485V-54H483ZM482 297H-217V299H482V297ZM-218 296V-54H-220V296H-218ZM-217 297C-217.552 297 -218 296.552 -218 296H-220C-220 297.657 -218.657 299 -217 299V297ZM483 296C483 296.552 482.552 297 482 297V299C483.657 299 485 297.657 485 296H483ZM482 -55C482.552 -55 483 -54.5523 483 -54H485C485 -55.6568 483.657 -57 482 -57V-55ZM-217 -57C-218.657 -57 -220 -55.6568 -220 -54H-218C-218 -54.5523 -217.552 -55 -217 -55V-57Z" fill="white" fill-opacity="0.1"/>
+<g id="vertical">
+<g id="Group 6">
+<path id="Vector 5" d="M20.7102 3.80981H3.34668" stroke="white" stroke-linecap="round"/>
+<path id="Vector 6" d="M20.7102 20.3337H3.34668" stroke="white" stroke-linecap="round"/>
+</g>
+<rect id="Rectangle 5" x="7.87646" y="7.87646" width="8.24707" height="8.24707" rx="2.5" stroke="white" stroke-linecap="round"/>
+</g>
+</g>
+</svg>

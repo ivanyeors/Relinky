@@ -1,0 +1,26 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+CSS Guidelines
+
+Define global CSS variables (custom properties) for consistent values across your plugin
+Store common values like colors, spacing, and typography in CSS variables
+Create component-specific CSS files to maintain modularity
+Use meaningful class names that describe the component's purpose
+Avoid magic numbers - use CSS variables instead
+Structure CSS with a clear hierarchy
+Use BEM (Block Element Modifier) or similar naming convention for classes
+Keep styles reusable and maintainable
+
+HTML Guidelines
+
+Keep HTML files clean and focused on structure
+Never include inline styles in HTML
+Never write JavaScript directly in HTML files
+Link to external CSS files properly in the head section
+Link to JavaScript files at the end of the body
+Use semantic HTML elements where appropriate
+Maintain proper document structure with DOCTYPE and meta tags
+Keep the root element clean for React/UI framework mounting

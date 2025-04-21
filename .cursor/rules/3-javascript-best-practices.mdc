@@ -1,0 +1,30 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+1. Use Modern ES6+ Features
+
+   // Use destructuring
+   const { name, id } = node;
+
+   // Use arrow functions
+   const handleClick = () => {
+     // implementation
+   };
+
+   // Use template literals
+   const message = `Selected component: ${componentName}`;
+
+2. Async/Await Pattern
+
+   async function fetchComponents() {
+     try {
+       const components = await figma.getComponentsAsync();
+       return components;
+     } catch (error) {
+       console.error('Error fetching components:', error);
+     }
+   }
+
+   
