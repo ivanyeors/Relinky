@@ -129,6 +129,24 @@ export async function scanForMissingLibraryVariables(
     console.log(`Filtering missing variables by types:`, variableTypes);
   }
   
+  // Initialize progress
+  let currentProgress = 0;
+  const updateProgressWithDebounce = (() => {
+    let lastUpdate = Date.now();
+    return (progress: number) => {
+      const now = Date.now();
+      // Update at least every 100ms to show continuous progress
+      if (now - lastUpdate >= 100 || progress - currentProgress >= 5) {
+        currentProgress = progress;
+        progressCallback(progress);
+        lastUpdate = now;
+      }
+    };
+  })();
+  
+  // Update to show scan has started
+  updateProgressWithDebounce(1);
+  
   // Get nodes to scan
   let nodesToScan: SceneNode[] = [];
   
@@ -146,9 +164,37 @@ export async function scanForMissingLibraryVariables(
     console.log('Scanning entire page:', nodesToScan.length, 'top-level nodes');
   }
   
+  // Update progress after determining scan scope
+  updateProgressWithDebounce(5);
+  
   // Nodes with boundVariables and/or missingVariables
-  const nodes = nodesToScan.flatMap(node => {
-    const result: SceneNode[] = [];
+  const nodes: SceneNode[] = [];
+  let nodesExamined = 0;
+  let totalNodesToExamine = 0;
+  
+  // First pass to estimate total nodes for better progress reporting
+  for (const node of nodesToScan) {
+    if (isScancelled()) break;
+    
+    const estimateNodeCount = (n: SceneNode) => {
+      totalNodesToExamine++;
+      if ('children' in n) {
+        for (const child of n.children) {
+          estimateNodeCount(child as SceneNode);
+        }
+      }
+    };
+    
+    estimateNodeCount(node);
+  }
+  
+  // Update progress after estimation
+  updateProgressWithDebounce(10);
+  console.log(`Estimated ${totalNodesToExamine} total nodes to examine`);
+  
+  // Now collect nodes with variables
+  for (const node of nodesToScan) {
+    if (isScancelled()) break;
     
     // Recursive function to collect nodes
     const collectNodes = (n: SceneNode) => {
@@ -157,10 +203,17 @@ export async function scanForMissingLibraryVariables(
         return;
       }
       
+      nodesExamined++;
+      if (nodesExamined % 100 === 0) { 
+        // Update progress during collection phase
+        const collectionProgress = 10 + Math.min(20, Math.round((nodesExamined / totalNodesToExamine) * 20));
+        updateProgressWithDebounce(collectionProgress);
+      }
+      
       if (shouldIncludeNode(n, ignoreHiddenLayers) && 
           (('boundVariables' in n && n.boundVariables) || 
            ('missingVariables' in n && n.missingVariables))) {
-        result.push(n);
+        nodes.push(n);
       }
       
       if ('children' in n) {
@@ -171,12 +224,16 @@ export async function scanForMissingLibraryVariables(
     };
     
     collectNodes(node);
-    return result;
-  });
+  }
   
   console.log(`Found ${nodes.length} nodes to scan for missing library variables`);
+  // Update progress after node collection
+  updateProgressWithDebounce(30);
   
   // Process each node
+  let processedNodes = 0;
+  const nodeProcessingWeight = 70; // 70% of the total progress is for node processing
+  
   for (let i = 0; i < nodes.length; i++) {
     if (isScancelled()) {
       console.log('Missing library scan cancelled');
@@ -187,6 +244,9 @@ export async function scanForMissingLibraryVariables(
     
     // Handle missingVariables property
     if ('missingVariables' in node && node.missingVariables) {
+      let propertiesProcessed = 0;
+      const totalProperties = Object.keys(node.missingVariables).length;
+      
       for (const [property, missingInfo] of Object.entries(node.missingVariables)) {
         if (isScancelled()) break;
         
@@ -219,11 +279,21 @@ export async function scanForMissingLibraryVariables(
             variableType: variableCategory
           });
         }
+        
+        propertiesProcessed++;
+        // Update progress during property processing
+        if (propertiesProcessed % 10 === 0 || propertiesProcessed === totalProperties) {
+          const nodeProgress = 30 + (nodeProcessingWeight * (i + (propertiesProcessed / totalProperties)) / nodes.length);
+          updateProgressWithDebounce(Math.round(nodeProgress));
+        }
       }
     }
     
     // Handle boundVariables
     if ('boundVariables' in node && node.boundVariables) {
+      let bindingsProcessed = 0;
+      const totalBindings = Object.keys(node.boundVariables).length;
+      
       for (const [property, binding] of Object.entries(node.boundVariables)) {
         if (isScancelled()) break;
         
@@ -294,10 +364,20 @@ export async function scanForMissingLibraryVariables(
             }
           }
         }
+        
+        bindingsProcessed++;
+        // Update progress during binding processing
+        if (bindingsProcessed % 5 === 0 || bindingsProcessed === totalBindings) {
+          const nodeProgress = 30 + (nodeProcessingWeight * (i + (bindingsProcessed / totalBindings)) / nodes.length);
+          updateProgressWithDebounce(Math.round(nodeProgress));
+        }
       }
     }
     
-    progressCallback(Math.round((i + 1) / nodes.length * 100));
+    processedNodes++;
+    // Pulse progress update to show activity even when processing large nodes
+    const baseProgress = 30 + (nodeProcessingWeight * processedNodes / nodes.length);
+    updateProgressWithDebounce(Math.round(baseProgress));
   }
   
   console.log(`Missing library scan complete. Found ${results.length} missing library variables in ${availableTypes.size} categories`);
@@ -322,6 +402,9 @@ export async function scanForMissingLibraryVariables(
     console.log(`Filtered to ${filteredResults.length} results based on selected variable types:`, variableTypes);
     console.log(`Remaining categories:`, [...new Set(filteredResults.map(r => r.variableCategory))]);
   }
+  
+  // Ensure we show 100% at the end
+  updateProgressWithDebounce(100);
   
   return { results: filteredResults, availableTypes };
 }
