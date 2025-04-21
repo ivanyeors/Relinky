@@ -1,3 +1,8 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
 You are an expert Figma plugin developer, proficient in TypeScript, Figma Plugin API, and web development.
 
 Code Style and Structure
