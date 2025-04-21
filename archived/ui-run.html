@@ -1,0 +1,4367 @@
+<!DOCTYPE html>
+<html>
+  <head>
+  <!-- Replace the mock Vue implementation with the actual Vue.js library -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  </head>
+
+<body>
+  <!-- Loading indicator -->
+  <div id="loading" style="display: flex; justify-content: center; align-items: center; height: 100vh;">
+    Loading...
+  </div>
+
+  <!-- Main app -->
+  <div id="app">
+    <div v-cloak class="plugin-container">
+      <div class="content-section">
+        <!-- Tab Navigation -->
+        <div class="tab-navigation">
+          <button 
+            class="tab-button" 
+            :class="{ 
+              'active': activeTab === 'tokens',
+              'inactive': activeTab !== 'tokens'
+            }"
+            @click="switchTab('tokens')"
+          >
+            <span>Values</span>
+          </button>
+          <button 
+            class="tab-button" 
+            :class="{ 
+              'active': activeTab === 'library-tokens',
+              'inactive': activeTab !== 'library-tokens',
+              'disabled': true
+            }"
+            disabled
+          >
+            <div class="tab-label">
+              <span>Variables</span>
+              <span class="beta-badge">SOON</span>
+            </div>
+            <span v-if="inactiveLibraryTokens.length" class="tab-badge">
+              {{ inactiveLibraryTokens.length }}
+            </span>
+          </button>
+      </div>
+
+      <!-- Section content -->
+      <div class="scan-section">
+          <div class="step-container">
+            <div class="step-content">
+              <!-- 1. Title and Watch button -->
+              <div class="step-header">
+                <h3 class="step-title">Select frames or components</h3>
+                <button 
+                  class="watch-toggle" 
+                  :class="{ 
+                    active: isWatching,
+                    disabled: !scanEntirePage 
+                  }"
+                  @click="toggleWatch"
+                  :disabled="!scanEntirePage"
+                  :title="watchButtonTitle"
+                >
+                  <div class="watch-toggle-content">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <path v-if="isWatching && scanEntirePage" d="M8 3.33333C11.3333 3.33333 14.1667 5.33333 15.3333 8C14.1667 10.6667 11.3333 12.6667 8 12.6667C4.66667 12.6667 1.83333 10.6667 0.666667 8C1.83333 5.33333 4.66667 3.33333 8 3.33333Z" fill="currentColor"/>
+                      <g v-else>
+                        <path d="M2.66667 2L13.3333 14" stroke="currentColor" stroke-width="1.5"/>
+                        <path d="M8 3.33333C11.3333 3.33333 14.1667 5.33333 15.3333 8C14.1667 10.6667 11.3333 12.6667 8 12.6667C4.66667 12.6667 1.83333 10.6667 0.666667 8C1.83333 5.33333 4.66667 3.33333 8 3.33333Z" fill="currentColor" fill-opacity="0.5"/>
+                      </g>
+                    </svg>
+                    <span class="watch-toggle-text">{{ isWatching && scanEntirePage ? 'Watching' : 'Watch changes' }}</span>
+                  </div>
+                </button>
+              </div>
+
+              <!-- 2. Scan Settings dropdown (move this before selection status) -->
+              <div class="scan-settings">
+                <div class="settings-header">
+                  <h4 class="settings-title">Scan Settings</h4>
+                  <button 
+                    class="settings-toggle"
+                    @click="showSettings = !showSettings"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <path 
+                        :d="showSettings 
+                          ? 'M4 10L8 6L12 10' 
+                          : 'M4 6L8 10L12 6'" 
+                        stroke="currentColor" 
+                        stroke-width="1.5" 
+                        stroke-linecap="round" 
+                        stroke-linejoin="round"
+                      />
+                    </svg>
+                  </button>
+                </div>
+                
+              <div class="settings-content" v-show="showSettings">
+              <!-- Move Scan Entire Page here -->
+                <div class="setting-item">
+                    <label class="toggle-label">
+                      <div class="toggle-label-content">
+                        <span>Scan Entire Page</span>
+                        <span v-if="scanEntirePage" class="slow-badge">slow</span>
+                        <span class="info-badge" title="Scan the entire page instead of selected frames">ⓘ</span>
+                      </div>
+                      <div class="toggle-wrapper">
+                        <input 
+                          type="checkbox" 
+                          v-model="scanEntirePage"
+                          class="toggle-input"
+                          @change="handleScanScopeChange"
+                        >
+                        <div class="toggle-slider"></div>
+                      </div>
+                    </label>
+                </div>
+
+              <!-- Existing Ignore Hidden Layers setting -->
+                <div class="setting-item">
+                    <label class="toggle-label">
+                      <div class="toggle-label-content">
+                        <span>Ignore Hidden Layers</span>
+                        <span class="beta-badge">Beta</span>
+                        <span class="info-badge" title="Hidden layers will be excluded from the scan">ⓘ</span>
+                      </div>
+                      <div class="toggle-wrapper">
+                        <input 
+                          type="checkbox" 
+                          v-model="ignoreHiddenLayers"
+                          class="toggle-input"
+                        >
+                        <div class="toggle-slider"></div>
+                      </div>
+                    </label>
+                </div>
+                </div>
+              </div>
+
+              <!-- 3. Selection status -->
+              <div class="selection-container">
+                <!-- Warning for instances -->
+                <div v-if="hasInstances" class="toast warning">
+                  <div class="toast-icon">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <path fill-rule="evenodd" clip-rule="evenodd" d="M8 1.33337L14.6667 13.3334H1.33334L8 1.33337ZM8 4.00004L3.73334 12H12.2667L8 4.00004ZM7.33334 6.66671H8.66668V9.33337H7.33334V6.66671ZM7.33334 10.6667H8.66668V12H7.33334V10.6667Z" fill="currentColor"/>
+                    </svg>
+                  </div>
+                  <span class="toast-message">Instances cannot be scanned. Please select frames, components, or sections instead.</span>
+                </div>
+                <!-- Existing selection messages -->
+                <div v-else-if="!hasSelection && !scanEntirePage" class="toast warning">
+                  <div class="toast-icon">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <path fill-rule="evenodd" clip-rule="evenodd" d="M8 1.33337L14.6667 13.3334H1.33334L8 1.33337ZM8 4.00004L3.73334 12H12.2667L8 4.00004ZM7.33334 6.66671H8.66668V9.33337H7.33334V6.66671ZM7.33334 10.6667H8.66668V12H7.33334V10.6667Z" fill="currentColor"/>
+                    </svg>
+                  </div>
+                  <span class="toast-message">Select frames or sections to start scanning</span>
+                </div>
+                <div v-else-if="hasSelection && !scanEntirePage" class="toast success">
+                  <div class="toast-icon">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <path fill-rule="evenodd" clip-rule="evenodd" d="M8 1.33334C4.31811 1.33334 1.33334 4.31811 1.33334 8C1.33334 11.6819 4.31811 14.6667 8 14.6667C11.6819 14.6667 14.6667 11.6819 14.6667 8C14.6667 4.31811 11.6819 1.33334 8 1.33334ZM11.0607 6.27274L7.39401 9.93941L5.27274 7.81814L6.06069 7.03019L7.39401 8.36351L10.2727 5.48479L11.0607 6.27274Z" fill="currentColor"/>
+                    </svg>
+                  </div>
+                  <span class="toast-message">{{ selectedCount }} {{ selectedCount === 1 ? 'item' : 'items' }} selected</span>
+                </div>
+                </div>
+              </div>
+          </div>
+      </div>
+      <!-- divider -->
+      <div class="divider"></div>
+      <!-- Results section -->
+      <div class="results-section">
+          <!-- Design Tokens Tab -->
+          <div v-if="activeTab === 'tokens'" class="tab-content">
+            <!-- Scan Type Selection -->
+            <div class="step-container">
+              <div class="step-content">
+                <!-- 1. Title -->
+                <h3 class="step-title">Choose what to scan for</h3>
+
+                <!-- 2. Scan Selection cards -->
+                <div class="scan-cards">
+                  <div v-for="option in tokenScanOptions"
+                       :key="option.value"
+                       class="scan-card"
+                       :class="{ 
+                         'selected': selectedScanType === option.value,
+                         'interactive': true
+                       }"
+                       role="option"
+                       :aria-selected="selectedScanType === option.value"
+                       tabindex="0"
+                       @click="selectScanType(option.value)"
+                  >
+                    <div class="scan-card-icon">
+                      <div class="icon" v-html="icons[option.icon]"></div>
+                    </div>
+                    
+                    <div class="scan-card-content">
+                      <div class="scan-card-text">
+                        <div class="scan-card-title">{{ option.label }}</div>
+                        <div class="scan-card-description">{{ option.description }}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Scan Controls -->
+            <div class="divider"></div>
+
+            <!-- Scanning Section - Following Hierarchy -->
+            <div class="step-container">
+              <div class="step-content">
+                <!-- 1. Title -->
+                <h3 class="step-title">Start scanning</h3>
+
+                <!-- 2. Progress Bar -->
+                <div class="progress-container">
+                  <div class="progress-bar">
+                    <!-- Remove progress track -->
+                    <div class="progress-fill" 
+                         :style="{ 
+                           width: `${scanProgress}%`,
+                           background: getProgressBarColor()
+                         }"
+                    ></div>
+                    <span class="progress-text" v-if="canStartScan || isScanning">{{ getProgressStatus() }}</span>
+                  </div>
+                </div>
+
+                <!-- 3. Buttons -->
+                <div class="scan-buttons">
+                  <!-- Start/Rescan button -->
+                  <button 
+                    v-if="!isScanning"
+                    @click="startScan(showRescanButton)" 
+                    class="button"
+                    :class="{
+                      'primary-button': !showRescanButton,
+                      'secondary-button rescan': showRescanButton
+                    }"
+                    :disabled="!canStartScan"
+                    :title="getStartScanButtonTitle()"
+                  >
+                    {{ showRescanButton ? 'Rescan' : 'Start Scan' }}
+                  </button>
+                  
+                  <!-- Stop button - only show when actively scanning -->
+                  <button 
+                    v-if="showStopButton"
+                    @click="stopScan()" 
+                    class="button warning-button"
+                  >
+                    Stop
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Add a new section for scan results with consistent styling -->
+            <template v-if="showScanResults">
+              <div class="divider"></div>
+              
+              <div class="step-container">
+                <div class="step-content">
+                  <!-- Results Header -->
+                  <div class="results-header">
+                    <div class="step-title-with-badge">
+                      <h3 class="step-title">Scan results</h3>
+                      <span class="results-badge">{{ getTotalResultsCount() }}</span>
+                    </div>
+                    <div class="results-actions">
+                      <button 
+                        class="button secondary-button"
+                        @click="clearResults"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Results Container -->
+                  <div class="results-container">
+                    <div v-for="(group, groupKey) in groupedByValue" 
+                         :key="groupKey" 
+                         class="value-group"
+                    >
+                      <!-- Group Header -->
+                      <div class="value-group-header" 
+                           @click="toggleGroup(groupKey)"
+                           :class="{ 'expanded': isGroupExpanded(groupKey) }"
+                      >
+                        <div class="group-info">
+                          <span class="expand-icon">
+                            {{ isGroupExpanded(groupKey) ? '▼' : '▶' }}
+                          </span>
+                          <!-- Add typography-specific template -->
+                          <template v-if="group.refs[0]?.type === 'typography'">
+                            <div class="typography-labels">
+                              <span class="label font-family" v-if="group.value.fontFamily">
+                                {{ group.value.fontFamily }}
+                              </span>
+                              <span class="label font-weight" v-if="group.value.fontWeight">
+                                {{ group.value.fontWeight }}
+                              </span>
+                              <span class="label font-size" v-if="group.value.fontSize">
+                                {{ group.value.fontSize }}px
+                              </span>
+                            </div>
+                          </template>
+                          <!-- Keep existing templates for other types -->
+                          <template v-else-if="group.refs[0]?.type === 'fill' || group.refs[0]?.type === 'stroke'">
+                            <color-preview :color="group.value" />
+                          </template>
+                          <template v-else>
+                            <span class="value-label">{{ formatValue(group.value) }}</span>
+                          </template>
+                        </div>
+                        <div class="group-actions">
+                          <span class="label instance-count">{{ group.refs.length }}×</span>
+                          <button 
+                            class="button secondary-button"
+                            @click.stop="selectGroup(group.refs, $event)"
+                          >
+                            Select All
+                          </button>
+                        </div>
+                      </div>
+
+                      <!-- Group Details -->
+                      <div v-if="isGroupExpanded(groupKey)" 
+                           class="value-group-details"
+                           @click.stop
+                      >
+                        <div v-for="ref in group.refs" 
+                             :key="ref.nodeId" 
+                             class="reference-item"
+                        >
+                          <div class="reference-info">
+                            <div class="reference-name">{{ ref.nodeName }}</div>
+                            <div class="reference-location">{{ ref.location }}</div>
+                          </div>
+                          <button 
+                            class="button secondary-button small"
+                            @click="selectNode(ref.nodeId, $event)"
+                          >
+                            Select
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </div>
+
+          <!-- Unlinked Library Tab -->
+          <div v-if="activeTab === 'library-tokens'" class="tab-content">
+            <div class="step-container">
+              <div class="step-content">
+                <!-- Scan Type Selection -->
+                <h3 class="step-title">Choose what to scan for</h3>
+                <!-- Restore icons in scan cards for Unlinked Tokens -->
+                <div class="scan-cards library-scan-cards" 
+                     role="listbox" 
+                     tabindex="0"
+                     @keydown="handleLibraryScanCardKeydown"
+                >
+                  <div v-for="(option, index) in libraryTokenScanOptions"
+                       :key="option.value"
+                       class="scan-card"
+                       role="option"
+                       :aria-selected="selectedLibraryTokenScanType === option.value"
+                       :tabindex="selectedLibraryTokenScanType === option.value ? 0 : -1"
+                       @click="selectLibraryScanType(option.value)"
+                  >
+                    <div class="scan-card-icon" v-html="icons[option.icon]"></div>
+                    <div class="scan-card-content">
+                      <span v-if="isLoadingOption === option.value" class="loading-spinner"></span>
+                      <template v-else>
+                        <div class="scan-card-title">{{ option.label }}</div>
+                        <div class="scan-card-description">{{ option.description }}</div>
+                      </template>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="divider"></div>
+
+                <!-- Scan Controls Section with improved UI -->
+                <div class="scan-section">
+                  <!-- Progress Bar - Always Visible -->
+                  <div class="progress-container">
+                    <div class="progress-bar">
+                      <div class="progress-track"></div>
+                      <div class="progress-fill" :style="{ width: getProgressWidth() }"></div>
+                      <div class="progress-text">{{ getProgressStatus() }}</div>
+                    </div>
+                  </div>
+
+                  <!-- Scan Buttons with improved layout -->
+                  <div class="scan-buttons-wrapper">
+                    <!-- Primary Action Buttons -->
+                    <div class="primary-actions" v-if="!isLibraryScanning">
+                      <button 
+                        v-if="!isScanning"
+                        @click="scanLibraryTokens" 
+                        class="button primary-button"
+                        :disabled="!canStartScan"
+                        :title="getStartScanButtonTitle()"
+                      >
+                        Start Scan
+                      </button>
+                      <button 
+                        v-if="hasLibraryResults"
+                        @click="scanLibraryTokens" 
+                        class="button secondary-button"
+                      >
+                        Rescan
+                      </button>
+                    </div>
+
+                    <!-- Control Buttons -->
+                    <div class="control-buttons" v-else>
+                      <button 
+                        v-if="!isPaused"
+                        @click="pauseLibraryScan" 
+                        class="button secondary-button"
+                      >
+                        <span class="button-icon">⏸</span>
+                        Pause
+                      </button>
+                      <button 
+                        v-else
+                        @click="resumeLibraryScan" 
+                        class="button primary-button"
+                      >
+                        <span class="button-icon">▶️</span>
+                        Resume
+                      </button>
+                      <button 
+                        @click="stopLibraryScan" 
+                        class="button warning-button"
+                      >
+                        <span class="button-icon">⏹</span>
+                        Stop
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Add scan results summary -->
+                <div v-if="scanSummary" class="scan-summary">
+                  <div class="summary-header">
+                    <h4>Scan Summary</h4>
+                    <span class="timestamp">{{ scanSummary.timestamp }}</span>
+                  </div>
+                  <div class="summary-stats">
+                    <div class="stat-item">
+                      <span class="stat-label">Nodes Scanned</span>
+                      <span class="stat-value">{{ scanSummary.totalNodes }}</span>
+                    </div>
+                    <div class="stat-item">
+                      <span class="stat-label">Variables Found</span>
+                      <span class="stat-value">{{ scanSummary.totalTokens }}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Results Section -->
+                <div v-if="hasLibraryResults" class="library-results">
+                  <!-- Summary -->
+                  <div class="results-summary">
+                    <div class="summary-item">
+                      <span class="summary-label">Total Variables</span>
+                      <span class="summary-value">{{ activeLibraryTokens.length + inactiveLibraryTokens.length }}</span>
+                    </div>
+                    <div class="summary-item warning" v-if="inactiveLibraryTokens.length">
+                      <span class="summary-label">Inactive Libraries</span>
+                      <span class="summary-value">{{ getUniqueLibraries(inactiveLibraryTokens).length }}</span>
+                    </div>
+                  </div>
+
+                  <!-- Inactive Libraries Section -->
+                  <div v-if="inactiveLibraryTokens.length > 0" class="token-section">
+                    <div class="section-header warning">
+                      <div class="header-content">
+                        <h4 class="section-title">Inactive Library Tokens</h4>
+                        <span class="token-count">{{ inactiveLibraryTokens.length }}</span>
+                      </div>
+                    </div>
+                    
+                    <!-- Group by Library -->
+                    <div v-for="library in getUniqueLibraries(inactiveLibraryTokens)" 
+                         :key="library"
+                         class="library-group">
+                      <div class="library-header">
+                        <span class="library-name">{{ library }}</span>
+                        <button class="button secondary-button"
+                                @click="activateLibrary(library)">
+                          Activate Library
+                        </button>
+                      </div>
+                      
+                      <div class="token-list">
+                        <div v-for="token in getTokensByLibrary(inactiveLibraryTokens, library)" 
+                             :key="token.id" 
+                             class="token-item inactive">
+                          <div class="token-info">
+                            <span class="token-name">{{ token.name }}</span>
+                            <div class="token-details">
+                              <span class="token-type">{{ formatTokenType(token.type) }}</span>
+                              <span class="token-usage">Used in {{ token.usages.length }} {{ token.usages.length === 1 ? 'place' : 'places' }}</span>
+                            </div>
+                          </div>
+                          <button 
+                            class="button text-button"
+                            @click="showTokenUsages(token)"
+                            :title="'Show where this token is used'"
+                          >
+                            <span class="button-icon">👁</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- No Results State -->
+                <div v-else-if="!isLibraryScanning" class="no-results">
+                  <div class="no-results-icon">
+                    <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                      <path d="M16 5.33334C22.6667 5.33334 28.3333 9.33334 30.6667 14.6667C28.3333 20 22.6667 24 16 24C9.33334 24 3.66668 20 1.33334 14.6667C3.66668 9.33334 9.33334 5.33334 16 5.33334Z" fill="currentColor" fill-opacity="0.3"/>
+                    </svg>
+                  </div>
+                  <span class="no-results-text">No tokens found</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Inside library-tokens tab content -->
+            <div v-if="activeTab === 'library-tokens'" class="tab-content">
+              <!-- ... existing scan controls ... -->
+
+              <!-- Variables Analysis Section -->
+              <div v-if="hasLibraryResults" class="library-analysis">
+                <!-- Collections Overview -->
+                <div class="analysis-section">
+                  <h3 class="section-title">Variable Collections</h3>
+                  <div class="collections-list">
+                    <div v-for="collection in variableCollections" 
+                         :key="collection.id" 
+                         class="collection-item"
+                         :class="{ 'inactive': !collection.isActive }">
+                      <div class="collection-header">
+                        <div class="collection-info">
+                          <span class="collection-name">{{ collection.name }}</span>
+                          <span class="collection-status" :class="{ 'warning': !collection.isActive }">
+                            {{ collection.isActive ? 'Active' : 'Inactive' }}
+                          </span>
+                        </div>
+                        <span class="variable-count">
+                          {{ collection.variablesCount }} variables
+                        </span>
+                      </div>
+                      
+                      <!-- Variables in Collection -->
+                      <div class="variables-list">
+                        <div v-for="variable in collection.variables" 
+                             :key="variable.id" 
+                             class="variable-item">
+                          <div class="variable-header">
+                            <span class="variable-name">{{ variable.name }}</span>
+                            <span class="variable-type">{{ formatTokenType(variable.type) }}</span>
+                          </div>
+                          
+                          <!-- Mode Information -->
+                          <div class="mode-info">
+                            <span class="mode-label">Current Mode:</span>
+                            <span class="mode-value">{{ variable.currentMode }}</span>
+                          </div>
+                          
+                          <!-- Usage Information -->
+                          <div class="usage-info">
+                            <div class="usage-header" @click="toggleUsageDetails(variable.id)">
+                              <span>Used in {{ variable.usages.length }} {{ variable.usages.length === 1 ? 'place' : 'places' }}</span>
+                              <span class="expand-icon">{{ isUsageExpanded(variable.id) ? '▼' : '▶' }}</span>
+                            </div>
+                            
+                            <!-- Usage Details (Expandable) -->
+                            <div v-if="isUsageExpanded(variable.id)" class="usage-details">
+                              <div v-for="usage in variable.usages" 
+                                   :key="`${usage.nodeId}-${usage.property}`" 
+                                   class="usage-item">
+                                <div class="usage-node-info">
+                                  <span class="node-name">{{ usage.nodeName }}</span>
+                                  <span class="property-name">{{ usage.property }}</span>
+                                </div>
+                                <button class="button text-button"
+                                        @click="selectNode(usage.nodeId)"
+                                        title="Select this instance">
+                                  <span class="button-icon">👁</span>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+      </div>
+      </div>
+
+      <!-- Sticky footer -->
+      <div class="sticky-footer">
+        <div class="version-info">
+          <span>v</span>
+          <span class="version-number">1.0.0</span>
+        </div>
+        <button class="donate-button" @click="openStripePayment">
+          <span class="cat-icon">🐱</span>
+          <span>Feed my cats</span>
+        </button>
+        <div class="resize-handle"></div>
+      </div>
+    </div>
+    <!-- Success Toast -->
+    <div class="success-toast" 
+      :class="{ 
+        visible: showSuccessToast,
+        warning: successMessage === 'Scanning the entire page may take longer'
+      }"
+      v-if="showSuccessToast">
+
+      <div class="success-toast-content">
+        <div class="success-toast-icon">
+          <svg v-if="successMessage !== 'Scanning the entire page may take longer'" 
+            width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path fill-rule="evenodd" clip-rule="evenodd" d="M8 1.33334C4.31811 1.33334 1.33334 4.31811 1.33334 8C1.33334 11.6819 4.31811 14.6667 8 14.6667C11.6819 14.6667 14.6667 11.6819 14.6667 8C14.6667 4.31811 11.6819 1.33334 8 1.33334ZM11.0607 6.27274L7.39401 9.93941L5.27274 7.81814L6.06069 7.03019L7.39401 8.36351L10.2727 5.48479L11.0607 6.27274Z" fill="currentColor"/>
+          </svg>
+          <svg v-else width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path fill-rule="evenodd" clip-rule="evenodd" d="M8 1L14.6667 13H1.33334L8 1ZM8 3.66667L3.73334 11.6667H12.2667L8 3.66667ZM7.33334 6H8.66668V8.66667H7.33334V6ZM7.33334 10H8.66668V11.3333H7.33334V10Z" fill="currentColor"/>
+        </svg>
+        </div>
+        <span class="success-toast-message">{{ successMessage }}</span>
+        <button class="success-toast-close" @click="dismissToast">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M12.6667 4.27337L11.7267 3.33337L8.00001 7.06004L4.27334 3.33337L3.33334 4.27337L7.06001 8.00004L3.33334 11.7267L4.27334 12.6667L8.00001 8.94004L12.6667 4.27337Z" fill="currentColor"/>
+        </svg>
+        </button>
+      </div>
+    </div>
+    <!-- Add error toast component -->
+    <div class="error-toast" v-if="showErrorToast">
+      <div class="error-toast-content">
+        <div class="error-toast-icon">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path fill-rule="evenodd" clip-rule="evenodd" d="M8 1.33337L14.6667 13.3334H1.33334L8 1.33337ZM7.33334 6.66671H8.66668V9.33337H7.33334V6.66671ZM7.33334 10.6667H8.66668V12H7.33334V10.6667Z" fill="currentColor"/>
+          </svg>
+        </div>
+        <span class="error-toast-message">{{ errorMessage }}</span>
+        <button class="error-toast-close" @click="dismissErrorToast">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M12.6667 4.27337L11.7267 3.33337L8.00001 7.06004L4.27334 3.33337L3.33334 4.27337L7.06001 8.00004L3.33334 11.7267L4.27334 12.6667L8.00001 8.94004L12.6667 4.27337Z" fill="currentColor"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+
+  <style>
+/* Add Figma's font stack at the top of your styles */
+:root {
+    --font-stack: 
+      -apple-system, 
+      BlinkMacSystemFont, 
+      'Segoe UI', 
+      Roboto, 
+      Oxygen-Sans, 
+      Ubuntu, 
+      Cantarell, 
+      'Helvetica Neue', 
+      sans-serif;
+
+    --spacing-lg: 16px;
+    --spacing-md: 12px;
+    --spacing-sm: 8px;
+    --spacing-xl: 24px;
+    --spacing-xs: 4px;
+    --spacing-xxs: 2px;
+}
+
+    [v-cloak] { display: none; }
+    
+    html {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    background-color: #2C2C2C;
+    color: #FFFFFF;
+    font-family: var(--font-stack);
+    font-size: 11px;
+    line-height: 16px;
+    }
+    /* Disable text selection globally */
+    body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    background-color: #2C2C2C;
+    color: #FFFFFF;
+    font-family: var(--font-stack);
+    font-size: 11px;
+    line-height: 16px;
+    user-select: none;
+    -webkit-user-select: none; /* Safari */
+    -moz-user-select: none; /* Firefox */
+    -ms-user-select: none; /* IE/Edge */
+    }
+    #app {
+    position: relative;
+    height: 100vh;
+    overflow: hidden;
+    }
+    
+
+
+/* KEYFRAMES */
+@keyframes button-spin {
+    from { transform: rotate(0deg); }
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+@keyframes spinner {
+    from { transform: rotate(0deg); }
+}
+
+/* ELEMENTS */
+/* Add consistent margins */
+    .step-title {
+    margin: var(--spacing-xxs) 0;
+}
+
+/* Add debug outline if needed */
+    .step-container {
+    position: relative;
+}
+
+/* Add debug styles */
+    .debug-info {
+    background: var(--figma-color-bg-secondary);
+    border-radius: 4px;
+    color: var(--figma-color-text);
+    font-family: monospace;
+    font-size: 11px;
+    padding: 8px;
+    white-space: pre-wrap;
+}
+
+/* Add icon components */
+    .icon-warning {
+    color: var(--figma-color-text-warning);
+}
+
+/* Small variant for reference items */
+.button.secondary-button.small {
+    font-size: 11px;
+    min-height: 24px;
+    padding: 4px 8px;
+}
+
+/* Add loading state for buttons */
+.button.secondary-button.loading {
+color: transparent;
+position: relative;
+}
+/* Update button styles in results section */
+.button.secondary-button {
+background: var(--figma-color-bg-secondary);
+position: relative;
+border-radius: 6px;
+border: 1px solid var(--figma-color-border);
+color: var(--figma-color-text);
+cursor: pointer;
+font-size: 11px;
+font-weight: 500;
+padding: 5px 12px;
+transition: all 0.1s ease;
+z-index: 1;
+}
+
+/* Active/Pressed state */
+.button.secondary-button:active {
+background: var(--figma-color-bg-pressed);
+border-color: var(--figma-color-border-strong);
+color: var(--figma-color-text);
+}
+/* Disabled state */
+.button.secondary-button:disabled {
+cursor: not-allowed;
+opacity: 0.4;
+pointer-events: none;
+}
+/* Hover state */
+.button.secondary-button:hover {
+background: var(--figma-color-bg-hover);
+border-color: var(--figma-color-highlight);
+}
+
+/* Focus state */
+.button.secondary-button:focus {
+    box-shadow: 0 0 0 2px var(--figma-color-border-brand-strong);
+    outline: none;
+}
+
+/* Add loading state styles for scan cards */
+    .scan-card.loading {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+/* Add progress bar state colors */
+    .progress-bar {
+    --progress-color: var(--figma-color-bg-disabled);
+    /* Default state */;
+}
+
+/* Add specific styles for analysis loading spinner */
+    .analysis-loading .loading-spinner {
+    border-width: 2.5px;
+    height: 24px;
+    margin: 8px auto;
+    width: 24px;
+}
+
+/* Add specific styles for the scan card icons */
+    .scan-card-icon .icon {
+    opacity: 0.8;
+}
+
+/* Add styles for tab label with beta badge */
+    .tab-label {
+    align-items: center;
+    display: flex;
+    gap: 4px;
+}
+
+/* Add these styles */
+    .color-preview {
+    align-items: center;
+    background: var(--figma-color-bg);
+    border-radius: 2px;
+    border: 1px solid var(--figma-color-border);
+    display: flex;
+    gap: 6px;
+    max-width: fit-content;
+    padding: 4px 8px;
+    transition: all 0.2s ease;
+}
+
+/* Add these styles */
+    .scan-settings {
+    background: var(--figma-color-bg-secondary);
+    border-radius: 6px;
+    margin-top: 4px;
+    overflow: hidden;
+    padding: 0;
+}
+
+/* Add these styles */
+    .section-title {
+    color: var(--figma-color-text);
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
+/* Add these styles */
+    .step-title-with-badge {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+}
+
+/* Add these styles */
+    .typography-details {
+    background: var(--figma-color-bg-secondary);
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px;
+    transition: all 0.2s ease;
+}
+
+/* Add these styles for the beta badge */
+    .beta-badge {
+    background: var(--figma-color-bg-brand-tertiary);
+    border-radius: 3px;
+    color: var(--figma-color-text-brand);
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    margin-left: 4px;
+    padding: 1px 4px;
+    text-transform: uppercase;
+    vertical-align: middle;
+}
+
+/* Adjust beta badge in tab */
+    .tab-button .beta-badge {
+    font-size: 8px;
+    margin-left: 2px;
+    padding: 2px 4px;
+}
+
+/* Allow text selection in specific areas if needed */
+    .code, .selectable-text {
+    -moz-user-select: text;
+    -ms-user-select: text;
+    -webkit-user-select: text;
+    user-select: text;
+}
+
+/* Apply consistent padding */
+    .step-container {
+    padding: var(--spacing-xxs);
+}
+
+/* Button Container */
+    .scan-buttons {
+    display: flex;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-xs);
+}
+
+/* Button Container Styles */
+    .scan-buttons-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 0 16px;
+}
+
+/* Button Styles */
+    .button {
+    align-items: center;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    flex: 1;
+    font-size: 12px;
+    font-weight: 500;
+    gap: 6px;
+    height: 32px;
+    justify-content: center;
+    min-width: unset;
+    padding: 0 var(--spacing-md);
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    width: auto;
+}
+
+/* Collection Styles */
+    .library-analysis {
+    margin-top: 24px;
+}
+
+/* Common Progress Bar Styles */
+    .progress-container {
+    background: var(--figma-color-bg);
+    border-radius: 6px;
+    margin-bottom: var(--spacing-md);
+    padding: var(--spacing-md);
+}
+
+/* Common section styles */
+    .step-container {
+    padding: var(--spacing-sm);
+}
+
+/* Consistent loading spinner style */
+    .loading-spinner {
+    animation: spin 0.6s linear infinite;
+    border-radius: 50%;
+    border-top-color: transparent;
+    border: 2px solid var(--figma-color-bg-brand);
+    height: 16px;
+    width: 16px;
+}
+
+/* Container for select button spinner */
+    .select-button.loading {
+    color: transparent;
+    position: relative;
+}
+
+/* Disable text selection globally */
+    body {
+    -webkit-user-select: none;
+    -ms-user-select: none;
+    -moz-user-select: none;
+    user-select: none;
+}
+
+/* Divider */
+    .divider {
+    background: var(--figma-color-border);
+    height: 1px;
+    margin: var(--spacing-lg) 0;
+}
+
+/* Ensure value groups are visible */
+    .value-group {
+    background: var(--figma-color-bg-secondary);
+    border-radius: 6px;
+    border: 1px solid var(--figma-color-border);
+    margin-bottom: 8px;
+    overflow: hidden;
+}
+
+/* Error state */
+    .button.error {
+    background: var(--figma-color-bg-danger);
+    color: white;
+}
+
+/* Improved Button Layout Styles */
+    .scan-buttons-wrapper {
+    padding: 0 16px;
+}
+
+/* Improved Progress Bar Styles */
+    .progress-container {
+    background: var(--figma-color-bg);
+    border-radius: 6px;
+    padding: 16px;
+}
+
+/* Library Group */
+    .library-group {
+    margin-bottom: var(--spacing-lg);
+}
+
+/* Library Results */
+    .library-results {
+    margin-top: var(--spacing-xl);
+}
+
+/* Library Results Styles */
+    .library-results {
+    margin-top: 24px;
+}
+
+/* Make sure the step container is visible */
+    .step-container {
+    background: var(--figma-color-bg);
+    position: relative;
+    z-index: 1;
+}
+
+/* Mode Styles */
+    .mode-info {
+    color: var(--figma-color-text-secondary);
+    font-size: 11px;
+    margin-bottom: 8px;
+}
+
+/* Progress Bar Container */
+    .progress-container {
+    background: var(--figma-color-bg);
+    border-radius: 6px;
+    margin-bottom: var(--spacing-xs);
+    padding: var(--spacing-xs);
+}
+
+/* Progress Bar Styles */
+    .progress-container {
+    background: var(--figma-color-bg);
+    border-radius: 6px;
+    margin-bottom: 16px;
+    padding: var(--spacing-xxs);
+}
+
+/* Progress bar states */
+    .progress-bar.scanning .progress-fill {
+    background: var(--figma-color-bg-brand);
+}
+
+/* Resize handle styles */
+    .resize-handle {
+    /* Prevent touch scrolling while resizing */
+    bottom: 0;
+    cursor: nwse-resize;
+    height: 16px;
+    position: absolute;
+    right: 0;
+    touch-action: none;
+    width: 16px;
+    z-index: 1000;
+}
+
+/* Results Section */
+    .results-section {
+    padding: var(--spacing-lg);
+}
+
+/* Results section styles */
+    .results-container {
+    /* Remove max-height limit */
+    height: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow: visible;
+    padding: 8px;
+}
+
+/* Scan Controls */
+    .scan-controls {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+/* Scan Section Styles */
+    .scan-section {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin: 24px 0;
+}
+
+/* Selected state (includes active state) */
+    .scan-card.selected {
+    background: var(--figma-color-bg-brand);
+    border-color: var(--figma-color-border-brand);
+}
+
+/* Separate text from progress fill */
+    .progress-text {
+    /* Add subtle text shadow for better readability */
+    text-shadow: 
+        0 0 1px var(--figma-color-bg),
+        0 0 1px var(--figma-color-bg),
+        0 0 1px var(--figma-color-bg);
+    /* Ensure text stays on top */
+    pointer-events: none;
+    /* Fixed position on right */
+    top: 50%;
+    /* Prevent text from interfering with interactions */
+    white-space: nowrap;
+    /* Use default text color */
+    z-index: 2;
+    color: var(--figma-color-text);
+    font-size: 11px;
+    font-weight: 500;
+    position: absolute;
+    right: 8px;
+    transform: translateY(-50%);
+}
+
+
+/* Success state */
+    .button.success {
+    background: var(--figma-color-bg-success);
+    color: white;
+}
+
+/* Summary Styles */
+    .scan-summary {
+    background: var(--figma-color-bg);
+    border-radius: 6px;
+    margin-top: 16px;
+    padding: 12px;
+}
+
+/* Token Section */
+    .token-section {
+    margin-top: var(--spacing-lg);
+}
+
+/* Update Progress Bar Styles */
+    .scan-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin: 16px 0;
+}
+
+/* Update Progress Bar styles */
+    .progress-bar {
+    background: var(--figma-color-bg-disabled);
+    border-radius: 6px;
+    height: 32px;
+    overflow: hidden;
+    position: relative;
+    transition: background-color 0.3s ease;
+}
+
+/* Update Progress Bar styles to match guide */
+    .progress-bar {
+    background: var(--figma-color-bg-disabled);
+    border-radius: 6px;
+    height: 32px;
+    overflow: hidden;
+    position: relative;
+}
+
+/* Update Scan Controls Styles */
+    .scan-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+
+
+/* Update button styles to match */
+    .scan-buttons {
+    display: flex;
+    gap: 8px;
+    padding: 0 16px;
+}
+
+/* Update color preview styles for results */
+    .value-group-header .color-preview {
+    background: transparent;
+    border: none;
+    font-family: var(--font-stack);
+    padding: 4px 8px;
+}
+
+/* Update content section spacing */
+    .content-section {
+    /* Remove padding */
+    flex: 1;
+    overflow-y: auto;
+    padding: 0;
+}
+
+/* Update divider spacing */
+    .divider {
+    /* Adjust margin */
+    background-color: var(--figma-color-border);
+    height: 1px;
+    margin: 8px 0;
+}
+
+/* Update existing styles */
+    .toggle-label {
+    /* Account for padding */
+    justify-content: space-between;
+    padding: var(--spacing-2xs) 0;
+    width: calc(100% - var(--spacing-xs) * 2);
+}
+
+/* Update first section specific styles */
+    .first-section {
+    & .step-content {
+        gap: 4px;
+    /* Reduce gap between elements */
+        padding: 0;
+    /* Remove padding */
+    background: var(--figma-color-bg);
+    padding: 0;
+}
+
+/* Update group actions container */
+    .group-actions {
+    /* Push to right */
+    align-items: center;
+    display: flex;
+    gap: 8px;
+    margin-left: auto;
+}
+
+/* Update plugin container spacing */
+    .plugin-container {
+    /* Remove any default padding */
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+    padding: 0;
+}
+
+/* Update progress bar styles */
+    .progress-fill {
+    background: var(--progress-color);
+    transition: all 0.3s ease;
+}
+
+/* Update reference item button container */
+    .reference-item {
+    align-items: center;
+    background: var(--figma-color-bg-secondary);
+    border-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+    padding: 8px;
+    transition: background 0.1s ease;
+}
+
+/* Update reference item styles for typography */
+    .reference-item {
+    align-items: center;
+    background: var(--figma-color-bg-secondary);
+    border-radius: 6px;
+    display: flex;
+    gap: 8px;
+    margin-bottom: 4px;
+    padding: 8px 12px;
+}
+
+/* Update results container styles */
+    .results-container {
+    /* Ensure container is visible */
+    min-height: 100px;
+    /* Remove max-height limit */
+    height: auto;
+    background: var(--figma-color-bg);
+    border-radius: 6px;
+    border: 1px solid var(--figma-color-border);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 8px;
+    overflow: visible;
+    padding: 8px;
+}
+
+/* Update scan card styles */
+    .scan-cards {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: repeat(2, 1fr);
+}
+
+/* Update scan section spacing */
+    .scan-section {
+    /* Remove padding */
+    background: var(--figma-color-bg);
+    padding: 0;
+}
+
+/* Update scan settings spacing */
+    .scan-settings {
+    /* Reduce top margin */
+    background: var(--figma-color-bg-secondary);
+    /* Remove default padding */
+    border-radius: 6px;
+    margin-top: 4px;
+    overflow: hidden;
+    padding: 0;
+}
+
+/* Update section spacing */
+    .scan-section {
+    margin: var(--spacing-lg) 0;
+}
+
+/* Update selection container spacing */
+    .selection-container {
+    /* Add minimal vertical margin */
+    margin: 4px 0;
+}
+
+/* Update settings header spacing */
+    .settings-header {
+    /* Reduce padding */
+    cursor: pointer;
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 8px;
+}
+
+/* Update spacing for results section */
+    .scan-summary {
+    margin-top: 16px;
+}
+
+/* Update step container spacing */
+    .step-container {
+    /* Consistent padding */
+    padding: 8px;
+}
+
+/* Update step header spacing */
+    .step-header {
+    /* Remove margin */
+    /* Remove padding */
+    margin: 0;
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+    padding: 0;
+}
+
+/* Update step title spacing */
+    .step-title {
+    /* Remove padding */
+    font-size: 13px;
+    font-weight: 600;
+    margin: 0;
+    padding: 0;
+}
+
+/* Update the loading spinner styles */
+    .select-button.loading {
+    align-items: center;
+    color: transparent;
+    display: flex;
+    justify-content: center;
+    position: relative;
+}
+
+/* Update toast spacing */
+    .toast {
+    /* Add minimal vertical margin */
+    border-radius: 4px;
+    /* Adjust padding */
+    margin: 4px 0;
+    align-items: center;
+    display: flex;
+    padding: 6px 8px;
+}
+
+/* Update typography styles */
+    .typography-info {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+    width: 100%;
+}
+
+/* Update warning button style */
+    .button.warning-button {
+    background: var(--figma-color-bg);
+    border: 1px solid var(--figma-color-border-danger);
+    color: var(--figma-color-text-danger);
+}
+
+/* Update watch toggle spacing */
+    .watch-toggle {
+    /* Add negative margin to align better */
+    /* Reduce padding */
+    margin: -2px;
+    padding: 4px 6px;
+}
+
+/* Updated Button Styles */
+    .button {
+    align-items: center;
+    border-radius: 6px;
+    display: flex;
+    font-size: 12px;
+    font-weight: 500;
+    gap: 6px;
+    height: 32px;
+    justify-content: center;
+    min-width: 90px;
+    padding: 0 16px;
+    transition: all 0.2s ease;
+}
+
+/* Updated Progress Bar Styles */
+    .scan-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin: 16px 0;
+}
+
+/* Updated Scan Section Styles */
+    .scan-section {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin: 16px 0;
+}
+
+/* Usage Styles */
+    .usage-info {
+    border-top: 1px solid var(--figma-color-border);
+    padding-top: 8px;
+}
+
+/* Use the same loading style for all buttons */
+    .button.loading {
+    color: transparent !important;
+    position: relative;
+}
+
+/* Variable Styles */
+    .variables-list {
+    padding: 8px;
+}
+
+body {
+    -moz-user-select: none;
+    -ms-user-select: none;
+    -webkit-user-select: none;
+    background-color: #2C2C2C;
+    color: #FFFFFF;
+    font-family: var(--font-stack);
+    font-size: 11px;
+    height: 100%;
+    line-height: 16px;
+    margin: 0;
+    overflow: hidden;
+    padding: 0;
+    user-select: none;
+}
+
+html {
+    background-color: #2C2C2C;
+    color: #FFFFFF;
+    font-family: var(--font-stack);
+    font-size: 11px;
+    height: 100%;
+    line-height: 16px;
+    margin: 0;
+    overflow: hidden;
+    padding: 0;
+}
+
+html, body {
+    background-color: #2C2C2C;
+    color: #FFFFFF;
+    font-family: var(--font-stack);
+    font-size: 11px;
+    height: 100%;
+    line-height: 16px;
+    margin: 0;
+    overflow: hidden;
+    padding: 0;
+}
+
+to {
+    transform: rotate(360deg);
+}
+
+}
+
+
+    .results-section {
+    padding-bottom: 16px;
+}
+
+
+    .results-section {
+    padding-bottom: 16px;
+}
+
+
+    .step-container {
+    padding: var(--spacing-xxs);
+}
+
+    .tab-navigation {
+    background: var(--figma-color-bg-secondary);
+    border-radius: 6px;
+    display: flex;
+    gap: 2px;
+    margin-bottom: 16px;
+    padding: 2px;
+}
+
+    .watch-toggle.active {
+    &:not(.disabled) {
+        color: var(--figma-color-text-brand);
+    background: var(--figma-color-bg-brand-tertiary);
+    }
+}
+
+    .watch-toggle.disabled {
+    background: var(--figma-color-bg-disabled);
+    color: var(--figma-color-text-disabled);
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+    /* Active state */
+    .button.active {
+    background: var(--figma-color-bg-brand);
+    color: white;
+}
+
+    /* Add specific styles for button loading spinner */
+    .select-button .loading-spinner {
+    border-right-color: var(--figma-color-text-onbrand);
+    border-top-color: var(--figma-color-text-onbrand);
+    border-width: 2px;
+    bottom: 0;
+    height: 12px;
+    left: 0;
+    margin: auto;
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 12px;
+}
+
+    /* Update progress bar styles */
+    .progress-container {
+    margin: 12px 0;
+}
+
+.color-swatch {
+    border: none;
+    height: 100%;
+    width: 100%
+}
+
+.color-swatch-container {
+    background: var(--figma-color-bg-secondary);
+    border-radius: 3px;
+    border: 1px solid var(--figma-color-border);
+    height: 20px;
+    overflow: hidden;
+    padding: 0;
+    width: 20px;
+}
+
+.control-buttons {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-start;
+}
+
+.current-value-label {
+    color: var(--figma-color-text-secondary);
+    font-size: 11px;
+}
+
+.description {
+    color: var(--figma-color-text-secondary);
+    margin: 8px 0 16px;
+}
+
+.divider {
+    /* Adjust margin */
+    background-color: var(--figma-color-border);
+    height: 1px;
+    margin: 8px 0;
+    margin: var(--spacing-sm) 0;
+}
+
+.donate-button {
+    /* Adjust donate button margin */
+    align-items: center;
+    background: var(--figma-color-bg-secondary);
+    border-radius: 4px;
+    border: none;
+    color: var(--figma-color-text-tertiary);
+    cursor: pointer;
+    display: flex;
+    font-size: 11px;
+    font-weight: 500;
+    gap: 6px;
+    margin-right: 12px;
+    padding: 4px 8px;
+    transition: all 0.2s ease;
+}
+
+.donate-button:hover {
+    background: var(--figma-color-bg-hover);
+    color: var(--figma-color-text);
+    transform: scale(1.02);
+}
+
+.donate-button:hover .cat-icon {
+    transform: scale(1.1);
+}
+
+.empty-state {
+    color: var(--figma-color-text-secondary);
+    padding: 16px;
+    text-align: center;
+}
+
+.empty-state p {
+    margin: 0 0 16px 0;
+}
+
+.empty-state-steps {
+    display: inline-block;
+    line-height: 24px;
+    text-align: left;
+}
+
+.error-toast {
+    align-items: center;
+    background: var(--figma-color-bg-danger);
+    border-radius: 6px;
+    bottom: 16px;
+    color: white;
+    display: flex;
+    gap: 8px;
+    left: 50%;
+    padding: 8px 12px;
+    position: fixed;
+    transform: translateX(-50%);
+    z-index: 1000;
+}
+
+.expand-icon {
+    align-items: center;
+    color: var(--figma-color-text-secondary);
+    display: inline-flex;
+    height: 16px;
+    justify-content: center;
+    margin: -4px;
+    transition: all 0.1s ease;
+    width: 16px;
+}
+
+.first-section {
+    & .step-content {
+        gap: 4px;
+        background: var(--figma-color-bg);
+        padding: 0;
+    }
+}
+
+
+.group-actions {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+}
+
+.group-info {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+}
+
+.header {
+    border-bottom: 1px solid var(--figma-color-border);
+    flex-shrink: 0;
+    padding: 16px;
+}
+
+.header h2 {
+    font-family: var(--font-stack);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 24px;
+    margin: 0;
+}
+
+.header-left {
+    align-items: center;
+    display: flex;
+    flex: 1;
+    gap: 8px;
+}
+
+.header-right {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+}
+
+.icon {
+    align-items: center;
+    display: flex;
+    height: 24px;
+    justify-content: center;
+    width: 24px;
+}
+
+.icon svg {
+    display: block;
+    height: 100%;
+    width: 100%;
+}
+
+.icon-info {
+    color: var(--figma-color-text-secondary);
+}
+
+.info-badge {
+    color: var(--figma-color-text-secondary);
+    cursor: help;
+    font-size: 11px;
+}
+
+.info-message {
+    background-color: var(--figma-color-bg-secondary);
+    color: var(--figma-color-text-secondary);
+}
+
+.instance-count {
+    color: var(--figma-color-text-secondary);
+    font-size: 11px;
+}
+
+.libraries-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.library-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.library-details {
+    color: var(--figma-color-text-secondary);
+    font-size: 11px;
+}
+
+.library-group {
+    margin-bottom: 16px;
+}
+
+.library-header {
+    align-items: center;
+    background: var(--figma-color-bg-secondary);
+    border-radius: 6px 6px 0 0;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+    padding: var(--spacing-sm) var(--spacing-md);
+    transition: background-color 0.2s ease;
+}
+
+.library-header:hover {
+    background: var(--figma-color-bg-hover);
+}
+
+.library-item {
+    background: var(--figma-color-bg);
+    border-radius: 4px;
+    padding: 8px;
+}
+
+.library-name {
+    color: var(--figma-color-text-secondary);
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.library-results {
+    margin-top: 24px;
+}
+
+.library-scan-controls {
+    margin-top: 16px;
+}
+
+.library-status {
+    border-radius: 4px;
+    font-size: 10px;
+    padding: 2px 6px;
+}
+
+.library-status.disabled {
+    background: var(--figma-color-bg-disabled);
+    color: var(--figma-color-text-secondary);
+}
+
+.library-status.enabled {
+    background: var(--figma-color-bg-success);
+    color: var(--figma-color-text-onbrand);
+}
+
+.loading-spinner {
+    animation: spinner 0.6s linear infinite;
+    border-radius: 50%;
+    border-right-color: var(--figma-color-bg-brand);
+    border-top-color: var(--figma-color-bg-brand);
+    border: 2px solid transparent;
+    height: 16px;
+    width: 16px;
+}
+
+.progress-fill {
+    align-items: center;
+    background: linear-gradient(
+        90deg, 
+        var(--figma-color-bg-brand) 0%,
+        var(--figma-color-bg-brand-hover) 100%
+    );
+    bottom: 0;
+    display: flex;
+    height: 100%;
+    left: 0;
+    min-width: 60px;
+    padding: 0 12px;
+    position: absolute;
+    top: 0;
+    transition: width 0.3s ease;
+}
+
+.progress-info {
+    align-items: center;
+    color: var(--figma-color-text-secondary);
+    display: flex;
+    font-size: 11px;
+    justify-content: space-between;
+}
+
+.progress-status {
+    color: var(--figma-color-text-secondary);
+}
+
+.progress-text {
+    align-items: center;
+    bottom: 0;
+    color: white;
+    display: flex;
+    font-size: 12px;
+    font-weight: 500;
+    height: 100%;
+    justify-content: center;
+    left: 0;
+    position: absolute;
+    right: 8px;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    top: 0;
+    width: 100%;
+    z-index: 1;
+}
+
+.progress-track {
+    background: var(--figma-color-bg-secondary);
+    height: 100%;
+    left: 0;
+    position: absolute;
+    top: 0;
+    width: 100%;
+}
+
+.property-name {
+    color: var(--figma-color-text-secondary);
+    font-size: 11px;
+}
+
+.reference-card {
+    align-items: flex-start;
+    background: var(--figma-color-bg-secondary);
+    border-radius: 2px;
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+    padding: 0;
+}
+
+.reference-header {
+    cursor: pointer;
+    padding: 4px 0;
+    user-select: none;
+}
+
+.reference-header:hover {
+    background: var(--figma-color-bg-hover);
+}
+
+.reference-info {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    gap: 2px;
+    padding: 12px;
+}
+
+.reference-item {
+    align-items: center;
+    background: var(--figma-color-bg-secondary);
+    border-radius: 6px;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+    padding: 8px 12px;
+    transition: all 0.2s ease;
+}
+
+.reference-item:hover {
+    background: var(--figma-color-bg-hover);
+    transform: translateX(4px);
+}
+
+.reference-item:last-child {
+    margin-bottom: 0;
+}
+
+.reference-location {
+    color: var(--figma-color-text-secondary);
+    font-size: 11px;
+}
+
+.reference-name {
+    color: var(--figma-color-text);
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.references-container {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow-y: auto;
+}
+
+.rescan {
+    border-radius: 4px;
+    background: none;
+    border: none;
+    color: var(--figma-color-text-secondary);
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 4px 6px;
+}
+
+.resize-handle::after {
+    border-bottom: 2px solid var(--figma-color-border);
+    border-right: 2px solid var(--figma-color-border);
+    bottom: 4px;
+    content: '';
+    height: 8px;
+    pointer-events: none;
+    position: absolute;
+    right: 4px;
+    width: 8px;
+}
+
+.results-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.results-actions .button {
+    height: 28px;
+    min-width: unset;
+    padding: 5px 12px;
+}
+
+.results-badge {
+    align-items: center;
+    background: var(--figma-color-bg-secondary);
+    border-radius: 10px;
+    color: var(--figma-color-text);
+    display: inline-flex;
+    font-size: 11px;
+    font-weight: 500;
+    height: 20px;
+    justify-content: center;
+    min-width: 20px;
+    padding: 0 6px;
+}
+
+.results-container {
+    height: auto;
+    background: var(--figma-color-bg);
+    border-radius: 6px;
+    border: 1px solid var(--figma-color-border);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 8px;
+    overflow: visible;
+    padding: 8px;
+}
+
+.results-header {
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.results-section {
+    margin-top: var(--spacing-lg);
+}
+
+.results-summary {
+    background: var(--figma-color-bg);
+    border-radius: 6px;
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+    padding: 12px;
+}
+
+.scan-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: var(--spacing-xxs);
+}
+
+.scan-card {
+    align-items: flex-start;
+    background: var(--figma-color-bg-secondary);
+    border-radius: 6px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    display: flex;
+    gap: 12px;
+    padding: 12px;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.scan-card-content {
+    flex: 1;
+    min-width: 0;
+    pointer-events: none;
+}
+
+.scan-card-description {
+    color: var(--figma-color-text-secondary);
+    font-size: 11px;
+    transition: color 0.2s ease;
+}
+
+.scan-card-icon {
+    align-items: center;
+    color: var(--figma-color-text);
+    display: flex;
+    flex-shrink: 0;
+    height: 24px;
+    justify-content: center;
+    pointer-events: none;
+    width: 24px;
+}
+
+.scan-card-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.scan-card-title {
+    color: var(--figma-color-text);
+    font-size: 13px;
+    font-weight: 600;
+    transition: color 0.2s ease;
+}
+
+.scan-card.loading .loading-spinner {
+    left: 50%;
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.scan-card.loading .scan-card-content {
+    position: relative;
+}
+
+.scan-card.selected .scan-card-description {
+    color: var(--figma-color-text-brand);
+}
+
+.scan-card.selected .scan-card-icon {
+    color: var(--figma-color-text-brand);
+}
+
+.scan-card.selected .scan-card-icon,
+    .scan-card.selected .scan-card-title,
+    .scan-card.selected .scan-card-description {
+    color: white;
+}
+
+.scan-card.selected .scan-card-title {
+    color: var(--figma-color-text-brand);
+}
+
+.scan-card:focus {
+    border-radius: 6px;
+    box-shadow: 0 0 0 2px var(--figma-color-border-brand);
+    outline: none;
+}
+
+.scan-card:hover .icon,
+    .scan-card.selected .icon {
+    opacity: 1;
+}
+
+.scan-card[aria-selected="true"]:focus {
+    box-shadow: 0 0 0 2px var(--figma-color-border-brand),
+                  0 0 0 4px rgba(var(--figma-color-bg-brand-rgb), 0.2);
+}
+
+.scan-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin: 16px;
+}
+
+.scan-details {
+    color: var(--figma-color-text-secondary);
+    font-size: 11px;
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.scan-scope-selector {
+    padding: 2px 0;
+    width: 100%;
+}
+
+.scan-type-selector {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.scan-type-selector label {
+    color: var(--figma-color-text-secondary);
+    font-size: 11px;
+    margin-bottom: 4px;
+}
+
+.secondary-button {
+    background: var(--figma-color-bg-secondary);
+    color: var(--figma-color-text);
+}
+
+.secondary-button.rescan {
+    background: var(--figma-color-bg-brand-tertiary);
+    border: 1px solid var(--figma-color-border-brand-strong);
+    color: var(--figma-color-text-brand);
+}
+
+.secondary-button.rescan:hover {
+    background: var(--figma-color-bg-brand);
+    border-color: var(--figma-color-border-brand-strong);
+    color: white;
+}
+
+.section-header {
+    align-items: center;
+    background: var(--figma-color-bg);
+    display: flex;
+    justify-content: space-between;
+    padding: 12px;
+}
+
+.section-header.warning {
+    background: var(--figma-color-bg-warning);
+    color: white;
+}
+
+.section-subtitle {
+    color: var(--figma-color-text);
+    font-size: 12px;
+    font-weight: 600;
+    margin: 0 0 12px 0;
+}
+
+.select-button {
+    background: var(--figma-color-bg-brand);
+    border-radius: 4px;
+    border: none;
+    color: var(--figma-color-text-onbrand);
+    cursor: pointer;
+    font-size: 11px;
+    height: 32px;
+    min-width: 64px;
+    opacity: 0.9;
+    padding: 5px 12px;
+    transition: all 0.2s ease;
+}
+
+.select-button .loading-spinner {
+    border-right-color: var(--figma-color-text-onbrand);
+    border-top-color: var(--figma-color-text-onbrand);
+    border-width: 2px;
+    bottom: 0;
+    height: 12px;
+    left: 0;
+    margin: auto;
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 12px;
+}
+
+.select-button.loading {
+    color: transparent !important;
+    pointer-events: none !important;
+    position: relative !important;
+}
+
+.select-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.select-button:hover {
+    opacity: 1;
+    transform: scale(1.05);
+}
+
+.select-input {
+    appearance: none;
+    background: var(--figma-color-bg);
+    border-radius: 2px;
+    border: 1px solid var(--figma-color-border);
+    color: var(--figma-color-text);
+    cursor: pointer;
+    font-family: var(--font-stack);
+    font-size: 11px;
+    height: 32px;
+    line-height: 16px;
+    padding: 8px 8px 8px 12px;
+}
+
+.selection-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.selection-count {
+    color: var(--figma-color-text-secondary);
+    font-size: 11px;
+}
+
+.setting-item {
+    margin-bottom: 8px;
+}
+
+.setting-item:last-child {
+    margin-bottom: 0;
+}
+
+.settings-content {
+    /* Keep horizontal padding consistent */
+    padding: 0 12px 12px;
+}
+
+.settings-header {
+    /* Reduce padding */
+    cursor: pointer;
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 8px;
+}
+
+.settings-title {
+    color: var(--figma-color-text);
+    font-size: 11px;
+    font-weight: 500;
+    margin: 0;
+}
+
+.settings-toggle {
+    align-items: center;
+    background: none;
+    border-radius: 6px;
+    border: none;
+    color: var(--figma-color-text-secondary);
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    margin: -4px;
+    padding: 8px;
+    transition: all 0.1s ease;
+}
+
+.settings-toggle:active {
+    background: var(--figma-color-bg-pressed);
+    color: var(--figma-color-text);
+}
+
+.settings-toggle:hover {
+    background: var(--figma-color-bg-hover);
+    color: var(--figma-color-text);
+}
+
+.slow-badge {
+    background: var(--figma-color-bg-warning-tertiary);
+    border-radius: 3px;
+    color: var(--figma-color-text-warning);
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    padding: 1px 4px;
+    text-transform: uppercase;
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.stat-label {
+    color: var(--figma-color-text-secondary);
+    font-size: 11px;
+}
+
+.stat-value {
+    font-size: 16px;
+    font-weight: 500;
+}
+
+.step-content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-lg);
+}
+
+.step-content > * {
+    margin-bottom: var(--spacing-xs);
+}
+
+.step-header {
+    /* Remove any margin */
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+    margin: 0;
+}
+
+.step-title {
+    font-size: 13px;
+    font-weight: 600;
+    margin: 0;
+    padding: var(--spacing-xxs);
+}
+
+.step-title-with-badge {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+}
+
+.sticky-footer {
+    /* For resize handle positioning */
+    align-items: center;
+    background: var(--figma-color-bg);
+    border-top: 1px solid var(--figma-color-border);
+    bottom: 0;
+    display: flex;
+    height: 32px;
+    justify-content: space-between;
+    left: 0;
+    padding: 4px 16px;
+    position: fixed;
+    right: 0;
+    z-index: 100;
+    position: relative;
+}
+
+.success-toast.warning {
+    background: var(--figma-color-bg-warning);
+    border: 1px solid var(--figma-color-border-warning);
+}
+
+.success-toast.warning .success-toast-message,
+    .success-toast.warning .success-toast-icon {
+    color: white;
+}
+
+.summary-header {
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.summary-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.summary-item.warning .summary-value {
+    color: var(--figma-color-text-danger);
+}
+
+.summary-label {
+    color: var(--figma-color-text-secondary);
+    font-size: 11px;
+}
+
+.summary-stats {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.summary-value {
+    color: var(--figma-color-text);
+    font-size: 16px;
+    font-weight: 500;
+}
+
+.tab-badge {
+    background: var(--figma-color-bg-danger);
+    border-radius: 10px;
+    color: white;
+    font-size: 11px;
+    margin-left: 4px;
+    padding: 2px 6px;
+}
+
+.tab-button {
+    align-items: center;
+    background: none;
+    border-radius: 4px;
+    border: none;
+    color: var(--figma-color-text-secondary);
+    cursor: pointer;
+    display: flex;
+    flex: 1;
+    font-size: 13px;
+    gap: 8px;
+    justify-content: center;
+    padding: 8px 16px;
+    transition: all 0.2s ease;
+}
+
+.tab-button.active {
+    background: var(--figma-color-bg);
+    color: var(--figma-color-text);
+    font-weight: 500;
+}
+
+.tab-button.active .tab-icon {
+    color: var(--figma-color-text-brand);
+    opacity: 1;
+}
+
+.tab-button.disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.tab-button.inactive:hover {
+    background: var(--figma-color-bg-hover);
+    color: var(--figma-color-text);
+}
+
+.tab-content {
+    padding: 0;
+}
+
+.tab-icon {
+    align-items: center;
+    display: flex;
+    height: 16px;
+    justify-content: center;
+    opacity: 0.8;
+    width: 16px;
+}
+
+.text-button {
+    background: none;
+    color: var(--figma-color-text-secondary);
+    padding: 4px 8px;
+}
+
+.text-button:hover {
+    background: var(--figma-color-bg-hover);
+}
+
+.timestamp {
+    color: var(--figma-color-text-secondary);
+    font-size: 11px;
+}
+
+.toast {
+    /* Add minimal vertical margin */
+    border-radius: 4px;
+    /* Adjust padding */
+    margin: 4px 0;
+    align-items: center;
+    background-color: var(--figma-color-bg-warning-tertiary);
+    border: 1px solid var(--figma-color-border-warning);
+    color: var(--figma-color-text-onwarning-tertiary);
+    display: flex;
+    padding: 6px 8px;
+}
+
+.toast-icon {
+    color: white;
+    margin-right: 8px;
+    opacity: 0.8;
+}
+
+.toast-message {
+    color: white;
+    font-size: 11px;
+    font-weight: 500;
+    opacity: 0.9;
+}
+
+.toast.success {
+    background: var(--figma-color-bg-success-tertiary);
+    border: 1px solid var(--figma-color-border-success);
+    color: white;
+}
+
+.toast.success .toast-icon {
+    color: white;
+    margin-right: 8px;
+    opacity: 1;
+}
+
+.toast.success .toast-message {
+    color: white;
+    font-size: 11px;
+    font-weight: 500;
+    opacity: 1;
+}
+
+.toggle-container {
+    align-items: center;
+    display: flex;
+    padding: 2px 0;
+    width: 100%;
+}
+
+.toggle-input {
+    height: 0;
+    opacity: 0;
+    position: absolute;
+    width: 0;
+}
+
+.toggle-input:checked + .toggle-slider {
+    background-color: var(--figma-color-bg-brand);
+}
+
+.toggle-input:checked + .toggle-slider:before {
+    transform: translateX(12px);
+}
+
+.toggle-input:disabled + .toggle-slider {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.toggle-label {
+    align-items: center;
+    color: var(--figma-color-text);
+    cursor: pointer;
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+    padding: 2px 0;
+    user-select: none;
+    width: 100%;
+}
+
+.toggle-label-content {
+    align-items: center;
+    display: flex;
+    flex: 1;
+    gap: 8px;
+}
+
+.toggle-slider {
+    background-color: var(--figma-color-bg-disabled);
+    border-radius: 16px;
+    bottom: 0;
+    cursor: pointer;
+    left: 0;
+    position: absolute;
+    right: 0;
+    top: 0;
+    transition: .2s;
+}
+
+.toggle-slider:before {
+    background-color: white;
+    border-radius: 50%;
+    bottom: 2px;
+    content: "";
+    height: 12px;
+    left: 2px;
+    position: absolute;
+    transition: .2s;
+    width: 12px;
+}
+
+.toggle-wrapper {
+    flex-shrink: 0;
+    height: 16px;
+    position: relative;
+    width: 28px;
+}
+
+.token-count {
+    background: var(--figma-color-bg-tertiary);
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 8px;
+}
+
+.token-details {
+    color: var(--figma-color-text-secondary);
+    display: flex;
+    font-size: 11px;
+    gap: 8px;
+}
+
+.token-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    gap: 4px;
+}
+
+.token-item {
+    align-items: center;
+    background: var(--figma-color-bg);
+    border-bottom: 1px solid var(--figma-color-border);
+    border-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+    margin-bottom: var(--spacing-xs);
+    padding: 8px 12px;
+    padding: var(--spacing-sm) var(--spacing-md);
+    padding: var(--spacing-xs);
+    transition: all 0.2s ease;
+}
+
+.token-item.inactive {
+    border: 1px solid var(--figma-color-border-warning);
+}
+
+.token-item:hover {
+    background: var(--figma-color-bg-hover);
+    transform: translateX(4px);
+}
+
+.token-item:last-child {
+    border-bottom: none;
+}
+
+.token-list {
+    background: var(--figma-color-bg);
+    border-radius: 0 0 6px 6px;
+    overflow: hidden;
+    padding: 8px;
+    padding: var(--spacing-sm);
+    padding: var(--spacing-xs);
+}
+
+.token-name {
+    font-weight: 500;
+}
+
+.token-section {
+    background: var(--figma-color-bg-secondary);
+    border-radius: 6px;
+    margin-top: 16px;
+    overflow: hidden;
+}
+
+.token-type {
+    background: var(--figma-color-bg-secondary);
+    border-radius: 4px;
+    padding: 2px 6px;
+}
+
+.typography-details {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    gap: 8px;
+}
+
+.typography-details:hover {
+    background: var(--figma-color-bg-hover);
+    transform: translateX(4px);
+}
+
+.typography-preview {
+    color: var(--figma-color-text);
+    font-family: system-ui;
+    font-family: var(--font-stack);
+    font-size: 11px;
+    font-style: italic;
+    line-height: 16px;
+    opacity: 0.8;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.typography-specs {
+    color: var(--figma-color-text-secondary);
+    display: grid;
+    flex-direction: column;
+    font-size: 12px;
+    gap: 4px;
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.typography-tag {
+    align-items: center;
+    background: var(--figma-color-bg-secondary);
+    border-radius: 4px;
+    color: var(--figma-color-text-secondary);
+    display: flex;
+    flex-shrink: 0;
+    font-size: 11px;
+    font-weight: 500;
+    height: 20px;
+    overflow: hidden;
+    padding: 2px 6px;
+    text-overflow: ellipsis;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.typography-tag.font-family {
+    background: var(--figma-color-bg-brand-tertiary);
+    color: var(--figma-color-text-brand);
+    font-weight: 600;
+}
+
+.typography-tag.size {
+    background: var(--figma-color-bg-secondary);
+    justify-content: center;
+    min-width: 35px;
+}
+
+.typography-tag.weight {
+    background: var(--figma-color-bg-secondary);
+}
+
+.typography-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    min-width: 0;
+}
+
+.usage-details {
+    margin-top: 8px;
+}
+
+.usage-header {
+    align-items: center;
+    color: var(--figma-color-text-secondary);
+    cursor: pointer;
+    display: flex;
+    font-size: 11px;
+    justify-content: space-between;
+    padding: 4px 0;
+}
+
+.usage-item {
+    align-items: center;
+    background: var(--figma-color-bg-secondary);
+    border-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+    padding: 6px;
+}
+
+.usage-item:hover {
+    background: var(--figma-color-bg-hover);
+    transform: translateX(4px);
+}
+
+.usage-node-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.value-group {
+    background: var(--figma-color-bg-secondary);
+    border-radius: 6px;
+    border: 1px solid var(--figma-color-border);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 8px;
+    overflow: hidden;
+}
+
+.value-group-details {
+    /* Ensure details are scrollable if needed */
+    max-height: 300px;
+    background: var(--figma-color-bg);
+    border-top: 1px solid var(--figma-color-border);
+    overflow-y: auto;
+    padding: 8px;
+}
+
+.value-group-header {
+    align-items: center;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    min-height: 40px;
+    padding: 8px 12px;
+    transition: background-color 0.2s ease;
+    user-select: none;
+}
+
+.value-group-header:hover {
+    background: var(--figma-color-bg-hover);
+}
+
+.variable-details {
+    border-top: 1px solid var(--figma-color-border);
+    margin-top: 8px;
+    padding-top: 8px;
+}
+
+.variable-header {
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.variable-item {
+    background: var(--figma-color-bg-tertiary);
+    border-radius: 4px;
+    margin-bottom: 8px;
+    padding: 8px 12px;
+}
+
+.variable-name {
+    font-weight: 500;
+    font-weight: 500;
+}
+
+.variable-type {
+    background: var(--figma-color-bg-secondary);
+    background: var(--figma-color-bg-secondary);
+    border-radius: 4px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-size: 11px;
+    padding: 2px 6px;
+    padding: 2px 6px;
+}
+
+.version-info {
+    align-items: center;
+    color: var(--figma-color-text-secondary);
+    display: flex;
+    font-size: 11px;
+    gap: 4px;
+}
+
+.version-number {
+    color: var(--figma-color-text-tertiary);
+}
+
+.warning-button {
+    background: var(--figma-color-bg-danger);
+    color: white;
+}
+
+.warning-icon,
+    .info-icon {
+    color: white;
+    flex-shrink: 0;
+    height: 12px;
+    width: 12px;
+}
+
+.warning-message {
+    background: var(--figma-color-bg-warning);
+    background-color: var(--figma-color-bg-warning-secondary);
+    border: 1px solid var(--figma-color-border-warning);
+    color: white;
+}
+
+.warning-message,
+    .info-message {
+    align-items: center;
+    border-radius: 6px;
+    display: flex;
+    font-size: 11px;
+    gap: var(--spacing-xs);
+    margin: var(--spacing-xs);
+    padding: var(--spacing-sm);
+}
+
+.watch-toggle {
+    /* Add negative margin to align better */
+    border-radius: 4px;
+    /* Reduce padding */
+    margin: -2px;
+    align-items: center;
+    background: none;
+    border: none;
+    color: var(--figma-color-text-secondary);
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    padding: 4px 6px;
+    transition: all 0.2s ease;
+}
+
+.watch-toggle-content {
+    align-items: center;
+    display: flex;
+    gap: 6px;
+}
+
+.watch-toggle-text {
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.watch-toggle.disabled {
+    background: var(--figma-color-bg-disabled);
+    color: var(--figma-color-text-disabled);
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.watch-toggle.disabled:hover {
+    background: var(--figma-color-bg-disabled);
+    color: var(--figma-color-text-disabled);
+}
+
+.watch-toggle:hover {
+    &:not(.disabled) {
+        background: var(--figma-color-bg-hover);
+    color: var(--figma-color-text);
+}
+
+
+/* IDS */
+#app {
+    height: 100vh;
+    overflow: hidden;
+    position: relative;
+}
+
+
+
+
+/* Add empty state */
+    .results-container:empty::after {
+    align-items: center;
+    color: var(--figma-color-text-secondary);
+    content: 'No results found';
+    display: flex;
+    font-size: 12px;
+    height: 100px;
+    justify-content: center;
+}
+
+/* Add focus styles for keyboard navigation */
+    .scan-cards:focus {
+    border-radius: 6px;
+    box-shadow: 0 0 0 2px var(--figma-color-border-brand);
+    outline: none;
+}
+
+/* Add hover effect */
+    .progress-bar:hover .progress-fill {
+    filter: brightness(0.95);
+}
+
+/* Add hover state */
+    .toggle-label:hover .slow-badge {
+    opacity: 1;
+}
+
+/* Add these styles to match Figma's scrollbar */
+    /* Scrollbar styling */
+    ::-webkit-scrollbar {
+    width: 6px;
+}
+
+/* Add visual feedback on hover */
+    .resize-handle:hover::after {
+    border-color: var(--figma-color-border-brand);
+}
+
+/* Combine hover and active states */
+    .scan-card:hover:not(.selected),
+    .scan-card:active:not(.selected) {
+    background: var(--figma-color-bg-hover);
+    border-color: var(--figma-color-border);
+}
+
+
+
+
+/* Disabled state */
+    .button:disabled {
+    background: var(--figma-color-bg-disabled);
+    color: var(--figma-color-text-disabled);
+    cursor: not-allowed;
+}
+
+
+/* Focus state */
+    .button:focus {
+    outline-offset: 2px;
+    outline: 2px solid var(--figma-color-bg-brand);
+}
+
+/* Focus state */
+    .scan-card:focus {
+    box-shadow: 0 0 0 2px var(--figma-color-border-brand);
+    outline: none;
+}
+
+
+
+/* Hover state */
+    .button:hover:not(:disabled) {
+    background: var(--figma-color-bg-hover);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--figma-color-bg-tertiary);
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--figma-color-bg-secondary);
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+
+
+[data-tooltip]:before {
+    background: var(--figma-color-bg);
+    border-radius: 4px;
+    bottom: 100%;
+    color: var(--figma-color-text);
+    content: attr(data-tooltip);
+    font-size: 11px;
+    left: 50%;
+    opacity: 0;
+    padding: 4px 8px;
+    pointer-events: none;
+    position: absolute;
+    transform: translateX(-50%);
+    transition: opacity 0.2s ease;
+    white-space: nowrap;
+}
+
+[data-tooltip]:hover:before {
+    opacity: 1;
+}
+
+
+/* ATTRIBUTES */
+/* Add tooltip styles */
+    [data-tooltip] {
+    position: relative;
+}
+
+/* Improve keyboard focus visibility */
+    .scan-card[aria-selected="true"] {
+    background: var(--figma-color-bg-brand-tertiary);
+    border-color: var(--figma-color-border-brand);
+}
+
+[v-cloak] {
+    display: none;
+}
+
+</style>
+
+
+  <!-- Add color preview template outside of style tag -->
+  <template id="color-preview">
+    <div class="color-preview">
+      <div class="color-swatch-container">
+        <div 
+          class="color-swatch" 
+          :style="{
+            backgroundColor: `rgba(${color.r * 255}, ${color.g * 255}, ${color.b * 255}, ${color.a || 1})`
+          }"
+        ></div>
+      </div>
+      <div class="color-info">
+        <span class="color-hex">RGB({{ Math.round(color.r * 255) }}, {{ Math.round(color.g * 255) }}, {{ Math.round(color.b * 255) }})</span>
+        <span v-if="color.a !== 1" class="color-opacity">{{ Math.round(color.a * 100) }}%</span>
+      </div>
+    </div>
+  </template>
+
+
+  <script>
+    function initializeApp() {
+      const { createApp } = Vue;
+      
+      // Add the SuccessToast component definition
+      const SuccessToast = {
+        template: '#success-toast',
+        props: {
+          message: String,
+          show: Boolean
+        },
+        methods: {
+          close() {
+            this.$emit('close');
+          }
+        }
+      };
+
+      // Create new icon components that use the imported SVGs
+      const Icon = {
+        props: {
+          name: {
+            type: String,
+            required: true
+          }
+        },
+        template: `
+          <div class="icon" v-html="getIcon"></div>
+        `,
+        computed: {
+          getIcon() {
+            const icon = this.$root.icons[this.name];
+            console.log('Loading icon:', this.name, icon ? 'found' : 'not found');
+            console.log('Icon content:', icon);
+            return icon;
+          }
+        }
+      };
+
+      createApp({
+        components: {
+          Icon,
+          SuccessToast,
+          ColorPreview: {
+            template: '#color-preview',
+            props: {
+              color: {
+                type: Object,
+                required: true
+              }
+            },
+            methods: {
+              formatColorToHex({ r, g, b }) {
+                const toHex = (n) => {
+                  const hex = Math.round(n * 255).toString(16);
+                  return hex.length === 1 ? '0' + hex : hex;
+                };
+                return `#${toHex(r)}${toHex(g)}${toHex(b)}`.toUpperCase();
+              }
+            }
+          }
+        },
+        data() {
+          return {
+            activeTab: 'tokens',
+            selectedScanType: null, // Remove default 'vertical-gap' value
+            scanEntirePage: false,
+            isScanning: false,
+            scanProgress: 0,
+            scanError: false,
+            scanComplete: false,
+            groupedReferences: {},
+            expandedGroups: new Set(),
+            hasSelection: false,
+            selectedCount: 0,
+            hasInstances: false,
+            isWatching: false,
+            tokenScanOptions: [
+              {
+                value: 'typography',
+                label: 'Typography',
+                description: 'Find text layers missing text style variables',
+                icon: 'typography'
+              },
+              {
+                value: 'vertical-gap',
+                label: 'Vertical Gap',
+                description: 'Find frames with unlinked vertical gap',
+                icon: 'spacing'
+              },
+              {
+                value: 'horizontal-padding',
+                label: 'Horizontal Padding',
+                description: 'Find frames with unlinked horizontal padding',
+                icon: 'horizontal-padding'
+              },
+              {
+                value: 'vertical-padding',
+                label: 'Vertical Padding',
+                description: 'Find frames with unlinked vertical padding',
+                icon: 'vertical-padding'
+              },
+              {
+                value: 'corner-radius',
+                label: 'Corner Radius',
+                description: 'Find shapes with unlinked corner radius',
+                icon: 'radius'
+              },
+              {
+                value: 'fill',
+                label: 'Fill Colors',
+                description: 'Find layers with unlinked fill colors',
+                icon: 'fill'
+              },
+              {
+                value: 'stroke',
+                label: 'Stroke Colors',
+                description: 'Find layers with unlinked stroke colors',
+                icon: 'stroke'
+              }
+            ],
+            showSuccessToast: false,
+            successMessage: '',
+            selectingNodeIds: new Set(), // Track which groups are being selected
+            libraryResults: {},  // Separate results for library scan
+            variableAnalysis: null,
+            isAnalyzing: false,
+            showSettings: false,
+            ignoreHiddenLayers: false,
+            icons: {
+              'typography': `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <g id="type">
+                  <path d="M19.9567 8.71249V9.97212H14.9434V8.71249H19.9567ZM16.4045 6.39478H17.8909V15.6153C17.8909 16.0351 17.9518 16.35 18.0735 16.56C18.1995 16.7657 18.3591 16.9043 18.5522 16.9757C18.7495 17.0428 18.9574 17.0764 19.1757 17.0764C19.3395 17.0764 19.4738 17.068 19.5788 17.0512C19.6838 17.0302 19.7677 17.0134 19.8307 17.0009L20.133 18.3361C20.0323 18.3738 19.8916 18.4116 19.7111 18.4494C19.5305 18.4914 19.3017 18.5124 19.0246 18.5124C18.6047 18.5124 18.1932 18.4221 17.7901 18.2416C17.3912 18.061 17.0595 17.786 16.795 17.4165C16.5347 17.047 16.4045 16.581 16.4045 16.0183V6.39478Z M3.8667 6.87338V5.48779H13.5406V6.87338H9.48464V18.3864H7.9227V6.87338H3.8667Z" fill="currentColor"/>
+                </g>
+              </svg>`,
+              
+              'stroke': `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <g id="stroke">
+                  <path d="M17.1266 17.1267L6.87317 6.87329" stroke="currentColor" stroke-linecap="round"/>
+                  <rect x="3.84668" y="3.84668" width="16.3066" height="16.3066" rx="2.5" stroke="currentColor" stroke-linecap="round"/>
+                </g>
+              </svg>`,
+              
+              'spacing': `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <g id="Gap">
+                  <path d="M20.7651 3.39014H19C17.3431 3.39014 16 4.73328 16 6.39014V17.6096C16 19.2665 17.3431 20.6096 19 20.6096H20.7651" stroke="currentColor" stroke-linecap="round"/>
+                  <path d="M3.23486 3.39014H4.99998C6.65683 3.39014 7.99998 4.73328 7.99998 6.39014V17.6096C7.99998 19.2665 6.65683 20.6096 4.99998 20.6096H3.23486" stroke="currentColor" stroke-linecap="round"/>
+                  <path d="M12 6.92114V17.2227" stroke="currentColor" stroke-linecap="round"/>
+                </g>
+              </svg>`,
+              
+              'radius': `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <g id="corner">
+                  <path d="M3.34302 20.8875V10.1124C3.34302 6.24643 6.47703 3.11243 10.343 3.11243H22.4347" stroke="currentColor"/>
+                </g>
+              </svg>`,
+              
+              'vertical-padding': `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <g id="vertical">
+                  <path d="M20.7102 3.80981H3.34668" stroke="currentColor" stroke-linecap="round"/>
+                  <path d="M20.7102 20.3337H3.34668" stroke="currentColor" stroke-linecap="round"/>
+                  <rect x="7.87646" y="7.87646" width="8.24707" height="8.24707" rx="2.5" stroke="currentColor" stroke-linecap="round"/>
+                </g>
+              </svg>`,
+              
+              'horizontal-padding': `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <g id="horizontal">
+                  <path d="M3.76648 3.39014L3.76648 20.7537" stroke="currentColor" stroke-linecap="round"/>
+                  <path d="M20.2904 3.39014L20.2904 20.7537" stroke="currentColor" stroke-linecap="round"/>
+                  <rect x="7.87646" y="7.87646" width="8.24707" height="8.24707" rx="2.5" stroke="currentColor" stroke-linecap="round"/>
+                </g>
+              </svg>`,
+              
+              'fill': `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <g id="fill">
+                  <rect x="3.78979" y="3.78979" width="16.4204" height="16.4204" rx="2.5" stroke="currentColor" stroke-linecap="round"/>
+                  <rect x="5.51733" y="5.51733" width="12.9653" height="12.9653" rx="1" fill="currentColor"/>
+                </g>
+              </svg>`,
+              'library': `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <g id="library">
+                  <path d="M17.1266 17.1267L6.87317 6.87329" stroke="currentColor" stroke-linecap="round"/>
+                  <rect x="3.84668" y="3.84668" width="16.3066" height="16.3066" rx="2.5" stroke="currentColor" stroke-linecap="round"/>
+                </g>
+              </svg>`,
+              'variable': `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <g id="variable">
+                  <path d="M17.1266 17.1267L6.87317 6.87329" stroke="currentColor" stroke-linecap="round"/>
+                  <rect x="3.84668" y="3.84668" width="16.3066" height="16.3066" rx="2.5" stroke="currentColor" stroke-linecap="round"/>
+                </g>
+              </svg>`
+            },
+            windowSize: {
+              width: 400,
+              height: 600
+            },
+            isResizing: false,
+            selectedFrameIds: [],
+            inactiveLibraryTokens: [],
+            activeLibraryTokens: [],
+            selectedTokenScanType: 'all',
+            libraryTokenScanOptions: [
+              {
+                value: 'all',
+                label: 'All Library Tokens',
+                description: 'Find all tokens from inactive libraries',
+                icon: 'tokens'
+              },
+              {
+                value: 'colors',
+                label: 'Color Tokens',
+                description: 'Find color tokens from inactive libraries',
+                icon: 'fill'
+              },
+              {
+                value: 'typography',
+                label: 'Typography Tokens',
+                description: 'Find typography tokens from inactive libraries',
+                icon: 'typography'
+              },
+              {
+                value: 'spacing',
+                label: 'Spacing Tokens',
+                description: 'Find spacing tokens from inactive libraries',
+                icon: 'spacing'
+              }
+            ],
+            selectedLibraryTokenScanType: 'all', // Default to 'all' instead of empty
+            isLibraryScanning: false,
+            libraryScanProgress: 0,
+            hasLibraryResults: false,
+            isPaused: false,
+            currentScanNode: null,
+            scanSummary: null,
+            variableCollections: [
+              {
+                id: 1,
+                name: 'Colors',
+                isActive: true,
+                variablesCount: 5,
+                variables: [
+                  {
+                    id: 1,
+                    name: 'Primary Color',
+                    type: 'color',
+                    currentMode: 'Light Mode',
+                    usages: [
+                      { nodeId: 'node1', property: 'background-color' },
+                      { nodeId: 'node2', property: 'border-color' },
+                      { nodeId: 'node3', property: 'text-color' }
+                    ]
+                  },
+                  {
+                    id: 2,
+                    name: 'Secondary Color',
+                    type: 'color',
+                    currentMode: 'Dark Mode',
+                    usages: [
+                      { nodeId: 'node4', property: 'background-color' },
+                      { nodeId: 'node5', property: 'border-color' },
+                      { nodeId: 'node6', property: 'text-color' }
+                    ]
+                  },
+                  {
+                    id: 3,
+                    name: 'Tertiary Color',
+                    type: 'color',
+                    currentMode: 'Light Mode',
+                    usages: [
+                      { nodeId: 'node7', property: 'background-color' },
+                      { nodeId: 'node8', property: 'border-color' },
+                      { nodeId: 'node9', property: 'text-color' }
+                    ]
+                  },
+                  {
+                    id: 4,
+                    name: 'Quaternary Color',
+                    type: 'color',
+                    currentMode: 'Dark Mode',
+                    usages: [
+                      { nodeId: 'node10', property: 'background-color' },
+                      { nodeId: 'node11', property: 'border-color' },
+                      { nodeId: 'node12', property: 'text-color' }
+                    ]
+                  },
+                  {
+                    id: 5,
+                    name: 'Neutral Color',
+                    type: 'color',
+                    currentMode: 'Light Mode',
+                    usages: [
+                      { nodeId: 'node13', property: 'background-color' },
+                      { nodeId: 'node14', property: 'border-color' },
+                      { nodeId: 'node15', property: 'text-color' }
+                    ]
+                  }
+                ]
+              },
+              {
+                id: 2,
+                name: 'Typography',
+                isActive: true,
+                variablesCount: 3,
+                variables: [
+                  {
+                    id: 6,
+                    name: 'Body Font',
+                    type: 'typography',
+                    currentMode: 'Light Mode',
+                    usages: [
+                      { nodeId: 'node16', property: 'font-family' },
+                      { nodeId: 'node17', property: 'font-size' },
+                      { nodeId: 'node18', property: 'line-height' }
+                    ]
+                  },
+                  {
+                    id: 7,
+                    name: 'Heading Font',
+                    type: 'typography',
+                    currentMode: 'Dark Mode',
+                    usages: [
+                      { nodeId: 'node19', property: 'font-family' },
+                      { nodeId: 'node20', property: 'font-size' },
+                      { nodeId: 'node21', property: 'line-height' }
+                    ]
+                  },
+                  {
+                    id: 8,
+                    name: 'Button Font',
+                    type: 'typography',
+                    currentMode: 'Light Mode',
+                    usages: [
+                      { nodeId: 'node22', property: 'font-family' },
+                      { nodeId: 'node23', property: 'font-size' },
+                      { nodeId: 'node24', property: 'line-height' }
+                    ]
+                  }
+                ]
+              },
+              {
+                id: 3,
+                name: 'Spacing',
+                isActive: true,
+                variablesCount: 2,
+                variables: [
+                  {
+                    id: 9,
+                    name: 'Padding',
+                    type: 'spacing',
+                    currentMode: 'Light Mode',
+                    usages: [
+                      { nodeId: 'node25', property: 'padding' },
+                      { nodeId: 'node26', property: 'padding' }
+                    ]
+                  },
+                  {
+                    id: 10,
+                    name: 'Margin',
+                    type: 'spacing',
+                    currentMode: 'Dark Mode',
+                    usages: [
+                      { nodeId: 'node27', property: 'margin' },
+                      { nodeId: 'node28', property: 'margin' }
+                    ]
+                  }
+                ]
+              }
+            ],
+            lastScannedType: null, // Add this to track the last scan type
+          }
+        },
+        computed: {
+          scanScope() {
+            return this.scanEntirePage ? 'entire-page' : 'selected-frames';
+          },
+          canStartScan() {
+            return (this.hasSelection || this.scanEntirePage) && this.selectedScanType !== null;
+          },
+          hasResults() {
+            const hasRefs = Object.keys(this.groupedReferences).length > 0;
+            console.log('Has results?', {
+              groupedReferences: this.groupedReferences,
+              count: Object.keys(this.groupedReferences).length,
+              hasRefs
+            });
+            return hasRefs;
+          },
+          groupedByValue() {
+            const valueGroups = {};
+            
+            Object.entries(this.groupedReferences).forEach(([key, refs]) => {
+              try {
+                // Split the key safely
+                const [property, ...valueParts] = key.split(':');
+                const valueStr = valueParts.join(':'); // Rejoin in case value contains colons
+                
+                // Parse the value safely
+                let value;
+                try {
+                  value = JSON.parse(valueStr);
+                } catch {
+                  value = valueStr; // Use raw string if parsing fails
+                }
+                
+                const groupKey = typeof value === 'object' ? JSON.stringify(value) : String(value);
+                
+                if (!valueGroups[groupKey]) {
+                  valueGroups[groupKey] = {
+                    value,
+                    properties: new Set(),
+                    refs: []
+                  };
+                }
+                
+                valueGroups[groupKey].properties.add(property);
+                valueGroups[groupKey].refs.push(...refs);
+              } catch (err) {
+                console.warn('Error processing group:', key, err);
+              }
+            });
+            
+            return valueGroups;
+          },
+          watchButtonTitle() {
+            if (!this.scanEntirePage) {
+              return 'Enable "Scan Entire Page" to use watch mode';
+            }
+            return this.isWatching ? 'Stop watching for changes' : 'Watch for changes';
+          },
+          canWatch() {
+            return this.scanEntirePage;
+          },
+          activeLibraryTokens() {
+            return this.activeLibraryTokens;
+          },
+          inactiveLibraryTokens() {
+            return this.inactiveLibraryTokens;
+          },
+          showScanResults() {
+            const shouldShow = !this.isScanning && this.hasResults && this.scanComplete;
+            console.log('Show scan results?', {
+              isScanning: this.isScanning,
+              hasResults: this.hasResults,
+              scanComplete: this.scanComplete,
+              shouldShow
+            });
+            return shouldShow;
+          },
+          showStopButton() {
+            return this.isScanning && !this.scanComplete;
+          },
+          showRescanButton() {
+            // Only show rescan if we have results AND the scan type hasn't changed
+            return this.hasResults && this.selectedScanType === this.lastScannedType;
+          }
+        },
+        methods: {
+          handleScanScopeChange() {
+            if (this.scanEntirePage) {
+              this.successMessage = 'Scanning the entire page may take longer';
+              this.showSuccessToast = true;
+              setTimeout(() => {
+                if (this.successMessage === 'Scanning the entire page may take longer') {
+                  this.showSuccessToast = false;
+                }
+              }, 3000);
+            } else {
+              this.stopWatching();
+            }
+            // Store the user's preference
+            this.userPrefersScanEntirePage = this.scanEntirePage;
+          },
+          stopWatching() {
+            this.isWatching = false;
+            parent.postMessage({ 
+              pluginMessage: { 
+                type: 'stop-watching'
+              }
+            }, '*');
+          },
+          startScan(isRescan = false) {
+            if (this.isScanning) return;
+            
+            // Reset states
+            this.isScanning = true;
+            this.scanProgress = 0;
+            this.scanError = false;
+            this.scanComplete = false;
+            
+            if (!isRescan) {
+              this.clearResults();
+            }
+            
+            // Get current selection
+            const selectedFrameIds = !this.scanEntirePage ? [...this.selectedFrameIds] : [];
+            
+            console.log('Starting scan:', {
+              scanType: this.selectedScanType,
+              scanEntirePage: this.scanEntirePage,
+              selectedFrameIds,
+              hasSelection: this.hasSelection
+            });
+            
+            parent.postMessage({
+              pluginMessage: {
+                type: 'scan-for-tokens',
+                scanType: this.selectedScanType,
+                scanEntirePage: this.scanEntirePage,
+                selectedFrameIds
+              }
+            }, '*');
+            // Update lastScannedType
+            this.lastScannedType = this.selectedScanType;
+          },
+          stopScan() {
+            // Log stop request
+            console.log('Stopping scan...');
+            
+            this.isScanning = false;
+            this.scanComplete = true;
+            
+            parent.postMessage({
+              pluginMessage: {
+                type: 'stop-scan'
+              } 
+            }, '*');
+          },
+          handleScanComplete(msg) {
+            // Log scan completion
+            console.log('Scan complete:', msg);
+            
+            // Update states
+            this.isScanning = false;
+            this.scanComplete = true;
+          },
+          handleScanError(error) {
+            this.isScanning = false;
+            this.scanComplete = true;
+            this.scanError = true;
+            
+            console.error('Scan error:', error);
+            this.showError('Scan failed. Please try again.');
+          },
+          
+          showError(message) {
+            // Add error toast or notification
+            console.error(message);
+            // You can implement a toast notification here
+          },
+
+          switchTab(tab) {
+            // Clean up previous tab state
+            this.isScanning = false;
+            this.scanProgress = 0;
+            this.scanError = false;
+            this.scanComplete = false;
+            this.groupedReferences = {};
+            
+            this.activeTab = tab;
+          },
+
+          getProgressStatus() {
+            if (this.scanError) {
+              return 'Scan error';
+            }
+            if (!this.isScanning && this.scanProgress === 100) {
+              return this.hasResults ? 'Scan complete' : 'Scan complete, no issues found';
+            }
+            if (this.isScanning) {
+              return `Scanning... ${Math.round(this.scanProgress)}%`;
+            }
+            return 'Ready to scan';
+          },
+          
+          getProgressBarColor() {
+            if (this.scanError) {
+              return 'var(--figma-color-bg-danger)';
+            }
+            if (!this.isScanning && this.scanProgress === 100) {
+              return 'var(--figma-color-bg-success)';
+            }
+            if (this.isScanning) {
+              return 'var(--figma-color-bg-brand)';
+            }
+            return 'var(--figma-color-bg-disabled)';
+          },
+          handlePluginMessage(msg) {
+            if (!msg) return;
+            
+            console.log('Received message:', msg.type, msg);
+            
+            switch (msg.type) {
+              case 'missing-references-result':
+                this.isScanning = false;
+                this.scanComplete = true;
+                this.scanProgress = 100;
+                if (msg.references) {
+                  this.groupedReferences = msg.references;
+                  console.log('Scan complete with results:', {
+                    references: msg.references,
+                    groupCount: Object.keys(msg.references).length
+                  });
+                }
+                break;
+                
+              case 'scan-progress':
+                this.scanProgress = msg.progress;
+                this.isScanning = msg.isScanning ?? true;
+                break;
+                
+              case 'selection-updated':
+                this.updateSelection(msg);
+                break;
+                
+              case 'init-icons':
+                this.icons = msg.icons;
+                break;
+                
+              // Remove duplicate handlers
+              default:
+                console.log('Unhandled message type:', msg.type);
+            }
+          },
+          async getSelectedFrameIds() {
+            return new Promise((resolve) => {
+              parent.postMessage({ 
+                pluginMessage: { type: 'get-selected-frame-ids' }
+              }, '*');
+
+              const handler = (event) => {
+                const msg = event.data.pluginMessage;
+                if (msg.type === 'selected-frame-ids') {
+                  window.removeEventListener('message', handler);
+                  resolve(msg.ids);
+                }
+              };
+              window.addEventListener('message', handler);
+            });
+          },
+          async selectGroup(refs, groupId) {
+            this.selectingNodeIds.add(groupId);
+            const nodeIds = refs.map(ref => ref.nodeId);
+            parent.postMessage({ 
+              pluginMessage: { 
+                type: 'select-group',
+                nodeIds
+              }
+            }, '*');
+            
+            setTimeout(() => {
+              this.selectingNodeIds.delete(groupId);
+            }, 500);
+          },
+          formatValue(value) {
+            if (typeof value === 'object') {
+              return JSON.stringify(value);
+            }
+            return String(value);
+          },
+          formatGapValue(value, ref) {
+            if (ref.type === 'gap') {
+              const direction = ref.isVertical ? 'Vertical' : 'Horizontal';
+              return `${direction} Gap: ${value}px`;
+            }
+            return formatValue(value);
+          },
+          toggleGroup(groupKey) {
+            if (this.expandedGroups.has(groupKey)) {
+              this.expandedGroups.delete(groupKey);
+            } else {
+              this.expandedGroups.add(groupKey);
+            }
+          },
+          isGroupExpanded(groupKey) {
+            return this.expandedGroups.has(groupKey);
+          },
+          getPropertyName(key) {
+            return key.split(':')[0];
+          },
+          toggleWatch() {
+            if (!this.canWatch) return;
+            
+            this.isWatching = !this.isWatching;
+            parent.postMessage({ 
+              pluginMessage: { 
+                type: this.isWatching ? 'start-watching' : 'stop-watching',
+                scanType: this.selectedScanType,
+                scanScope: this.scanScope,
+                scanEntirePage: this.scanEntirePage
+              }
+            }, '*');
+          },
+          clearResults() {
+            this.groupedReferences = {};
+            this.expandedGroups.clear();
+          },
+          dismissToast() {
+            this.showSuccessToast = false;
+          },
+          handleResize(msg) {
+            if (msg.type === 'resize' && msg.width && msg.height) {
+              const width = Number(msg.width);
+              const height = Number(msg.height);
+              
+              if (!isNaN(width) && !isNaN(height)) {
+                this.windowSize = { width, height };
+              }
+            }
+          },
+          updateProgress(newProgress) {
+            const progress = Math.min(Math.max(0, Number(newProgress) || 0), 100);
+            console.log(`Updating progress bar: ${progress}%`);
+            this.scanProgress = progress;
+          },
+          isSelecting(id) {
+            return this.selectingNodeIds.has(id);
+          },
+          async startLibraryScan() {
+            this.isLibraryScanning = true;
+            this.libraryScanProgress = 0;
+            this.currentScanNode = null;
+            this.scanSummary = null;
+            this.isPaused = false;
+            
+            const selectedFrameIds = !this.scanEntirePage  // Use the same scanEntirePage state
+              ? await this.getSelectedFrameIds()
+              : undefined;
+            
+            parent.postMessage({ 
+              pluginMessage: { 
+                type: 'scan-for-tokens',
+                scanType: 'inactive-tokens',
+                scanScope: this.scanEntirePage ? 'entire-page' : 'selected-frames',
+                selectedFrameIds
+              }
+            }, '*');
+          },
+          clearLibraryResults() {
+            this.libraryResults = {};
+          },
+          async listVariables() {
+            this.isAnalyzing = true;
+            this.variableAnalysis = null;  // Reset previous results
+            parent.postMessage({ 
+              pluginMessage: { 
+                type: 'list-variables'
+              }
+            }, '*');
+          },
+          openStripePayment() {
+            window.open('https://buy.stripe.com/8wM7wb49NeFD5UYcMM', '_blank');
+          },
+          startResize(e) {
+            this.isResizing = true;
+            
+            const startX = e.clientX;
+            const startY = e.clientY;
+            const startWidth = this.windowSize.width;
+            const startHeight = this.windowSize.height;
+            
+            const onMouseMove = (e) => {
+              if (!this.isResizing) return;
+              
+              const newWidth = startWidth + (e.clientX - startX);
+              const newHeight = startHeight + (e.clientY - startY);
+              
+              // Set minimum sizes
+              const width = Math.max(300, newWidth);
+              const height = Math.max(400, newHeight);
+              
+              this.windowSize = { width, height };
+              
+              // Send resize message to plugin
+              parent.postMessage({ 
+                pluginMessage: { 
+                  type: 'resize', 
+                  width,
+                  height
+                }
+              }, '*');
+            };
+            
+            const onMouseUp = () => {
+              this.isResizing = false;
+              document.removeEventListener('mousemove', onMouseMove);
+              document.removeEventListener('mouseup', onMouseUp);
+            };
+            
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+          },
+          updateSelection(msg) {
+            this.hasSelection = msg.hasSelection;
+            this.selectedCount = msg.count;
+            if (msg.selectedFrameIds) {
+              this.selectedFrameIds = msg.selectedFrameIds;
+            }
+          },
+          getStyleData(key) {
+            try {
+              // Extract the JSON data from the textStyleId string
+              const styleMatch = key.match(/textStyleId:({.*?})/);
+              if (!styleMatch) return this.getDefaultStyle();
+              
+              const styleData = JSON.parse(styleMatch[1]);
+              
+              // Clean up the font family name
+              styleData.fontFamily = styleData.fontFamily.split(' ')[0];
+              
+              return styleData;
+            } catch (err) {
+              console.warn('Error parsing style data:', err);
+              return this.getDefaultStyle();
+            }
+          },
+          getDefaultStyle() {
+            return {
+              fontFamily: 'Unknown',
+              fontWeight: 'Regular',
+              fontSize: 14
+            };
+          },
+          async scanLibraryTokens() {
+            this.isLibraryScanning = true;
+            this.libraryScanProgress = 0;
+            this.currentScanNode = null;
+            this.scanSummary = null;
+            this.isPaused = false;
+            this.inactiveLibraryTokens = [];
+            this.activeLibraryTokens = [];
+            parent.postMessage({ 
+              pluginMessage: { 
+                type: 'scan-library-tokens',
+                scanType: this.selectedLibraryTokenScanType
+              }
+            }, '*');
+          },
+          async activateLibrary(libraryName) {
+            parent.postMessage({ 
+              pluginMessage: { 
+                type: 'activate-library',
+                libraryName 
+              }
+            }, '*');
+          },
+          stopLibraryScan() {
+            console.log('Requesting scan stop...');
+            parent.postMessage({ 
+              pluginMessage: { type: 'stop-library-scan' }
+            }, '*');
+          },
+          formatTokenType(type) {
+            switch (type.toLowerCase()) {
+              case 'color':
+                return 'Color';
+              case 'float':
+                return 'Number';
+              case 'string':
+                return 'Text';
+              default:
+                return type;
+            }
+          },
+          pauseLibraryScan() {
+            console.log('Requesting scan pause...');
+            this.isPaused = true;
+            parent.postMessage({ 
+              pluginMessage: { type: 'pause-library-scan' }
+            }, '*');
+          },
+          resumeLibraryScan() {
+            console.log('Requesting scan resume...');
+            this.isPaused = false;
+            parent.postMessage({ 
+              pluginMessage: { type: 'resume-library-scan' }
+            }, '*');
+          },
+          getUniqueLibraries(tokens) {
+            return [...new Set(tokens.map(token => token.libraryName))];
+          },
+          getTokensByLibrary(tokens, libraryName) {
+            return tokens.filter(token => token.libraryName === libraryName);
+          },
+          showTokenUsages(token) {
+            const nodeIds = token.usages.map(usage => usage.nodeId);
+            parent.postMessage({ 
+              pluginMessage: { 
+                type: 'select-nodes',
+                nodeIds
+              }
+            }, '*');
+          },
+          toggleUsageDetails(variableId) {
+            this.isUsageExpanded = { ...this.isUsageExpanded, [variableId]: !this.isUsageExpanded[variableId] };
+          },
+          isUsageExpanded(variableId) {
+            return this.isUsageExpanded[variableId] || false;
+          },
+          selectNode(nodeId) {
+            parent.postMessage({ 
+              pluginMessage: { 
+                type: 'select-node',
+                nodeId
+              }
+            }, '*');
+          },
+          switchTab(tab) {
+            this.activeTab = tab;
+          },
+          getProgressBarColor() {
+            if (this.scanError) {
+              return 'var(--figma-color-bg-danger)';
+            }
+            if (!this.isScanning && this.scanProgress === 100) {
+              return 'var(--figma-color-bg-success)';
+            }
+            if (this.isScanning) {
+              return 'var(--figma-color-bg-brand)';
+            }
+            return 'var(--figma-color-bg-disabled)';
+          },
+
+          getProgressStatus() {
+            if (this.scanError) {
+              return 'Scan error';
+            }
+            if (!this.isScanning && this.scanProgress === 100) {
+              return this.hasResults ? 'Scan complete' : 'Scan complete, no issues found';
+            }
+            if (this.isScanning) {
+              return `Scanning... ${Math.round(this.scanProgress)}%`;
+            }
+            return 'Ready to scan';
+          },
+
+          // Add new method to handle progress width
+          getProgressWidth() {
+            // Always return a percentage, even if 0
+            return `${Math.max(0, Math.min(100, this.scanProgress))}%`;
+          },
+          getStartScanButtonTitle() {
+            if (!this.hasSelection && !this.scanEntirePage) {
+              return 'Select frames/components/sections or enable "Scan Entire Page"';
+            }
+            if (!this.selectedScanType) {
+              return 'Select what to scan for';
+            }
+            return 'Start scanning';
+          },
+          handleScanCardKeydown(e) {
+            if (e.key === 'ArrowRight') {
+              this.selectNextCard();
+            } else if (e.key === 'ArrowLeft') {
+              this.selectPreviousCard();
+            } else if (e.key === 'Enter') {
+              this.selectCurrentCard();
+            }
+          },
+          selectNextCard() {
+            const currentIndex = this.tokenScanOptions.findIndex(option => option.value === this.selectedScanType);
+            const nextIndex = (currentIndex + 1) % this.tokenScanOptions.length;
+            this.selectedScanType = this.tokenScanOptions[nextIndex].value;
+          },
+          selectPreviousCard() {
+            const currentIndex = this.tokenScanOptions.findIndex(option => option.value === this.selectedScanType);
+            const prevIndex = (currentIndex - 1 + this.tokenScanOptions.length) % this.tokenScanOptions.length;
+            this.selectedScanType = this.tokenScanOptions[prevIndex].value;
+          },
+          selectCurrentCard() {
+            this.selectedScanType = this.selectedScanType;
+          },
+          handleLibraryScanCardKeydown(e) {
+            if (e.key === 'ArrowRight') {
+              this.selectNextLibraryCard();
+            } else if (e.key === 'ArrowLeft') {
+              this.selectPreviousLibraryCard();
+            } else if (e.key === 'Enter') {
+              this.selectCurrentLibraryCard();
+            }
+          },
+          selectNextLibraryCard() {
+            const currentIndex = this.libraryTokenScanOptions.findIndex(option => option.value === this.selectedLibraryTokenScanType);
+            const nextIndex = (currentIndex + 1) % this.libraryTokenScanOptions.length;
+            this.selectedLibraryTokenScanType = this.libraryTokenScanOptions[nextIndex].value;
+          },
+          selectPreviousLibraryCard() {
+            const currentIndex = this.libraryTokenScanOptions.findIndex(option => option.value === this.selectedLibraryTokenScanType);
+            const prevIndex = (currentIndex - 1 + this.libraryTokenScanOptions.length) % this.libraryTokenScanOptions.length;
+            this.selectedLibraryTokenScanType = this.libraryTokenScanOptions[prevIndex].value;
+          },
+          selectCurrentLibraryCard() {
+            this.selectedLibraryTokenScanType = this.selectedLibraryTokenScanType;
+          },
+          handleScanProgress(msg) {
+            if (msg && typeof msg.progress === 'number') {
+              this.scanProgress = Math.min(100, Math.max(0, msg.progress));
+              this.isScanning = msg.isScanning !== false;
+            }
+          },
+          selectScanType(value) {
+            // Toggle selection if clicking the same card
+            if (this.selectedScanType === value) {
+              this.selectedScanType = null;
+            } else {
+              this.selectedScanType = value;
+            }
+            // Reset lastScannedType if selecting a different type
+            if (this.lastScannedType !== value) {
+              this.lastScannedType = null;
+            }
+          },
+          getTotalResultsCount() {
+            return Object.values(this.groupedByValue).reduce((sum, group) => sum + group.refs.length, 0);
+          },
+          formatTypographyValue(value) {
+            if (typeof value === 'object') {
+              return `${value.fontFamily} ${value.fontWeight} ${value.fontSize}px`;
+            }
+            return String(value);
+          },
+          debugResults() {
+            console.log('Current state:', {
+              isScanning: this.isScanning,
+              hasResults: this.hasResults,
+              groupedReferences: this.groupedReferences,
+              groupedByValue: this.groupedByValue
+            });
+          },
+          selectLibraryScanType(value) {
+            // Toggle selection if clicking the same card
+            if (this.selectedLibraryTokenScanType === value) {
+              this.selectedLibraryTokenScanType = null;
+            } else {
+              this.selectedLibraryTokenScanType = value;
+            }
+          },
+        },
+        watch: {
+          activeLibraryTokens(newVal) {
+            this.hasLibraryResults = newVal.length > 0 || this.inactiveLibraryTokens.length > 0;
+          },
+          inactiveLibraryTokens(newVal) {
+            this.hasLibraryResults = newVal.length > 0 || this.activeLibraryTokens.length > 0;
+          }
+        },
+        mounted() {
+          console.log('Vue app mounted');
+          
+          // Remove any default selection
+          this.selectedScanType = null;
+
+          // Single message handler
+          window.onmessage = (event) => {
+            const msg = event.data.pluginMessage;
+            if (msg) {
+              this.handlePluginMessage(msg);
+            }
+          };
+
+          // Request initial selection state
+          parent.postMessage({ 
+            pluginMessage: { 
+              type: 'get-selected-frame-ids' 
+            }
+          }, '*');
+        },
+        created() {
+          // Ensure we stay on the tokens tab
+          this.activeTab = 'tokens';
+        }
+      }).mount('#app');
+
+      // Hide loading indicator
+      document.getElementById('loading').style.display = 'none';
+    }
+
+    // Resize handling
+    let isResizing = false;
+    let initialWidth, initialHeight, initialX, initialY;
+
+    const MIN_WIDTH = 320;
+    const MIN_HEIGHT = 400;
+    const MAX_WIDTH = 800;
+    const MAX_HEIGHT = 900;
+
+    function initResizeHandle() {
+      const resizeHandle = document.querySelector('.resize-handle');
+      if (!resizeHandle) return;
+      
+      resizeHandle.addEventListener('mousedown', startResize);
+    }
+
+    function startResize(e) {
+      isResizing = true;
+      initialWidth = window.innerWidth;
+      initialHeight = window.innerHeight;
+      initialX = e.clientX;
+      initialY = e.clientY;
+
+      document.addEventListener('mousemove', handleResize);
+      document.addEventListener('mouseup', stopResize);
+      e.preventDefault(); // Prevent text selection while resizing
+    }
+
+    function handleResize(e) {
+      if (!isResizing) return;
+
+      const deltaX = e.clientX - initialX;
+      const deltaY = e.clientY - initialY;
+
+      const newWidth = Math.min(Math.max(initialWidth + deltaX, MIN_WIDTH), MAX_WIDTH);
+      const newHeight = Math.min(Math.max(initialHeight + deltaY, MIN_HEIGHT), MAX_HEIGHT);
+
+      // Send resize message to plugin
+      parent.postMessage({
+        pluginMessage: {
+          type: 'resize',
+          width: newWidth,
+          height: newHeight
+        }
+      }, '*');
+    }
+
+    function stopResize() {
+      isResizing = false;
+      document.removeEventListener('mousemove', handleResize);
+      document.removeEventListener('mouseup', stopResize);
+    }
+
+    // Single window.onload handler
+    window.onload = () => {
+      initializeApp();
+      initResizeHandle();
+    };
+  </script>
+</body>
+</html>

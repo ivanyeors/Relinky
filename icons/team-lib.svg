@@ -1,0 +1,14 @@
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="24" height="24" fill="#1E1E1E"/>
+<g id="Section 1">
+<path d="M-77 -182C-77 -183.105 -76.1046 -184 -75 -184H326C327.105 -184 328 -183.105 328 -182V43C328 44.1046 327.105 45 326 45H-75C-76.1046 45 -77 44.1046 -77 43V-182Z" fill="#444444"/>
+<path d="M-75 -183H326V-185H-75V-183ZM327 -182V43H329V-182H327ZM326 44H-75V46H326V44ZM-76 43V-182H-78V43H-76ZM-75 44C-75.5523 44 -76 43.5523 -76 43H-78C-78 44.6568 -76.6569 46 -75 46V44ZM327 43C327 43.5523 326.552 44 326 44V46C327.657 46 329 44.6569 329 43H327ZM326 -183C326.552 -183 327 -182.552 327 -182H329C329 -183.657 327.657 -185 326 -185V-183ZM-75 -185C-76.6569 -185 -78 -183.657 -78 -182H-76C-76 -182.552 -75.5523 -183 -75 -183V-185Z" fill="white" fill-opacity="0.1"/>
+<g id="team-lib">
+<rect id="Rectangle 5" x="3.84668" y="3.84668" width="16.3066" height="16.3066" rx="2.5" stroke="white" stroke-linecap="round"/>
+<circle id="Ellipse 1" cx="8.82167" cy="8.82169" r="2.77417" stroke="white"/>
+<circle id="Ellipse 3" cx="8.82167" cy="15.2742" r="2.77417" stroke="white"/>
+<circle id="Ellipse 2" cx="15.37" cy="8.82169" r="2.77417" stroke="white"/>
+<circle id="Ellipse 4" cx="15.37" cy="15.2742" r="2.77417" stroke="white"/>
+</g>
+</g>
+</svg>

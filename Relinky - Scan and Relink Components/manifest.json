@@ -1,15 +1,15 @@
 {
-  "name": "Relinky",
-  "id": "1307669275006892545",
+  "name": "Relinky - Scan and Replace Missing Tokens",
+  "id": "1472180567792940214",
   "api": "1.0.0",
-  "main": "code.js",
+  "main": "./dist/code.js",
   "capabilities": [],
   "enableProposedApi": false,
   "documentAccess": "dynamic-page",
   "editorType": [
     "figma"
   ],
-  "ui": "ui.html",
+  "ui": "./dist/ui.html",
   "networkAccess": {
     "allowedDomains": ["https://unpkg.com"]
   }

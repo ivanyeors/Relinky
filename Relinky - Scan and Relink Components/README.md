@@ -1,40 +1,104 @@
-Below are the steps to get your plugin running. You can also find instructions at:
+# Relinky - Scan and Replace Missing Token
 
-  https://www.figma.com/plugin-docs/plugin-quickstart-guide/
+A powerful Figma plugin to help you find and manage unlinked design tokens and styles across your files.
 
-This plugin template uses Typescript and NPM, two standard tools in creating JavaScript applications.
+## Features
 
-First, download Node.js which comes with NPM. This will allow you to install TypeScript and other
-libraries. You can find the download link here:
+### 🔍 Comprehensive Scanning
+- **Typography**: Find text layers missing text style variables
+- **Auto-layout Spacing**: 
+  - Detect unlinked vertical gaps
+  - Find frames with unlinked vertical padding
+  - Find frames with unlinked horizontal padding
+- **Corner Radius**: Identify shapes with unlinked corner radius
+- **Colors**: 
+  - Find layers with unlinked fill colors
+  - Detect layers with unlinked stroke colors
+- **Library Variables**: Scan for inactive or missing library variables
 
-  https://nodejs.org/en/download/
+### 🎯 Smart Selection
+- Scan entire page or selected frames/components/sections
+- Group similar unlinked values for easier management
+- Quick selection of affected layers
+- Navigate to specific instances
+- Automatic viewport adjustment to selected elements
 
-Next, install TypeScript using the command:
+### 👀 Live Watching
+- Watch for changes in real-time
+- Automatically scan as you work
+- Toggle watching on/off
+- Smart debouncing to prevent performance issues
 
-  npm install -g typescript
+### 💡 Smart Features
+- Detailed typography information display
+- Grouped results by value
+- Progress tracking during scans
+- Success notifications
+- Rescan and clear results options
+- Library variable analysis
+- Variable collection insights
+- Scan filters:
+  - Ignore hidden layers
+  - Include/exclude specific layer types
 
-Finally, in the directory of your plugin, get the latest type definitions for the plugin API by running:
+## 🗺 Roadmap
 
-  npm install --save-dev @figma/plugin-typings
+### ✅ Implemented
+- Have a success state for no results found
+- Release version number
+- Donation button
+- Rename to "Scan Whole Page"
+- Fix progress bar
 
-If you are familiar with JavaScript, TypeScript will look very familiar. In fact, valid JavaScript code
-is already valid Typescript code.
+### 🛠 In Progress / Experimental
+- Ignore hidden layers for scan
+- Watch for changes to work
 
-TypeScript adds type annotations to variables. This allows code editors such as Visual Studio Code
-to provide information about the Figma API while you are writing code, as well as help catch bugs
-you previously didn't notice.
+### �� Planned
+- Feedback CTA
+- Pro version vs free version features
+- Scan for linked tokens from non-active libraries
+- Scan selected similar variable tokens
+- Work on similar typography groupings
+  - Ignore different content but group same font settings
+- Horizontal padding improvements
+  - Add toggle for left and right
+- Vertical padding improvements
+  - Add toggle for top and bottom
+- Typography UI improvements
+  - Split results in small labels
+- Fix instances and instance word corrections
 
-For more information, visit https://www.typescriptlang.org/
+## Usage
 
-Using TypeScript requires a compiler to convert TypeScript (code.ts) into JavaScript (code.js)
-for the browser to run.
+### Installation
+1. Open Figma and go to the Community tab
+2. Search for "Relinky"
+3. Click "Install"
 
-We recommend writing TypeScript code using Visual Studio code:
+### Basic Usage
+1. Select the frames, components, or sections you want to scan (or leave unselected to scan entire page)
+2. Open the plugin from Plugins > Relinky
+3. Configure scan settings (optional):
+   - Toggle "Ignore Hidden Layers"
+   - Select layer types to include
+4. Choose which references to scan for (typography, spacing, colors, etc.)
+5. Click "Start Scan" to begin the analysis
 
-1. Download Visual Studio Code if you haven't already: https://code.visualstudio.com/.
-2. Open this directory in Visual Studio Code.
-3. Compile TypeScript to JavaScript: Run the "Terminal > Run Build Task..." menu item,
-    then select "npm: watch". You will have to do this again every time
-    you reopen Visual Studio Code.
+### Working with Results
+- Results are grouped by type and value for easier management
+- Click on any result to select the affected layers in your design
+- Use the navigation arrows to jump between instances
+- Clear results and rescan as needed
 
-That's it! Visual Studio Code will regenerate the JavaScript file every time you save.
+### Live Watching Mode
+1. Enable "Scan Entire Page" to unlock watch mode
+2. Toggle "Watch Mode" to enable real-time scanning
+3. The plugin will automatically detect unlinked values as you work
+4. Disable Watch Mode when you want to stop automatic scanning
+
+### Tips
+- Use the grouped results to quickly standardize similar unlinked values
+- Regular scanning helps maintain design system consistency
+- Consider scanning before sharing designs or creating documentation
+- Watch mode works best when scanning the entire page
