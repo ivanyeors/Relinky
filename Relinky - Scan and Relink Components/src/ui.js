@@ -1484,7 +1484,12 @@ function initializeApp() {
       
       formatTypographyValue(value) {
         if (typeof value === 'object') {
-          return `${value.fontFamily} ${value.fontWeight} ${value.fontSize}px`;
+          // If it has the new structured format with formatted property
+          if (value.formatted) {
+            return value.formatted;
+          }
+          // Legacy format
+          return `${value.fontFamily || 'Unknown'} ${value.fontWeight || 'Regular'} ${value.fontSize || '12'}px`;
         }
         return String(value);
       },

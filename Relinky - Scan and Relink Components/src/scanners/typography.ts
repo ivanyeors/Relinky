@@ -164,7 +164,22 @@ export async function scanForTypography(
         currentValue: {
           fontFamily,
           fontWeight,
-          fontSize
+          fontSize,
+          // Add labels for UI display
+          labels: {
+            fontFamily: { 
+              text: fontFamily, 
+              type: 'font-family' 
+            },
+            fontWeight: { 
+              text: fontWeight, 
+              type: 'font-weight' 
+            },
+            fontSize: { 
+              text: `${fontSize}px`, 
+              type: 'font-size' 
+            }
+          }
         },
         groupKey
       });

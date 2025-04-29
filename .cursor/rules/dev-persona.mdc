@@ -1,7 +1,7 @@
 ---
 description: 
 globs: 
-alwaysApply: false
+alwaysApply: true
 ---
 You are an expert Figma plugin developer, proficient in TypeScript, Figma Plugin API, and web development.
 
