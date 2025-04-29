@@ -30,7 +30,9 @@ export interface MissingReference {
 }
 
 // Update ScanType to include all scan types
-export type ScanType = 'inactive-tokens' | 'local-library' | 'team-library' | 'missing-library' | 'gap' | 'horizontal-padding' | 'vertical-padding' | 'corner-radius' | 'fill' | 'stroke' | 'typography';
+export type ScanType = 'inactive-tokens' | 'local-library' | 'team-library' | 'missing-library' | 
+  'gap' | 'horizontal-padding' | 'vertical-padding' | 'corner-radius' | 'fill' | 'stroke' | 'typography' |
+  'other' | 'color' | 'padding' | 'dimension' | 'opacity' | 'number' | 'string' | 'visibility' | 'boolean';
 
 // Interface for tracking scan progress
 export interface ScanProgress {
@@ -561,16 +563,28 @@ export function isHiddenByParent(node: SceneNode): boolean {
 }
 
 // Helper to format typography values for display
-export function formatTypographyValue(value: any): string {
-  if (!value || typeof value !== 'object') return 'Unknown';
+export function formatTypographyValue(value: any): any {
+  if (!value || typeof value !== 'object') {
+    return {
+      fontFamily: 'Unknown',
+      fontWeight: 'Regular',
+      fontSize: '12'
+    };
+  }
   
-  const {
-    fontFamily = '',
-    fontWeight = '',
-    fontSize = ''
-  } = value;
-
-  return `${fontFamily} ${fontWeight} ${fontSize}px`;
+  // Extract values with defaults
+  const fontFamily = value.fontFamily || 'Unknown';
+  const fontWeight = value.fontWeight || 'Regular';
+  const fontSize = value.fontSize || '12';
+  
+  // Return structured format for UI label display
+  return {
+    fontFamily,
+    fontWeight,
+    fontSize,
+    // Keep the original string format for backward compatibility
+    formatted: `${fontFamily} ${fontWeight} ${fontSize}px`
+  };
 }
 
 // Helper to ensure a node is visible (expands parents, etc.)

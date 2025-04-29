@@ -508,15 +508,32 @@
                           <!-- Add typography-specific template -->
                           <template v-if="group.refs?.[0]?.type === 'typography' && group.refs[0]?.currentValue">
                             <div class="typography-labels">
-                              <span class="label font-family" v-if="group.refs[0].currentValue && group.refs[0].currentValue.fontFamily">
-                                {{ group.refs[0].currentValue.fontFamily }}
-                              </span>
-                              <span class="label font-weight" v-if="group.refs[0].currentValue && group.refs[0].currentValue.fontWeight">
-                                {{ group.refs[0].currentValue.fontWeight }}
-                              </span>
-                              <span class="label font-size" v-if="group.refs[0].currentValue && group.refs[0].currentValue.fontSize">
-                                {{ group.refs[0].currentValue.fontSize }}px
-                              </span>
+                              <!-- Show labels from the new structure if available -->
+                              <template v-if="group.refs[0].currentValue.labels">
+                                <span class="label font-family">
+                                  <span v-if="group.refs[0].currentValue.labels.fontFamily">{{ group.refs[0].currentValue.labels.fontFamily.text }}</span>
+                                </span>
+                                <span class="label font-weight">
+                                  <span v-if="group.refs[0].currentValue.labels.fontWeight">{{ group.refs[0].currentValue.labels.fontWeight.text }}</span>
+                                </span>
+                                <span class="label font-size">
+                                  <span v-if="group.refs[0].currentValue.labels.fontSize">{{ group.refs[0].currentValue.labels.fontSize.text }}</span>
+                                </span>
+                              </template>
+                              
+                              <!-- Fallback to old structure if labels not available -->
+                              <template v-else>
+                                <span class="label font-family" v-if="group.refs[0].currentValue && group.refs[0].currentValue.fontFamily">
+                                  {{ group.refs[0].currentValue.fontFamily }}
+                                </span>
+                                <span class="label font-weight" v-if="group.refs[0].currentValue && group.refs[0].currentValue.fontWeight">
+                                  {{ group.refs[0].currentValue.fontWeight }}
+                                </span>
+                                <span class="label font-size" v-if="group.refs[0].currentValue && group.refs[0].currentValue.fontSize">
+                                  {{ group.refs[0].currentValue.fontSize }}px
+                                </span>
+                              </template>
+                              
                               <!-- Add library type badge for non-library scans -->
                               <span v-if="!isLibraryVariableScan" 
                                     :class="{

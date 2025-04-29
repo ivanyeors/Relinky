@@ -35,7 +35,8 @@ async function isLocalLibraryVariable(variableId: string): Promise<boolean> {
     const collection = await figma.variables.getVariableCollectionByIdAsync(variable.variableCollectionId);
     
     // Local variables have collections that are not remote
-    return !!collection && !collection.remote;
+    // Exclude variables from collections with "Missing" in their name, which should be handled by missing-library scanner
+    return !!collection && !collection.remote && !collection.name.includes('Missing');
   } catch (err) {
     console.error(`Error checking local library variable ${variableId}:`, err);
     return false;
@@ -121,6 +122,57 @@ export async function scanForLocalLibraryVariables(
   for (const collection of collections) {
     collectionsMap.set(collection.id, collection);
   }
+
+  /**
+   * Helper function to determine variable type based on property and resolved type
+   * @param property The property name bound to the variable
+   * @param variableType The resolved type of the variable
+   * @returns The appropriate ScanType for the variable
+   */
+  const determineVariableType = (property: string, variableType?: string): ScanType => {
+    // Default to 'other' instead of 'fill' for better categorization
+    let varType: ScanType = 'other';
+    
+    if (!variableType) return varType;
+    
+    if (variableType === 'COLOR') {
+      if (property.includes('fill')) varType = 'fill';
+      else if (property.includes('stroke')) varType = 'stroke';
+      else if (property.includes('background')) varType = 'fill';
+      else if (property.includes('border')) varType = 'stroke';
+      else varType = 'color'; // Generic color type for other color properties
+    } 
+    else if (variableType === 'FLOAT') {
+      if (property.includes('cornerRadius')) varType = 'corner-radius';
+      else if (property.includes('itemSpacing')) varType = 'gap';
+      else if (property.includes('padding')) {
+        if (property.includes('horizontal')) varType = 'horizontal-padding';
+        else if (property.includes('vertical')) varType = 'vertical-padding';
+        else varType = 'padding';
+      }
+      else if (property.includes('width') || property.includes('height')) varType = 'dimension';
+      else if (property.includes('opacity')) varType = 'opacity';
+      else if (property.includes('spacing')) varType = 'gap';
+      else varType = 'number'; // Default for numeric properties that don't match specific categories
+    }
+    else if (variableType === 'STRING') {
+      if (property.includes('font') || 
+          property.includes('text') || 
+          property.includes('typography') ||
+          property.includes('letterSpacing') ||
+          property.includes('lineHeight')) {
+        varType = 'typography';
+      } else {
+        varType = 'string'; // Generic string for non-typography string variables
+      }
+    }
+    else if (variableType === 'BOOLEAN') {
+      if (property.includes('visible') || property.includes('hidden')) varType = 'visibility';
+      else varType = 'boolean'; // Generic boolean type
+    }
+    
+    return varType;
+  };
   
   // Function to process a node and check for local variables
   const processNode = async (node: SceneNode) => {
@@ -215,7 +267,22 @@ export async function scanForLocalLibraryVariables(
                   fontWeight, 
                   fontSize,
                   variableName: variable?.name || 'Unknown',
-                  collectionName: collection?.name || 'Local Variables'
+                  collectionName: collection?.name || 'Local Variables',
+                  // Add labels for UI display
+                  labels: {
+                    fontFamily: { 
+                      text: fontFamily, 
+                      type: 'font-family' 
+                    },
+                    fontWeight: { 
+                      text: fontWeight, 
+                      type: 'font-weight' 
+                    },
+                    fontSize: { 
+                      text: `${fontSize}px`, 
+                      type: 'font-size' 
+                    }
+                  }
                 },
                 isLocalLibrary: true,
                 groupKey,
@@ -227,27 +294,8 @@ export async function scanForLocalLibraryVariables(
               typographyVarsFound++;
               
             } else {
-              // Determine the type of variable
-              let varType: ScanType = 'fill';
-              
-              if (variable) {
-                if (variable.resolvedType === 'COLOR') {
-                  if (property.includes('fill')) varType = 'fill';
-                  else if (property.includes('stroke')) varType = 'stroke';
-                  else varType = 'fill'; // Default for colors
-                } 
-                else if (variable.resolvedType === 'FLOAT') {
-                  if (property.includes('cornerRadius')) varType = 'corner-radius';
-                  else if (property.includes('itemSpacing')) varType = 'gap';
-                  else if (property.includes('padding')) {
-                    if (property.includes('horizontal')) varType = 'horizontal-padding';
-                    else varType = 'vertical-padding';
-                  } 
-                  else varType = 'corner-radius'; // Default for numbers as corner-radius
-                }
-                else if (variable.resolvedType === 'STRING') varType = 'typography'; // Map strings to typography
-                else if (variable.resolvedType === 'BOOLEAN') varType = 'fill'; // Map booleans to fill as default
-              }
+              // Determine the type of variable using the helper function
+              const varType = determineVariableType(property, variable?.resolvedType);
               
               // Create a unique group key for this variable
               const groupKey = `${varType}-local-library-${variableId}`;
@@ -312,10 +360,8 @@ export async function scanForLocalLibraryVariables(
                   }
                 }
                 
-                // Determine type based on property name
-                let varType: ScanType = 'fill';
-                if (property.includes('fill')) varType = 'fill';
-                else if (property.includes('stroke')) varType = 'stroke';
+                // Use the same helper function for consistent categorization
+                const varType = determineVariableType(property, variable?.resolvedType);
                 
                 // Create a unique group key for this variable in an array
                 const groupKey = `${varType}-local-library-${variableId}-array-${j}`;
