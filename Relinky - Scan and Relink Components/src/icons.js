@@ -49,8 +49,16 @@ const radiusIcon =
 <path id="Vector 4" d="M8.4362 21.0068L6.62552 21.0068C4.41638 21.0068 2.62552 19.2159 2.62552 17.0068L2.62552 14.7657" stroke="white" stroke-linecap="round"/>
 </g>
 </g>
-</svg>
-`;
+</svg>`;
+
+const layoutIcon = 
+`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="layout">
+<rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-linecap="round"/>
+<path d="M3 8H21" stroke="currentColor" stroke-linecap="round"/>
+<path d="M9 8V21" stroke="currentColor" stroke-linecap="round"/>
+</g>
+</svg>`;
 
 const verticalPaddingIcon = 
 `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -269,6 +277,9 @@ const getVariableTypeIcon = (type) => {
       return verticalPaddingIcon;
     case 'horizontalpadding':
       return horizontalPaddingIcon;
+    case 'layout':
+    case 'dimension':
+      return layoutIcon;
     case 'all':
       return variableIcon;
     case 'other':
@@ -289,6 +300,19 @@ export const icons = {
   'vertical-padding': verticalPaddingIcon,
   'horizontal-padding': horizontalPaddingIcon,
   fill: fillIcon,
+  layout: layoutIcon,
+  opacity: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect x="3.5" y="3.5" width="17" height="17" rx="2.5" stroke="currentColor" stroke-linecap="round"/>
+  <path d="M7 7L17 17" stroke="currentColor" stroke-linecap="round"/>
+  <path d="M7 17L17 7" stroke="currentColor" stroke-linecap="round"/>
+  <circle cx="12" cy="12" r="5" stroke="currentColor" stroke-opacity="0.5" stroke-width="1.5"/>
+</svg>`,
+  effects: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect x="3.5" y="3.5" width="17" height="17" rx="2.5" stroke="currentColor" stroke-linecap="round"/>
+  <circle cx="9" cy="9" r="2.5" stroke="currentColor"/>
+  <path d="M19 19L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M14 14.5C12.3431 14.5 11 13.1569 11 11.5C11 9.84315 12.3431 8.5 14 8.5C15.6569 8.5 17 9.84315 17 11.5C17 13.1569 15.6569 14.5 14 14.5Z" stroke="currentColor" stroke-opacity="0.7" stroke-width="1.5"/>
+</svg>`,
   
   // Source type icons
   'raw-value': rawValueIcon,

@@ -27,12 +27,14 @@ export interface MissingReference {
   path?: string;                // Add node path for better location info
   isVisible: boolean;           // Whether the node is visible
   groupKey?: string;            // Custom key for grouping references with similar properties
+  dimensionType?: string;       // Added for layout scanning (width/height)
 }
 
 // Update ScanType to include all scan types
 export type ScanType = 'inactive-tokens' | 'local-library' | 'team-library' | 'missing-library' | 
   'gap' | 'horizontal-padding' | 'vertical-padding' | 'corner-radius' | 'fill' | 'stroke' | 'typography' |
-  'other' | 'color' | 'padding' | 'dimension' | 'opacity' | 'number' | 'string' | 'visibility' | 'boolean';
+  'other' | 'color' | 'padding' | 'dimension' | 'opacity' | 'number' | 'string' | 'visibility' | 'boolean' |
+  'layout' | 'effects' | 'effect-opacity'; // Added effects and effect-opacity types
 
 // Interface for tracking scan progress
 export interface ScanProgress {
