@@ -237,7 +237,7 @@ interface ScanForTokensMessage {
   isRescan?: boolean;
   isLibraryVariableScan?: boolean;
   // New properties for the two-level scan approach
-  sourceType: 'raw-values' | 'team-library' | 'local-library' | 'missing-library';
+  sourceType: 'raw-values' | 'team-library' | 'local-library' | 'missing-library' | 'deleted-variables';
   tokenType?: string | null;
   variableTypes?: string[];
 }
@@ -388,6 +388,22 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
           type: 'missing-library-result',
           references: grouped,
           availableTypes: Array.from(missingLibResult.availableTypes),
+          count: results.length
+        });
+      } else if (sourceType === 'deleted-variables') {
+        // Get the full deletedVariablesResult with availableTypes
+        const deletedVariablesResult = await scanners.scanForDeletedVariables(
+          progressCallback, 
+          selectedFrameIds, 
+          ignoreHiddenLayers, 
+          msg.variableTypes || []
+        );
+        
+        // Send the complete result to the UI
+        figma.ui.postMessage({
+          type: 'missing-library-result', // Reuse the same message type for UI compatibility
+          references: grouped,
+          availableTypes: Array.from(deletedVariablesResult.availableTypes),
           count: results.length
         });
       } else {
@@ -630,6 +646,16 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
         msg.variableTypes || [] // Pass variable types filter
       );
       
+      // Scan for deleted variables
+      const deletedVariables = await scanners.runScanner(
+        'deleted-variables',
+        'fill', // default scan type
+        [], // scan the whole page
+        () => {}, // Skip progress updates for this scan
+        false, // don't ignore hidden layers
+        msg.variableTypes || [] // Pass variable types filter
+      );
+      
       // Collect variables from all library types to show in UI
       let allVariables = [];
       
@@ -637,7 +663,8 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
       allVariables = [
         ...teamLibraryVariables,
         ...localLibraryVariables,
-        ...missingLibraryVariables
+        ...missingLibraryVariables,
+        ...deletedVariables
       ];
       
       // Send results to UI for display

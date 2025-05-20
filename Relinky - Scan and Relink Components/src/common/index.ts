@@ -31,7 +31,7 @@ export interface MissingReference {
 }
 
 // Update ScanType to include all scan types
-export type ScanType = 'inactive-tokens' | 'local-library' | 'team-library' | 'missing-library' | 
+export type ScanType = 'inactive-tokens' | 'local-library' | 'team-library' | 'missing-library' | 'deleted-variables' |
   'gap' | 'horizontal-padding' | 'vertical-padding' | 'corner-radius' | 'fill' | 'stroke' | 'typography' |
   'other' | 'color' | 'padding' | 'dimension' | 'opacity' | 'number' | 'string' | 'visibility' | 'boolean' |
   'layout' | 'effects' | 'effect-opacity'; // Added effects and effect-opacity types

@@ -14,7 +14,7 @@ interface AppearanceReference extends MissingReference {
  * Scan for element opacity values in the document
  * 
  * @param scanType - Type of scan ('opacity')
- * @param selectedFrameIds - Array of frame IDs to scan
+ * @param selectedFrameIds - Array of node IDs to scan (can include frames, components, groups, etc.)
  * @param progressCallback - Callback function for progress updates
  * @param ignoreHiddenLayers - Whether to ignore hidden layers during scanning
  * @returns Promise<AppearanceReference[]> - Array of references to element opacity values
@@ -41,12 +41,20 @@ export async function scanForAppearance(
   
   // Determine which nodes to scan
   if (selectedFrameIds && selectedFrameIds.length > 0) {
-    // Get selected nodes from IDs
+    // Get selected nodes from IDs - now supporting all node types
     nodesToScan = await Promise.all(
       selectedFrameIds.map(id => figma.getNodeByIdAsync(id))
-    ).then(nodes => nodes.filter((node): node is SceneNode => node !== null && 'type' in node));
+    ).then(nodes => nodes.filter((node): node is SceneNode => 
+      node !== null && 'type' in node && 
+      (node.type === 'FRAME' || 
+       node.type === 'COMPONENT' || 
+       node.type === 'COMPONENT_SET' ||
+       node.type === 'INSTANCE' ||
+       node.type === 'GROUP' ||
+       node.type === 'SECTION')
+    ));
     
-    console.log('Scanning selected frames:', nodesToScan.length, 'nodes');
+    console.log('Scanning selected nodes:', nodesToScan.length, 'nodes of types:', nodesToScan.map(n => n.type).join(', '));
   } else {
     // Fallback to current page
     nodesToScan = Array.from(figma.currentPage.children);

@@ -248,6 +248,12 @@ function initializeApp() {
             label: 'Missing Library Variables',
             description: 'Find all elements using variables from missing libraries',
             icon: 'missing'
+          },
+          {
+            value: 'deleted-variables',
+            label: 'Deleted Variables',
+            description: 'Find elements with deleted variables in selected node',
+            icon: 'missing'
           }
         ],
         showSettings: false,
@@ -336,7 +342,7 @@ function initializeApp() {
       canStartScan() {
         const hasSourceType = !!this.selectedSourceType;
         const hasScanType = !!this.selectedScanType;
-        const isMissingLibrary = this.selectedSourceType === 'missing-library';
+        const isMissingLibrary = this.selectedSourceType === 'missing-library' || this.selectedSourceType === 'deleted-variables';
         
         console.log('Can start scan?', {
           hasSourceType,
@@ -345,7 +351,7 @@ function initializeApp() {
           isScanning: this.isScanning
         });
         
-        // Special case for missing-library: allow scanning without selecting a scan type
+        // Special case for missing-library and deleted-variables: allow scanning without selecting a scan type
         if (isMissingLibrary) {
           return hasSourceType && !this.isScanning;
         }
@@ -670,9 +676,12 @@ function initializeApp() {
             if (this.variableFilters.libraryType === 'local-library' && !variable.isLocalLibrary) {
               return false;
             }
-            if (this.variableFilters.libraryType === 'missing-library' && !variable.isMissingLibrary) {
-              return false;
-            }
+                      if (this.variableFilters.libraryType === 'missing-library' && !variable.isMissingLibrary) {
+            return false;
+          }
+          if (this.variableFilters.libraryType === 'deleted-variables' && !variable.isDeletedVariable) {
+            return false;
+          }
           }
           
           // Filter by search term
@@ -710,7 +719,8 @@ function initializeApp() {
               type: variable.type,
               libraryType: variable.isTeamLibrary ? 'team-library' : 
                           variable.isLocalLibrary ? 'local-library' : 
-                          variable.isMissingLibrary ? 'missing-library' : 'unknown',
+                          variable.isMissingLibrary ? 'missing-library' : 
+                          variable.isDeletedVariable ? 'deleted-variables' : 'unknown',
               variables: []
             };
           }
@@ -807,6 +817,13 @@ function initializeApp() {
         if (this.selectedSourceType === 'missing-library') {
           return this.tokenScanOptions.filter(option => 
             option.value === 'missing-library'
+          );
+        }
+        
+        // For deleted-variables source, return only deleted variables option
+        if (this.selectedSourceType === 'deleted-variables') {
+          return this.tokenScanOptions.filter(option => 
+            option.value === 'deleted-variables'
           );
         }
         
@@ -957,8 +974,8 @@ function initializeApp() {
           // If we have a specific token type with a library source, include the token type separately
           tokenType: this.selectedSourceType !== 'raw-values' && this.selectedScanType ? 
                      this.selectedScanType.split('-').slice(2).join('-') : null,
-          // Include selected variable types for filtering if we're scanning for missing library variables
-          variableTypes: this.selectedSourceType === 'missing-library' ? this.selectedVariableTypes : []
+          // Include selected variable types for filtering if we're scanning for missing or deleted variables
+          variableTypes: (this.selectedSourceType === 'missing-library' || this.selectedSourceType === 'deleted-variables') ? this.selectedVariableTypes : []
         };
         
         // Make sure all message data is serializable
@@ -2332,6 +2349,7 @@ function initializeApp() {
           case 'team-library': return 'team library';
           case 'local-library': return 'local variables';
           case 'missing-library': return 'missing variables';
+          case 'deleted-variables': return 'deleted variables';
           case 'raw-values': return 'unlinked';
           default: return sourceType;
         }
