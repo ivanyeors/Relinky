@@ -9,6 +9,7 @@ import { scanForRawValues, groupRawValueResults } from './raw-values';
 import { scanForTeamLibraryVariables, groupTeamLibraryResults } from './team-library';
 import { scanForLocalLibraryVariables, groupLocalLibraryResults } from './local-library';
 import { scanForMissingLibraryVariables, groupMissingLibraryResults } from './missing-library';
+import { scanForDeletedVariables, groupDeletedVariableResults } from './deleted-variables';
 import { scanForGap, groupGapResults } from './gap';
 import { scanForPadding, groupPaddingResults } from './padding';
 import { scanForCornerRadius, groupCornerRadiusResults } from './radius';
@@ -18,11 +19,10 @@ import { scanForLayoutDimensions, groupLayoutResults } from './layout';
 import { scanForAppearance, groupAppearanceResults } from './appearance';
 import { scanForEffects, groupEffectsResults } from './effects';
 
-// Export all scanner functions
+// Export all scanner functions - use explicit exports for modules with overlapping types
 export * from './raw-values';
 export * from './team-library';
 export * from './local-library';
-export * from './missing-library';
 export * from './gap';
 export * from './padding';
 export * from './radius';
@@ -31,6 +31,22 @@ export * from './typography';
 export * from './layout';
 export * from './appearance';
 export * from './effects';
+
+// Explicitly export from missing-library
+export { 
+  scanForMissingLibraryVariables, 
+  groupMissingLibraryResults 
+} from './missing-library';
+
+// Explicitly export from deleted-variables
+export { 
+  scanForDeletedVariables, 
+  groupDeletedVariableResults, 
+  // Re-export the VariableTypeMetadata interface and VARIABLE_TYPE_CATEGORIES 
+  // from deleted-variables as they have the same structure as in missing-library
+  VariableTypeMetadata,
+  VARIABLE_TYPE_CATEGORIES
+} from './deleted-variables';
 
 // Cancellation flag for stopping scans
 let scanCancelled = false;
@@ -183,6 +199,9 @@ export async function runScanner(
     case 'missing-library':
       return scanForMissingLibraryVariables(progressHandler, selectedFrameIds, ignoreHiddenLayers, variableTypes)
         .then(result => result.results);
+    case 'deleted-variables':
+      return scanForDeletedVariables(progressHandler, selectedFrameIds, ignoreHiddenLayers, variableTypes)
+        .then(result => result.results);
     default:
       console.error(`Unknown scanner source type: ${sourceType}`);
       return [];
@@ -232,6 +251,8 @@ export function groupScanResults(
       return groupLocalLibraryResults(results as any);
     case 'missing-library':
       return groupMissingLibraryResults(results as any);
+    case 'deleted-variables':
+      return groupDeletedVariableResults(results as any);
     default:
       console.error(`Unknown group source type: ${sourceType}`);
       return {};

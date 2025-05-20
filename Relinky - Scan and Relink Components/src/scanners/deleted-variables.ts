@@ -1,5 +1,5 @@
-// Missing Library Scanner Module
-// Handles scanning for missing library variables in the document
+// Deleted Variables Scanner Module
+// Handles scanning for deleted variables in the document and selected nodes
 
 import { MissingReference, ScanType } from '../common';
 import { isScancelled } from './index';
@@ -60,27 +60,27 @@ function getVariableCategory(property: string): string {
 }
 
 /**
- * Checks if a variable is from a missing library
+ * Checks if a variable is deleted
  */
-async function isMissingLibraryVariable(variableId: string): Promise<{isMissing: boolean, error?: string, resolvedType?: string}> {
+async function isDeletedVariable(variableId: string): Promise<{isDeleted: boolean, error?: string, resolvedType?: string}> {
   try {
-    // Try to access the variable - if it exists but can't be found in team or local,
-    // it's likely from a missing library
+    // Try to access the variable - if it exists but can't be found,
+    // it's likely deleted
     const variable = await figma.variables.getVariableByIdAsync(variableId);
-    if (!variable) return { isMissing: false };
+    if (!variable) return { isDeleted: true };
     
     // Check if it's in missingVariables collection
     // This is a simplified check and may need more complex logic
     const collection = figma.variables.getVariableCollectionById(variable.variableCollectionId);
     return { 
-      isMissing: !!collection && !collection.remote && collection.name.includes('Missing'),
+      isDeleted: !!collection && !collection.remote && collection.name.includes('Missing'),
       resolvedType: variable.resolvedType
     };
   } catch (err) {
-    // If we get an error trying to access the variable, it is a missing library variable
+    // If we get an error trying to access the variable, it is likely deleted
     const errorMessage = String(err);
-    console.log(`Error accessing variable ${variableId}, may be missing:`, errorMessage);
-    return { isMissing: true, error: errorMessage };
+    console.log(`Error accessing variable ${variableId}, likely deleted:`, errorMessage);
+    return { isDeleted: true, error: errorMessage };
   }
 }
 
@@ -112,10 +112,10 @@ function shouldIncludeNode(node: SceneNode, ignoreHiddenLayers: boolean): boolea
 }
 
 /**
- * Scan for missing library variables in the document
+ * Scan for deleted variables in the document
  * Returns both the results and available variable types for filtering
  */
-export async function scanForMissingLibraryVariables(
+export async function scanForDeletedVariables(
   progressCallback: (progress: number) => void = () => {},
   selectedFrameIds: string[] | undefined = undefined,
   ignoreHiddenLayers: boolean = false,
@@ -124,14 +124,14 @@ export async function scanForMissingLibraryVariables(
   results: MissingReference[],
   availableTypes: Set<string>
 }> {
-  console.log('Starting missing library variables scan');
+  console.log('Starting deleted variables scan');
   
   const results: MissingReference[] = [];
   const availableTypes = new Set<string>();
   const filterByTypes = variableTypes.length > 0;
   
   if (filterByTypes) {
-    console.log(`Filtering missing variables by types:`, variableTypes);
+    console.log(`Filtering deleted variables by types:`, variableTypes);
   }
   
   // Initialize progress
@@ -231,7 +231,7 @@ export async function scanForMissingLibraryVariables(
     collectNodes(node);
   }
   
-  console.log(`Found ${nodes.length} nodes to scan for missing library variables`);
+  console.log(`Found ${nodes.length} nodes to scan for deleted variables`);
   // Update progress after node collection
   updateProgressWithDebounce(30);
   
@@ -241,7 +241,7 @@ export async function scanForMissingLibraryVariables(
   
   for (let i = 0; i < nodes.length; i++) {
     if (isScancelled()) {
-      console.log('Missing library scan cancelled');
+      console.log('Deleted variables scan cancelled');
       break;
     }
     
@@ -263,7 +263,7 @@ export async function scanForMissingLibraryVariables(
           const variableCategory = getVariableCategory(property);
           availableTypes.add(variableCategory);
           
-          const groupKey = `missing-library-${libraryName}-${variableName}`;
+          const groupKey = `deleted-variable-${libraryName}-${variableName}`;
           
           results.push({
             nodeId: node.id,
@@ -303,11 +303,11 @@ export async function scanForMissingLibraryVariables(
         if (isScancelled()) break;
         
         const processBinding = async (variableId: string, arrayIndex?: number) => {
-          const checkResult = await isMissingLibraryVariable(variableId);
+          const checkResult = await isDeletedVariable(variableId);
           
-          if (checkResult.isMissing) {
+          if (checkResult.isDeleted) {
             let variableName = 'Unknown Variable';
-            let libraryName = 'Missing Library';
+            let libraryName = 'Deleted Variable';
             
             try {
               const variable = await figma.variables.getVariableByIdAsync(variableId);
@@ -331,8 +331,8 @@ export async function scanForMissingLibraryVariables(
             availableTypes.add(variableCategory);
             
             const groupKey = arrayIndex !== undefined ? 
-              `missing-library-${libraryName}-${variableName}-array-${arrayIndex}` :
-              `missing-library-${libraryName}-${variableName}`;
+              `deleted-variable-${libraryName}-${variableName}-array-${arrayIndex}` :
+              `deleted-variable-${libraryName}-${variableName}`;
             
             results.push({
               nodeId: node.id,
@@ -385,7 +385,7 @@ export async function scanForMissingLibraryVariables(
     updateProgressWithDebounce(Math.round(baseProgress));
   }
   
-  console.log(`Missing library scan complete. Found ${results.length} missing library variables in ${availableTypes.size} categories`);
+  console.log(`Deleted variables scan complete. Found ${results.length} deleted variables in ${availableTypes.size} categories`);
   
   // Filter results by variable type if types are specified
   let filteredResults = results;
@@ -415,9 +415,9 @@ export async function scanForMissingLibraryVariables(
 }
 
 /**
- * Group missing library variable scan results with type filtering support
+ * Group deleted variable scan results with type filtering support
  */
-export function groupMissingLibraryResults(
+export function groupDeletedVariableResults(
   results: MissingReference[],
   selectedTypes?: string[]
 ): Record<string, MissingReference[]> {
@@ -432,7 +432,7 @@ export function groupMissingLibraryResults(
     const groupKey = result.groupKey || (() => {
       const libraryName = result.currentValue?.libraryName || 'Unknown Library';
       const variableName = result.currentValue?.variableName || 'Unknown Variable';
-      return `missing-library-${libraryName}-${variableName}`;
+      return `deleted-variable-${libraryName}-${variableName}`;
     })();
     
     if (!groups[groupKey]) {
@@ -442,7 +442,7 @@ export function groupMissingLibraryResults(
     groups[groupKey].push(result);
   });
   
-  console.log(`Grouped ${filteredResults.length} missing library results into ${Object.keys(groups).length} groups`);
+  console.log(`Grouped ${filteredResults.length} deleted variable results into ${Object.keys(groups).length} groups`);
   
   return groups;
 } 
