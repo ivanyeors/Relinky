@@ -166,6 +166,10 @@ function initializeApp() {
         radiusFilterType: 'all',
         // Filter type for gap (all, vertical, horizontal)
         gapFilterType: 'all',
+        // Filter type for layout (all, width, height, fill, hug)
+        layoutFilterType: 'all',
+        // Filter type for effects (all, x, y, blur, spread, color)
+        effectsFilterType: 'all',
         tokenScanOptions: [
           {
             value: 'typography',
@@ -210,6 +214,24 @@ function initializeApp() {
             icon: 'stroke'
           },
           {
+            value: 'layout',
+            label: 'Layout Dimensions',
+            description: 'Find common width and height values in layouts',
+            icon: 'layout'
+          },
+          {
+            value: 'opacity',
+            label: 'Appearance',
+            description: 'Find layers with unlinked element opacity values',
+            icon: 'opacity'
+          },
+          {
+            value: 'effects',
+            label: 'Effects',
+            description: 'Find layers with unlinked effect properties (shadows, blur, etc.)',
+            icon: 'effects'
+          },
+          {
             value: 'team-library',
             label: 'Team Library Variables',
             description: 'Find all elements using team library variables',
@@ -251,7 +273,8 @@ function initializeApp() {
           { value: 'spacing', label: 'Spacing' },
           { value: 'radius', label: 'Corner Radius' },
           { value: 'effect', label: 'Effects' },
-          { value: 'layout', label: 'Layout' }
+          { value: 'layout', label: 'Layout' },
+          { value: 'opacity', label: 'Opacity' }
         ],
         isLoadingVariables: false,
         selectedVariableId: null,
@@ -301,7 +324,8 @@ function initializeApp() {
           { value: 'spacing', label: 'Spacing' },
           { value: 'radius', label: 'Corner Radius' },
           { value: 'effect', label: 'Effects' },
-          { value: 'layout', label: 'Layout' }
+          { value: 'layout', label: 'Layout' },
+          { value: 'opacity', label: 'Opacity' }
         ],
       }
     },
@@ -471,7 +495,7 @@ function initializeApp() {
         for (const [key, group] of Object.entries(this.groupedReferences)) {
           if (group && (group.refs || Array.isArray(group))) {
             // Handle both formats (object with refs array or direct array)
-            const refs = group.refs || group;
+            let refs = group.refs || group;
             
             // Only include group if it has valid references
             if (Array.isArray(refs) && refs.length > 0) {
@@ -509,6 +533,49 @@ function initializeApp() {
                 } else {
                   console.log(`Including group ${key} with type ${variableType}, matches selected filter: ${this.selectedVariableTypeFilter}`);
                 }
+              }
+              
+              // Apply layout filters if needed
+              if (this.selectedScanType === 'layout' && this.layoutFilterType !== 'all') {
+                const filteredLayoutRefs = refs.filter(ref => {
+                  // Skip if not a layout reference
+                  if (ref.type !== 'layout') return false;
+                  
+                  // Filter by dimension type (width/height)
+                  if (this.layoutFilterType === 'width' && ref.dimensionType !== 'width') return false;
+                  if (this.layoutFilterType === 'height' && ref.dimensionType !== 'height') return false;
+                  
+                  // Filter by sizing mode (fill/hug)
+                  if (this.layoutFilterType === 'fill' && ref.layoutSizingMode !== 'fill') return false;
+                  if (this.layoutFilterType === 'hug' && ref.layoutSizingMode !== 'hug') return false;
+                  
+                  return true;
+                });
+                
+                // Skip empty groups after filtering
+                if (filteredLayoutRefs.length === 0) continue;
+                
+                // Use filtered refs
+                refs = filteredLayoutRefs;
+              }
+              
+              // Apply effects filters if needed
+              if (this.selectedScanType === 'effects' && this.effectsFilterType !== 'all') {
+                const filteredEffectsRefs = refs.filter(ref => {
+                  // Skip if not an effects reference
+                  if (ref.type !== 'effects') return false;
+                  
+                  // Filter by effect property type
+                  if (ref.effectProperty !== this.effectsFilterType) return false;
+                  
+                  return true;
+                });
+                
+                // Skip empty groups after filtering
+                if (filteredEffectsRefs.length === 0) continue;
+                
+                // Use filtered refs
+                refs = filteredEffectsRefs;
               }
               
               // Create a proper group object
@@ -661,9 +728,11 @@ function initializeApp() {
       },
       designTokenOptions() {
         // Filter for standard design token options (typography, spacing, padding, radius, colors)
-        return this.tokenScanOptions.filter(option => 
-          ['typography', 'gap', 'horizontal-padding', 'vertical-padding', 'corner-radius', 'fill', 'stroke'].includes(option.value)
+        const options = this.tokenScanOptions.filter(option => 
+          ['typography', 'gap', 'horizontal-padding', 'vertical-padding', 'corner-radius', 'fill', 'stroke', 'layout'].includes(option.value)
         );
+        console.log('Design token options:', options.map(o => o.value));
+        return options;
       },
       libraryVariableOptions() {
         // Filter for library-related options
@@ -704,66 +773,45 @@ function initializeApp() {
       
       // Token options filtered based on selected source type
       filteredTokenOptions() {
-        if (!this.selectedSourceType) return [];
+        console.log(`Getting filtered token options for source: ${this.selectedSourceType}`);
         
-        // All token types available for selection
-        const allTokenTypes = [
-          {
-            value: 'typography',
-            label: 'Typography',
-            description: 'Find text styles, font properties and type settings',
-            icon: 'typography'
-          },
-          {
-            value: 'fill',
-            label: 'Fill Colors',
-            description: 'Find fill colors in shapes, frames and components',
-            icon: 'fill'
-          },
-          {
-            value: 'stroke',
-            label: 'Stroke Colors',
-            description: 'Find stroke/border colors in elements',
-            icon: 'stroke'
-          },
-          {
-            value: 'corner-radius',
-            label: 'Corner Radius',
-            description: 'Find border radius and corner smoothing',
-            icon: 'radius'
-          },
-          {
-            value: 'gap',
-            label: 'Gap',
-            description: 'Find vertical auto-layout gap spacing',
-            icon: 'spacing'
-          },
-          {
-            value: 'horizontal-padding',
-            label: 'Horizontal Padding',
-            description: 'Find left and right padding in auto-layout',
-            icon: 'spacing-horizontal'
-          },
-          {
-            value: 'vertical-padding',
-            label: 'Vertical Padding',
-            description: 'Find top and bottom padding in auto-layout',
-            icon: 'spacing-vertical'
-          }
-        ];
-        
-        // For raw values, return standard design tokens
-        if (this.selectedSourceType === 'raw-values') {
-          return allTokenTypes;
+        // If no source type selected, return empty array
+        if (!this.selectedSourceType) {
+          return [];
         }
         
-        // For library source types, return all token types with the correct source prefix
-        // This will use the source type as the scan type and the token type will be handled in the backend
-        return allTokenTypes.map(tokenType => ({
-          ...tokenType,
-          value: `${this.selectedSourceType}-${tokenType.value}`,
-          description: `Find ${tokenType.label.toLowerCase()} using ${this.getSourceTypeLabel(this.selectedSourceType)} variables`
-        }));
+        // For raw-values source, filter by raw values options
+        if (this.selectedSourceType === 'raw-values') {
+          return this.tokenScanOptions.filter(option => {
+            // Include specific raw value types
+            return ['typography', 'gap', 'horizontal-padding', 'vertical-padding', 
+                    'corner-radius', 'fill', 'stroke', 'layout', 'opacity', 'effects'].includes(option.value);
+          });
+        }
+        
+        // For team-library source, return only team library option
+        if (this.selectedSourceType === 'team-library') {
+          return this.tokenScanOptions.filter(option => 
+            option.value === 'team-library'
+          );
+        }
+        
+        // For local-library source, return only local library option
+        if (this.selectedSourceType === 'local-library') {
+          return this.tokenScanOptions.filter(option => 
+            option.value === 'local-library'
+          );
+        }
+        
+        // For missing-library source, return only missing library option
+        if (this.selectedSourceType === 'missing-library') {
+          return this.tokenScanOptions.filter(option => 
+            option.value === 'missing-library'
+          );
+        }
+        
+        // Default fallback - return all options
+        return this.tokenScanOptions;
       },
     },
     methods: {
@@ -1432,54 +1480,71 @@ function initializeApp() {
       
       // Add the formatValue function
       formatValue(value) {
-        if (value === undefined || value === null) {
-          return 'N/A';
+        // Handle null, undefined, or empty values
+        if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) {
+          return 'None';
         }
         
-        // Handle different types of values
-        if (typeof value === 'object') {
-          // Special handling for objects
-          if (value.libraryName !== undefined || value.variableName !== undefined) {
-            // It's a library variable reference - just return the variable name only
-            if (value.variableName) {
+        try {
+          // Handle string values
+          if (typeof value === 'string') {
+            return value;
+          }
+          
+          // Handle number values - these are often spacing, padding, radius
+          if (typeof value === 'number') {
+            // Format as pixel value for UI display
+            return `${value}px`;
+          }
+          
+          // Handle opacity values
+          if (typeof value === 'number' && value >= 0 && value <= 1 && String(value).includes('.')) {
+            // Format as percentage for opacity values
+            return `${Math.round(value * 100)}%`;
+          }
+          
+          // Handle boolean values
+          if (typeof value === 'boolean') {
+            return value ? 'Yes' : 'No';
+          }
+          
+          // Handle color values
+          if (typeof value === 'object' && value !== null) {
+            // Check if it's a color (has r, g, b properties)
+            if ('r' in value && 'g' in value && 'b' in value) {
+              const r = Math.round(value.r * 255);
+              const g = Math.round(value.g * 255);
+              const b = Math.round(value.b * 255);
+              const a = value.a || 1;
+              
+              // For full opacity, just show RGB
+              if (a === 1) {
+                return `RGB(${r}, ${g}, ${b})`;
+              }
+              // For partial opacity, show RGBA
+              return `RGBA(${r}, ${g}, ${b}, ${a.toFixed(2)})`;
+            }
+            
+            // Check for variable references
+            if ('variableName' in value) {
               return value.variableName;
             }
-            // Only if variableName is missing, then show library name
-            if (value.libraryName) {
-              return 'Variable from ' + value.libraryName;
+            
+            // Check for typography values
+            if ('fontFamily' in value || 'fontSize' in value) {
+              return this.formatTypographyValue(value);
             }
-            return 'Unknown variable';
+            
+            // Handle other object values by serializing them
+            return JSON.stringify(value);
           }
           
-          // Special handling for color objects
-          if (value.r !== undefined && value.g !== undefined && value.b !== undefined) {
-            const r = Math.round(value.r * 255);
-            const g = Math.round(value.g * 255);
-            const b = Math.round(value.b * 255);
-            const a = value.a !== undefined ? value.a.toFixed(2) : 1;
-            return `RGBA(${r}, ${g}, ${b}, ${a})`;
-          }
-          
-          // Default object handling - stringify but limit length
-          try {
-            const str = JSON.stringify(value);
-            return str.length > 50 ? str.substring(0, 47) + '...' : str;
-          } catch (e) {
-            return '[Complex Object]';
-          }
+          // Default case - convert to string
+          return String(value);
+        } catch (err) {
+          console.warn('Error formatting value:', err);
+          return 'Error';
         }
-        
-        // Handle basic types
-        if (typeof value === 'string') {
-          return value.length > 50 ? value.substring(0, 47) + '...' : value;
-        }
-        
-        if (typeof value === 'number') {
-          return value.toLocaleString();
-        }
-        
-        // Default - convert to string
-        return String(value);
       },
       
       formatTypographyValue(value) {
@@ -2078,6 +2143,14 @@ function initializeApp() {
       },
       setGapFilter(type) {
         this.gapFilterType = type;
+      },
+      // Add layout filter method
+      setLayoutFilter(type) {
+        this.layoutFilterType = type;
+      },
+      // Add effects filter method  
+      setEffectsFilter(type) {
+        this.effectsFilterType = type;
       },
       // Add toggleGroup method
       toggleGroup(groupKey) {

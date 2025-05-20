@@ -41,6 +41,11 @@ export const VARIABLE_TYPE_CATEGORIES: VariableTypeMetadata[] = [
     type: 'layout',
     displayName: 'Layout',
     properties: ['width', 'height', 'layoutMode', 'layoutAlign', 'layoutGrow']
+  },
+  {
+    type: 'opacity',
+    displayName: 'Opacity',
+    properties: ['opacity', 'fillOpacity', 'strokeOpacity', 'effectOpacity']
   }
 ];
 

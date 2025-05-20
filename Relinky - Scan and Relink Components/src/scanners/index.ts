@@ -14,6 +14,9 @@ import { scanForPadding, groupPaddingResults } from './padding';
 import { scanForCornerRadius, groupCornerRadiusResults } from './radius';
 import { scanForColors, groupColorResults } from './color';
 import { scanForTypography, groupTypographyResults } from './typography';
+import { scanForLayoutDimensions, groupLayoutResults } from './layout';
+import { scanForAppearance, groupAppearanceResults } from './appearance';
+import { scanForEffects, groupEffectsResults } from './effects';
 
 // Export all scanner functions
 export * from './raw-values';
@@ -25,30 +28,33 @@ export * from './padding';
 export * from './radius';
 export * from './color';
 export * from './typography';
+export * from './layout';
+export * from './appearance';
+export * from './effects';
 
-// Scan cancellation flag
-let isScanCancelled = false;
-
-/**
- * Cancel any ongoing scan by setting the cancellation flag
- */
-export function cancelScan(): void {
-  isScanCancelled = true;
-  console.log('Scan cancelled');
-}
+// Cancellation flag for stopping scans
+let scanCancelled = false;
 
 /**
- * Check if scan is cancelled
+ * Check if scan has been cancelled
+ * @returns True if scan has been cancelled
  */
 export function isScancelled(): boolean {
-  return isScanCancelled;
+  return scanCancelled;
 }
 
 /**
- * Reset cancellation flag (called before starting a new scan)
+ * Reset cancellation flag
  */
 export function resetCancellation(): void {
-  isScanCancelled = false;
+  scanCancelled = false;
+}
+
+/**
+ * Cancel an ongoing scan
+ */
+export function cancelScan(): void {
+  scanCancelled = true;
 }
 
 /**
@@ -86,135 +92,148 @@ export function getFontWeightFromNode(node: TextNode): number {
 }
 
 /**
- * Run the appropriate scanner based on the source type and scan type
- * 
- * @param sourceType - The type of scanner to run
- * @param scanType - The type of scan to perform
- * @param selectedFrameIds - Array of frame IDs to scan
- * @param progressCallback - Callback for scan progress
- * @param ignoreHiddenLayers - Whether to ignore hidden layers
- * @param variableTypes - Array of variable types to filter by (optional)
- * @returns Promise<MissingReference[]> - Scan results
+ * Run a scanner based on source type and scan type
+ * @param sourceType Source type for the scan
+ * @param scanType Specific type of scan to run
+ * @param selectedFrameIds IDs of selected frames to scan (empty for entire page)
+ * @param progressCallback Function to call with progress updates
+ * @param ignoreHiddenLayers Whether to ignore hidden layers
+ * @param variableTypes Array of variable types to filter by
+ * @returns Array of scan results
  */
 export async function runScanner(
-  sourceType: 'raw-values' | 'team-library' | 'local-library' | 'missing-library',
+  sourceType: string,
   scanType: ScanType,
   selectedFrameIds: string[] = [],
-  progressCallback: (progress: number) => void = () => {},
+  progressCallback?: (progress: number) => void,
   ignoreHiddenLayers: boolean = false,
   variableTypes: string[] = []
 ): Promise<MissingReference[]> {
-  console.log(`Running ${sourceType} scanner with scan type ${scanType}`);
-  
-  // Reset cancellation flag before starting new scan
+  // Reset cancellation flag
   resetCancellation();
-  
-  // Handle different source types
+
+  // Default progress callback if none provided
+  const progressHandler = progressCallback || ((progress: number) => {
+    // No-op if no callback provided
+  });
+
+  // Get nodes to scan based on selection
+  let nodesToScan: SceneNode[] = [];
+  if (selectedFrameIds.length > 0) {
+    // Get selected nodes and their children
+    const selectedFrames = await Promise.all(
+      selectedFrameIds.map(id => figma.getNodeByIdAsync(id))
+    );
+
+    // Filter to valid frame types and get all descendants
+    const validFrames = selectedFrames
+      .filter((node): node is FrameNode | ComponentNode | ComponentSetNode | SectionNode =>
+        node !== null &&
+        (node.type === 'FRAME' || node.type === 'COMPONENT' || node.type === 'COMPONENT_SET' || node.type === 'SECTION')
+      );
+
+    // Collect all nodes to scan
+    for (const frame of validFrames) {
+      nodesToScan.push(frame);
+      // Only add descendants if they're visible or we're not ignoring hidden layers
+      if (!ignoreHiddenLayers || ('visible' in frame && frame.visible)) {
+        nodesToScan = [...nodesToScan, ...frame.findAll(node =>
+          !ignoreHiddenLayers || ('visible' in node && node.visible)
+        )];
+      }
+    }
+  } else {
+    // Scan entire page
+    nodesToScan = figma.currentPage.findAll(node =>
+      !ignoreHiddenLayers || ('visible' in node && node.visible)
+    );
+  }
+
+  console.log(`Using scanner: ${sourceType} - ${scanType} on ${nodesToScan.length} nodes`);
+
+  // Run the appropriate scanner based on source type and scan type
   switch (sourceType) {
     case 'raw-values':
-      // For raw values, we need to select the appropriate specialized scanner based on scanType
       switch (scanType) {
         case 'gap':
-          return scanForGap(scanType, selectedFrameIds, progressCallback, ignoreHiddenLayers);
-        
+          return scanForGap('gap', selectedFrameIds, progressHandler, ignoreHiddenLayers);
         case 'horizontal-padding':
         case 'vertical-padding':
-          return scanForPadding(scanType, selectedFrameIds, progressCallback, ignoreHiddenLayers);
-        
+          return scanForPadding(scanType, selectedFrameIds, progressHandler, ignoreHiddenLayers);
         case 'corner-radius':
-          return scanForCornerRadius(scanType, selectedFrameIds, progressCallback, ignoreHiddenLayers);
-        
+          return scanForCornerRadius('corner-radius', selectedFrameIds, progressHandler, ignoreHiddenLayers);
         case 'fill':
         case 'stroke':
-          return scanForColors(scanType, selectedFrameIds, progressCallback, ignoreHiddenLayers);
-        
+          return scanForColors(scanType, selectedFrameIds, progressHandler, ignoreHiddenLayers);
         case 'typography':
-          return scanForTypography(scanType, selectedFrameIds, progressCallback, ignoreHiddenLayers);
-        
+          return scanForTypography('typography', selectedFrameIds, progressHandler, ignoreHiddenLayers);
+        case 'layout':
+          return scanForLayoutDimensions(progressHandler, nodesToScan, ignoreHiddenLayers, variableTypes);
+        case 'opacity':
+          return scanForAppearance('opacity', selectedFrameIds, progressHandler, ignoreHiddenLayers);
+        case 'effects':
+          return scanForEffects('effects', selectedFrameIds, progressHandler, ignoreHiddenLayers);
         default:
-          // Default to raw values scanner
-          return scanForRawValues(scanType, selectedFrameIds, progressCallback, ignoreHiddenLayers);
+          return scanForRawValues(scanType, selectedFrameIds, progressHandler, ignoreHiddenLayers);
       }
-    
     case 'team-library':
-      return scanForTeamLibraryVariables(progressCallback, selectedFrameIds, ignoreHiddenLayers);
-    
+      return scanForTeamLibraryVariables(progressHandler, selectedFrameIds, ignoreHiddenLayers);
     case 'local-library':
-      return scanForLocalLibraryVariables(progressCallback, selectedFrameIds, ignoreHiddenLayers);
-    
+      return scanForLocalLibraryVariables(progressHandler, selectedFrameIds, ignoreHiddenLayers);
     case 'missing-library':
-      // Pass the variableTypes to the missing library scanner
-      const missingLibResult = await scanForMissingLibraryVariables(progressCallback, selectedFrameIds, ignoreHiddenLayers, variableTypes);
-      return missingLibResult.results;
-    
+      return scanForMissingLibraryVariables(progressHandler, selectedFrameIds, ignoreHiddenLayers, variableTypes)
+        .then(result => result.results);
     default:
-      console.error(`Unknown scanner type: ${sourceType}`);
+      console.error(`Unknown scanner source type: ${sourceType}`);
       return [];
   }
 }
 
 /**
- * Group scan results based on the source type and scan type
- * 
- * @param sourceType - The type of scanner that produced the results
- * @param results - Array of scan results to group
- * @returns Record<string, MissingReference[]> - Grouped results
+ * Group scan results based on source type
+ * @param sourceType Source type for the scan
+ * @param results Scan results to group
+ * @returns Grouped results
  */
 export function groupScanResults(
-  sourceType: 'raw-values' | 'team-library' | 'local-library' | 'missing-library',
+  sourceType: string,
   results: MissingReference[]
 ): Record<string, MissingReference[]> {
-  console.log(`Grouping ${results.length} results from ${sourceType} scanner`);
-  
-  // First check if results array is empty
-  if (results.length === 0) {
+  // For empty results, return empty object
+  if (!results || results.length === 0) {
     return {};
   }
   
-  // Get the scan type from the first result
-  const firstResult = results[0];
-  const scanType = firstResult.type || '';
-  
-  // Handle different source types
   switch (sourceType) {
     case 'raw-values':
-      // Group by specific scan type
-      switch (scanType) {
-        case 'gap':
-        case 'verticalGap':
-        case 'horizontalGap':
-          return groupGapResults(results as any);
-        
-        case 'horizontalPadding':
-        case 'verticalPadding':
-          return groupPaddingResults(results);
-        
-        case 'cornerRadius':
-          return groupCornerRadiusResults(results);
-        
-        case 'fill':
-        case 'stroke':
-          return groupColorResults(results);
-        
-        case 'typography':
-          return groupTypographyResults(results);
-        
-        default:
-          // Default to raw values grouping
-          return groupRawValueResults(results);
+      if (results.some(ref => ref.type === 'gap')) {
+        // Type assertion to handle the specific return type
+        return groupGapResults(results as any);
+      } else if (results.some(ref => ref.type === 'horizontal-padding' || ref.type === 'vertical-padding')) {
+        return groupPaddingResults(results as any);
+      } else if (results.some(ref => ref.type === 'corner-radius')) {
+        return groupCornerRadiusResults(results as any);
+      } else if (results.some(ref => ref.type === 'fill' || ref.type === 'stroke' || ref.type === 'color')) {
+        return groupColorResults(results);
+      } else if (results.some(ref => ref.type === 'typography')) {
+        return groupTypographyResults(results);
+      } else if (results.some(ref => ref.type === 'layout')) {
+        return groupLayoutResults(results);
+      } else if (results.some(ref => ref.type === 'opacity')) {
+        return groupAppearanceResults(results as any);
+      } else if (results.some(ref => ref.type === 'effects')) {
+        return groupEffectsResults(results as any);
+      } else {
+        return groupRawValueResults(results);
       }
-    
     case 'team-library':
-      return groupTeamLibraryResults(results);
-    
+      return groupTeamLibraryResults(results as any);
     case 'local-library':
-      return groupLocalLibraryResults(results);
-    
+      return groupLocalLibraryResults(results as any);
     case 'missing-library':
-      return groupMissingLibraryResults(results);
-    
+      return groupMissingLibraryResults(results as any);
     default:
-      console.error(`Unknown scanner type for grouping: ${sourceType}`);
+      console.error(`Unknown group source type: ${sourceType}`);
       return {};
   }
 }

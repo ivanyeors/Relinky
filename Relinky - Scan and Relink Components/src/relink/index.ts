@@ -22,6 +22,9 @@ import {
   isVariableBinding,
 } from '../common';
 
+// Import scanners from scanners module
+import { scanForLayoutDimensions } from '../scanners';
+
 // Global variable to allow cancellation of scanning
 let isScanCancelled = false;
 
@@ -31,6 +34,7 @@ interface ExtendedMissingReference extends MissingReference {
   value?: any;
   paddingType?: string;
   cornerType?: string;
+  dimensionType?: string; // Add dimension type for layout scanning
 }
 
 /**
@@ -1256,6 +1260,9 @@ export function groupMissingReferences(references: MissingReference[]): Record<s
       } else if (extRef.cornerType) {
         // For corner radius, group by value and corner type
         key = `${ref.type}-${extRef.cornerType}-${ref.currentValue}`;
+      } else if (extRef.dimensionType) {
+        // For layout dimensions, group by value and dimension type
+        key = `${ref.type}-${extRef.dimensionType}-${ref.currentValue}`;
       } else {
         // Default grouping for other types
         key = `${ref.type}-${ref.property}-${JSON.stringify(ref.currentValue)}`;
@@ -1460,6 +1467,13 @@ export async function scanForMissingReferences(
         break;
       case 'typography':
         refs = await scanForTextTokens(
+          progress => progressCallback?.(progress),
+          nodesToScan,
+          ignoreHiddenLayers
+        );
+        break;
+      case 'layout':
+        refs = await scanForLayoutDimensions(
           progress => progressCallback?.(progress),
           nodesToScan,
           ignoreHiddenLayers

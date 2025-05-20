@@ -351,10 +351,22 @@
                       Horizontal padding values found in your design. Use filters to see specific padding types.
                     </p>
                     <p v-else-if="selectedScanType === 'gap'" class="text-secondary">
-                      Gap values found in your design. Use filters to see specific gap types.
+                      These frames have gaps in auto-layout that are using raw values instead of variables. 
+                      Select a group to update them all at once.
+                    </p>
+                    <p v-else-if="selectedScanType === 'opacity'" class="text-secondary">
+                      These layers are using raw opacity values instead of variables. 
+                      This includes element opacity, fill opacity, stroke opacity, and effect opacity.
+                      Select a group to update them all at once.
+                    </p>
+                    <p v-else-if="selectedScanType === 'effects'" class="text-secondary">
+                      These layers have effect properties (shadows, blur, etc.) using raw values instead of variables.
+                      This includes X/Y positions, blur radius, spread, and colors.
+                      Select a group to update them all at once.
                     </p>
                     <p v-else class="text-secondary">
-                      Select groups to see where these values are used and select nodes.
+                      The selected values are used directly in the design instead of being linked to variables.
+                      Select a group to update them all at once.
                     </p>
                   </div>
                   
@@ -451,6 +463,25 @@
                     <button class="filter-btn" :class="{ active: radiusFilterType === 'bottom-right' }" @click="setRadiusFilter('bottom-right')">
                       <span class="icon" v-html="icons['radius-bottom-right']"></span>
                     </button>
+                  </div>
+                  
+                  <!-- Layout Filter (Only shows with layout scan type) -->
+                  <div id="layout-filter" v-if="selectedScanType === 'layout'" class="padding-filter">
+                    <button class="filter-btn" :class="{ active: layoutFilterType === 'all' }" @click="setLayoutFilter('all')">All Dimensions</button>
+                    <button class="filter-btn" :class="{ active: layoutFilterType === 'width' }" @click="setLayoutFilter('width')">Width Values</button>
+                    <button class="filter-btn" :class="{ active: layoutFilterType === 'height' }" @click="setLayoutFilter('height')">Height Values</button>
+                    <button class="filter-btn" :class="{ active: layoutFilterType === 'fill' }" @click="setLayoutFilter('fill')">Fill Container</button>
+                    <button class="filter-btn" :class="{ active: layoutFilterType === 'hug' }" @click="setLayoutFilter('hug')">Hug Contents</button>
+                  </div>
+
+                  <!-- Effects Filter (Only shows with effects scan type) -->
+                  <div id="effects-filter" v-if="selectedScanType === 'effects'" class="padding-filter">
+                    <button class="filter-btn" :class="{ active: effectsFilterType === 'all' }" @click="setEffectsFilter('all')">All Effects</button>
+                    <button class="filter-btn" :class="{ active: effectsFilterType === 'x' }" @click="setEffectsFilter('x')">X Position</button>
+                    <button class="filter-btn" :class="{ active: effectsFilterType === 'y' }" @click="setEffectsFilter('y')">Y Position</button>
+                    <button class="filter-btn" :class="{ active: effectsFilterType === 'blur' }" @click="setEffectsFilter('blur')">Blur Radius</button>
+                    <button class="filter-btn" :class="{ active: effectsFilterType === 'spread' }" @click="setEffectsFilter('spread')">Spread</button>
+                    <button class="filter-btn" :class="{ active: effectsFilterType === 'color' }" @click="setEffectsFilter('color')">Color</button>
                   </div>
 
                   <!-- Results Container -->
