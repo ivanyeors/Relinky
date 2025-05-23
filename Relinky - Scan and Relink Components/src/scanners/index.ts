@@ -8,7 +8,6 @@ import { ScanType, MissingReference } from '../common';
 import { scanForRawValues, groupRawValueResults } from './raw-values';
 import { scanForTeamLibraryVariables, groupTeamLibraryResults } from './team-library';
 import { scanForLocalLibraryVariables, groupLocalLibraryResults } from './local-library';
-import { scanForMissingLibraryVariables, groupMissingLibraryResults } from './missing-library';
 import { scanForDeletedVariables, groupDeletedVariableResults } from './deleted-variables';
 import { scanForGap, groupGapResults } from './gap';
 import { scanForPadding, groupPaddingResults } from './padding';
@@ -32,18 +31,14 @@ export * from './layout';
 export * from './appearance';
 export * from './effects';
 
-// Explicitly export from missing-library
+// Explicitly export from deleted-variables (formerly missing-library)
 export { 
-  scanForMissingLibraryVariables, 
-  groupMissingLibraryResults 
-} from './missing-library';
-
-// Explicitly export from deleted-variables
-export { 
-  scanForDeletedVariables, 
-  groupDeletedVariableResults, 
+  scanForDeletedVariables as scanForMissingLibraryVariables, 
+  groupDeletedVariableResults as groupMissingLibraryResults,
+  // Also export with original names for backward compatibility
+  scanForDeletedVariables,
+  groupDeletedVariableResults,
   // Re-export the VariableTypeMetadata interface and VARIABLE_TYPE_CATEGORIES 
-  // from deleted-variables as they have the same structure as in missing-library
   VariableTypeMetadata,
   VARIABLE_TYPE_CATEGORIES
 } from './deleted-variables';
@@ -143,17 +138,42 @@ export async function runScanner(
 
     // Filter to valid frame types and get all descendants
     const validFrames = selectedFrames
-      .filter((node): node is FrameNode | ComponentNode | ComponentSetNode | SectionNode =>
+      .filter((node): node is SceneNode =>
         node !== null &&
-        (node.type === 'FRAME' || node.type === 'COMPONENT' || node.type === 'COMPONENT_SET' || node.type === 'SECTION')
+        // Support ALL SceneNode types that can be meaningfully scanned
+        (node.type === 'FRAME' || 
+         node.type === 'COMPONENT' || 
+         node.type === 'COMPONENT_SET' ||
+         node.type === 'INSTANCE' ||
+         node.type === 'GROUP' ||
+         node.type === 'SECTION' ||
+         node.type === 'RECTANGLE' ||
+         node.type === 'ELLIPSE' ||
+         node.type === 'POLYGON' ||
+         node.type === 'STAR' ||
+         node.type === 'VECTOR' ||
+         node.type === 'LINE' ||
+         node.type === 'TEXT' ||
+         node.type === 'BOOLEAN_OPERATION' ||
+         node.type === 'SLICE' ||
+         node.type === 'CONNECTOR' ||
+         node.type === 'WIDGET' ||
+         node.type === 'EMBED' ||
+         node.type === 'LINK_UNFURL' ||
+         node.type === 'MEDIA' ||
+         node.type === 'STICKY' ||
+         node.type === 'SHAPE_WITH_TEXT' ||
+         node.type === 'CODE_BLOCK')
       );
 
     // Collect all nodes to scan
     for (const frame of validFrames) {
       nodesToScan.push(frame);
       // Only add descendants if they're visible or we're not ignoring hidden layers
-      if (!ignoreHiddenLayers || ('visible' in frame && frame.visible)) {
-        nodesToScan = [...nodesToScan, ...frame.findAll(node =>
+      // Also check if the node has children (container nodes)
+      if ((!ignoreHiddenLayers || ('visible' in frame && frame.visible)) &&
+          ('children' in frame)) {
+        nodesToScan = [...nodesToScan, ...frame.findAll((node: SceneNode) =>
           !ignoreHiddenLayers || ('visible' in node && node.visible)
         )];
       }
@@ -197,7 +217,7 @@ export async function runScanner(
     case 'local-library':
       return scanForLocalLibraryVariables(progressHandler, selectedFrameIds, ignoreHiddenLayers);
     case 'missing-library':
-      return scanForMissingLibraryVariables(progressHandler, selectedFrameIds, ignoreHiddenLayers, variableTypes)
+      return scanForDeletedVariables(progressHandler, selectedFrameIds, ignoreHiddenLayers, variableTypes)
         .then(result => result.results);
     case 'deleted-variables':
       return scanForDeletedVariables(progressHandler, selectedFrameIds, ignoreHiddenLayers, variableTypes)
@@ -250,7 +270,7 @@ export function groupScanResults(
     case 'local-library':
       return groupLocalLibraryResults(results as any);
     case 'missing-library':
-      return groupMissingLibraryResults(results as any);
+      return groupDeletedVariableResults(results as any);
     case 'deleted-variables':
       return groupDeletedVariableResults(results as any);
     default:

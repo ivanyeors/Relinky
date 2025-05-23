@@ -917,4 +917,52 @@ export function groupMissingReferences(missingRefs: MissingReference[]): Record<
   });
   
   return grouped;
+}
+
+/**
+ * Check if a node is a scannable SceneNode type
+ * This includes all node types that can have properties scanned (effects, fills, typography, etc.)
+ * @param node The node to check
+ * @returns True if the node is a scannable type
+ */
+export function isScannableNodeType(node: BaseNode | null): node is SceneNode {
+  if (!node || !('type' in node)) {
+    return false;
+  }
+  
+  // Support ALL SceneNode types that can be meaningfully scanned
+  return (
+    node.type === 'FRAME' || 
+    node.type === 'COMPONENT' || 
+    node.type === 'COMPONENT_SET' ||
+    node.type === 'INSTANCE' ||
+    node.type === 'GROUP' ||
+    node.type === 'SECTION' ||
+    node.type === 'RECTANGLE' ||
+    node.type === 'ELLIPSE' ||
+    node.type === 'POLYGON' ||
+    node.type === 'STAR' ||
+    node.type === 'VECTOR' ||
+    node.type === 'LINE' ||
+    node.type === 'TEXT' ||
+    node.type === 'BOOLEAN_OPERATION' ||
+    node.type === 'SLICE' ||
+    node.type === 'CONNECTOR' ||
+    node.type === 'WIDGET' ||
+    node.type === 'EMBED' ||
+    node.type === 'LINK_UNFURL' ||
+    node.type === 'MEDIA' ||
+    node.type === 'STICKY' ||
+    node.type === 'SHAPE_WITH_TEXT' ||
+    node.type === 'CODE_BLOCK'
+  );
+}
+
+/**
+ * Filter an array of nodes to only include scannable types
+ * @param nodes Array of nodes to filter
+ * @returns Array containing only scannable nodes
+ */
+export function filterScannableNodes(nodes: readonly BaseNode[]): SceneNode[] {
+  return nodes.filter(isScannableNodeType);
 } 

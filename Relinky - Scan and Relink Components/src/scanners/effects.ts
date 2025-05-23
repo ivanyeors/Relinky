@@ -44,24 +44,77 @@ export async function scanForEffects(
   
   // Determine which nodes to scan
   if (selectedFrameIds && selectedFrameIds.length > 0) {
-    // Get selected nodes from IDs - now supporting all node types
-    nodesToScan = await Promise.all(
+    // Get selected nodes from IDs - now supporting ALL node types that can have effects
+    const selectedNodes = await Promise.all(
       selectedFrameIds.map(id => figma.getNodeByIdAsync(id))
     ).then(nodes => nodes.filter((node): node is SceneNode => 
       node !== null && 'type' in node && 
+      // Include ALL SceneNode types that can potentially have effects
       (node.type === 'FRAME' || 
        node.type === 'COMPONENT' || 
        node.type === 'COMPONENT_SET' ||
        node.type === 'INSTANCE' ||
        node.type === 'GROUP' ||
-       node.type === 'SECTION')
+       node.type === 'SECTION' ||
+       node.type === 'RECTANGLE' ||
+       node.type === 'ELLIPSE' ||
+       node.type === 'POLYGON' ||
+       node.type === 'STAR' ||
+       node.type === 'VECTOR' ||
+       node.type === 'LINE' ||
+       node.type === 'TEXT' ||
+       node.type === 'BOOLEAN_OPERATION' ||
+       node.type === 'SLICE' ||
+       node.type === 'CONNECTOR' ||
+       node.type === 'WIDGET' ||
+       node.type === 'EMBED' ||
+       node.type === 'LINK_UNFURL' ||
+       node.type === 'MEDIA' ||
+       node.type === 'STICKY' ||
+       node.type === 'SHAPE_WITH_TEXT' ||
+       node.type === 'CODE_BLOCK')
     ));
     
-    console.log('Scanning selected nodes:', nodesToScan.length, 'nodes of types:', nodesToScan.map(n => n.type).join(', '));
+    console.log('Found selected nodes:', selectedNodes.length, 'nodes of types:', selectedNodes.map(n => n.type).join(', '));
+    
+    // Collect ALL nodes to scan (including all descendants)
+    for (const selectedNode of selectedNodes) {
+      // Add the selected node itself
+      nodesToScan.push(selectedNode);
+      
+      // Add all descendants if the node has children and meets visibility criteria
+      if ('children' in selectedNode && selectedNode.children.length > 0) {
+        try {
+          // Use findAll to get ALL descendant nodes
+          const descendants = selectedNode.findAll((node: SceneNode) => {
+            // Apply visibility filter if needed
+            if (ignoreHiddenLayers && 'visible' in node && !node.visible) {
+              return false;
+            }
+            // Include all SceneNode types that can have effects
+            return 'effects' in node;
+          });
+          
+          console.log(`Adding ${descendants.length} descendants from ${selectedNode.name}`);
+          nodesToScan.push(...descendants);
+        } catch (error) {
+          console.warn(`Error collecting descendants from ${selectedNode.name}:`, error);
+        }
+      }
+    }
+    
+    console.log('Total nodes to scan (including descendants):', nodesToScan.length);
   } else {
-    // Fallback to current page
-    nodesToScan = Array.from(figma.currentPage.children);
-    console.log('Scanning entire page:', nodesToScan.length, 'top-level nodes');
+    // Fallback to current page - use findAll to get all nodes
+    nodesToScan = figma.currentPage.findAll((node: SceneNode) => {
+      // Apply visibility filter if needed
+      if (ignoreHiddenLayers && 'visible' in node && !node.visible) {
+        return false;
+      }
+      // Include all nodes that can have effects
+      return 'effects' in node;
+    });
+    console.log('Scanning entire page:', nodesToScan.length, 'nodes with effects capability');
   }
   
   // Check if scan was cancelled after getting nodes
@@ -78,23 +131,7 @@ export async function scanForEffects(
   
   // Total count for progress tracking
   let totalNodesProcessed = 0;
-  let totalNodesToProcess = 0;
-  
-  // Count total nodes to process for progress calculation
-  const countNodes = (node: SceneNode): number => {
-    let count = 1;
-    if ('children' in node) {
-      for (const child of node.children) {
-        count += countNodes(child as SceneNode);
-      }
-    }
-    return count;
-  };
-  
-  // Calculate total nodes for progress reporting
-  for (const node of nodesToScan) {
-    totalNodesToProcess += countNodes(node);
-  }
+  let totalNodesToProcess = nodesToScan.length; // Now we know the exact count upfront
   
   console.log(`Found ${totalNodesToProcess} total nodes to scan for ${scanType}`);
   
@@ -160,7 +197,7 @@ export async function scanForEffects(
     return propertyFilter === property || propertyFilter === 'all';
   }
   
-  // Process a single node
+  // Process a single node (no longer recursive since we have all nodes in the flat list)
   function processNode(node: SceneNode) {
     // Skip if we shouldn't include this node
     if (!shouldIncludeNode(node)) return;
@@ -170,9 +207,10 @@ export async function scanForEffects(
     
     // Update progress occasionally
     totalNodesProcessed++;
-    if (totalNodesProcessed % 100 === 0) {
+    if (totalNodesProcessed % 50 === 0 || totalNodesProcessed === totalNodesToProcess) {
       const progress = Math.min(totalNodesProcessed / totalNodesToProcess, 0.99);
       progressCallback(progress);
+      console.log(`Processing effects: ${totalNodesProcessed}/${totalNodesToProcess} nodes (${Math.round(progress * 100)}%)`);
     }
     
     // Safe check for effects property
@@ -182,20 +220,29 @@ export async function scanForEffects(
     
     // Skip if effects has a variable binding and is not raw
     if (!isRawValue(node, 'effects')) {
+      console.log(`Node ${node.name} has effects bound to variables, skipping`);
       return;
     }
+    
+    console.log(`Checking effects on node: ${node.name} (${node.type}) - found ${node.effects.length} effects`);
     
     // Process each effect
     for (let i = 0; i < node.effects.length; i++) {
       const effect = node.effects[i];
       
       // Skip if effect is not visible
-      if (!effect.visible) continue;
+      if (!effect.visible) {
+        console.log(`Effect ${i} on ${node.name} is not visible, skipping`);
+        continue;
+      }
+      
+      console.log(`Processing effect ${i} on ${node.name}: ${effect.type}`);
       
       // Process DROP_SHADOW effects
       if (effect.type === 'DROP_SHADOW' || effect.type === 'INNER_SHADOW') {
         // Check X position
         if (shouldIncludeProperty('x') && typeof effect.offset.x === 'number') {
+          console.log(`Found raw effect X offset: ${effect.offset.x} on ${node.name}`);
           results.push({
             nodeId: node.id,
             nodeName: node.name,
@@ -211,6 +258,7 @@ export async function scanForEffects(
         
         // Check Y position
         if (shouldIncludeProperty('y') && typeof effect.offset.y === 'number') {
+          console.log(`Found raw effect Y offset: ${effect.offset.y} on ${node.name}`);
           results.push({
             nodeId: node.id,
             nodeName: node.name,
@@ -226,6 +274,7 @@ export async function scanForEffects(
         
         // Check blur radius
         if (shouldIncludeProperty('blur') && typeof effect.radius === 'number') {
+          console.log(`Found raw effect blur radius: ${effect.radius} on ${node.name}`);
           results.push({
             nodeId: node.id,
             nodeName: node.name,
@@ -241,6 +290,7 @@ export async function scanForEffects(
         
         // Check spread (only for DROP_SHADOW and INNER_SHADOW)
         if (shouldIncludeProperty('spread') && typeof effect.spread === 'number') {
+          console.log(`Found raw effect spread: ${effect.spread} on ${node.name}`);
           results.push({
             nodeId: node.id,
             nodeName: node.name,
@@ -256,6 +306,7 @@ export async function scanForEffects(
         
         // Check color
         if (shouldIncludeProperty('color') && effect.color) {
+          console.log(`Found raw effect color on ${node.name}`);
           results.push({
             nodeId: node.id,
             nodeName: node.name,
@@ -279,6 +330,7 @@ export async function scanForEffects(
       else if (effect.type === 'LAYER_BLUR' || effect.type === 'BACKGROUND_BLUR') {
         // Check blur radius
         if (shouldIncludeProperty('blur') && typeof effect.radius === 'number') {
+          console.log(`Found raw blur effect radius: ${effect.radius} on ${node.name}`);
           results.push({
             nodeId: node.id,
             nodeName: node.name,
@@ -293,16 +345,9 @@ export async function scanForEffects(
         }
       }
     }
-    
-    // Process children recursively
-    if ('children' in node) {
-      for (const child of node.children) {
-        processNode(child as SceneNode);
-      }
-    }
   }
   
-  // Process all root nodes
+  // Process all nodes in the flat list (no longer recursive)
   for (const node of nodesToScan) {
     // Check if scan was cancelled
     if (isScancelled()) {
