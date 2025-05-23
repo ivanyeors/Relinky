@@ -139,6 +139,11 @@ function initializeApp() {
         isTokenScan: false, // Whether the scan was for tokens
         isLibraryVariableScan: false, // Whether the scan was for library variables
         ignoreHiddenLayers: false, // Whether to ignore hidden layers when scanning
+        // Progress animation state
+        scanStartTime: null, // Track when scan started
+        minAnimationDuration: 1500, // Minimum animation duration in ms
+        progressAnimationId: null, // Animation frame ID for smooth progress
+        actualProgress: 0, // Real scan progress from backend
         // Library token state
         hasLibraryResults: false,
         activeLibraryTokens: [],
@@ -897,6 +902,13 @@ function initializeApp() {
         // Set scanning state
         this.isScanning = true;
         this.scanProgress = 0;
+        this.actualProgress = 0;
+        
+        // Track scan start time for minimum animation duration
+        this.scanStartTime = Date.now();
+        
+        // Start smooth progress animation
+        this.startProgressAnimation();
         
         // Reset animation classes and scroll state
         const tokenTypeSection = document.querySelector('.token-type-section');
@@ -999,8 +1011,12 @@ function initializeApp() {
         // Log stop request
         console.log('Stopping scan...');
         
+        // Stop progress animation
+        this.stopProgressAnimation();
+        
         this.isScanning = false;
         this.scanComplete = true;
+        this.scanProgress = 100;
         
         try {
           parent.postMessage({
@@ -1015,9 +1031,35 @@ function initializeApp() {
       handleScanComplete(msg) {
         console.log('Scan complete - full message:', msg);
         
+        // Check if minimum animation duration has elapsed
+        const now = Date.now();
+        const elapsed = this.scanStartTime ? now - this.scanStartTime : this.minAnimationDuration;
+        const remainingTime = Math.max(0, this.minAnimationDuration - elapsed);
+        
+        // Set actual progress to 100%
+        this.actualProgress = 100;
+        
+        // If minimum duration hasn't elapsed, delay completion
+        if (remainingTime > 0) {
+          // Continue animation to 100% over remaining time
+          setTimeout(() => {
+            this.completeScan(msg);
+          }, remainingTime);
+        } else {
+          // Complete immediately if minimum duration has elapsed
+          this.completeScan(msg);
+        }
+      },
+      
+      // Complete the scan with all UI updates
+      completeScan(msg) {
+        // Stop progress animation
+        this.stopProgressAnimation();
+        
         // Update states
         this.isScanning = false;
         this.scanComplete = true;
+        this.scanProgress = 100;
         
         // Detailed logging for better debugging
         console.log('Message structure:', {
@@ -1443,10 +1485,65 @@ function initializeApp() {
       },
       handleScanProgress(msg) {
         if (msg && typeof msg.progress === 'number') {
-          this.scanProgress = Math.min(100, Math.max(0, msg.progress));
+          this.actualProgress = Math.min(100, Math.max(0, msg.progress));
           this.isScanning = msg.isScanning !== false;
         }
       },
+      
+      // Start smooth progress animation with minimum duration
+      startProgressAnimation() {
+        // Cancel any existing animation
+        if (this.progressAnimationId) {
+          cancelAnimationFrame(this.progressAnimationId);
+        }
+        
+        // Start the animation loop
+        this.animateProgress();
+      },
+      
+      // Smooth progress animation loop
+      animateProgress() {
+        if (!this.isScanning || !this.scanStartTime) {
+          return;
+        }
+        
+        const now = Date.now();
+        const elapsed = now - this.scanStartTime;
+        const minProgress = Math.min(95, (elapsed / this.minAnimationDuration) * 100);
+        
+        // Use the higher of actual progress or minimum time-based progress
+        // But never exceed actual progress if it's meaningful (> 5%)
+        let targetProgress;
+        if (this.actualProgress > 5) {
+          // If we have meaningful actual progress, use it but ensure minimum duration
+          targetProgress = Math.max(minProgress, this.actualProgress);
+        } else {
+          // If actual progress is minimal, use time-based progress
+          targetProgress = minProgress;
+        }
+        
+        // Smooth transition to target progress
+        const progressDiff = targetProgress - this.scanProgress;
+        if (Math.abs(progressDiff) > 0.1) {
+          this.scanProgress += progressDiff * 0.1; // Smooth easing
+        } else {
+          this.scanProgress = targetProgress;
+        }
+        
+        // Continue animation if still scanning
+        if (this.isScanning) {
+          this.progressAnimationId = requestAnimationFrame(() => this.animateProgress());
+        }
+      },
+      
+      // Stop progress animation
+      stopProgressAnimation() {
+        if (this.progressAnimationId) {
+          cancelAnimationFrame(this.progressAnimationId);
+          this.progressAnimationId = null;
+        }
+      },
+      
       selectScanType(value) {
         console.log(`Selected scan type: ${value}`);
         
@@ -2576,6 +2673,11 @@ function initializeApp() {
       
       // Initialize the variable type filter to 'all' by default
       this.selectedVariableTypeFilter = 'all';
+    },
+    
+    beforeUnmount() {
+      // Clean up animation frames to prevent memory leaks
+      this.stopProgressAnimation();
     }
   }).mount('#app');
 
