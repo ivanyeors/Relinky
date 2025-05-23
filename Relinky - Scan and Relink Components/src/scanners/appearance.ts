@@ -41,24 +41,77 @@ export async function scanForAppearance(
   
   // Determine which nodes to scan
   if (selectedFrameIds && selectedFrameIds.length > 0) {
-    // Get selected nodes from IDs - now supporting all node types
-    nodesToScan = await Promise.all(
+    // Get selected nodes from IDs - now supporting ALL node types that can have opacity
+    const selectedNodes = await Promise.all(
       selectedFrameIds.map(id => figma.getNodeByIdAsync(id))
     ).then(nodes => nodes.filter((node): node is SceneNode => 
       node !== null && 'type' in node && 
+      // Include ALL SceneNode types that can have opacity
       (node.type === 'FRAME' || 
        node.type === 'COMPONENT' || 
        node.type === 'COMPONENT_SET' ||
        node.type === 'INSTANCE' ||
        node.type === 'GROUP' ||
-       node.type === 'SECTION')
+       node.type === 'SECTION' ||
+       node.type === 'RECTANGLE' ||
+       node.type === 'ELLIPSE' ||
+       node.type === 'POLYGON' ||
+       node.type === 'STAR' ||
+       node.type === 'VECTOR' ||
+       node.type === 'LINE' ||
+       node.type === 'TEXT' ||
+       node.type === 'BOOLEAN_OPERATION' ||
+       node.type === 'SLICE' ||
+       node.type === 'CONNECTOR' ||
+       node.type === 'WIDGET' ||
+       node.type === 'EMBED' ||
+       node.type === 'LINK_UNFURL' ||
+       node.type === 'MEDIA' ||
+       node.type === 'STICKY' ||
+       node.type === 'SHAPE_WITH_TEXT' ||
+       node.type === 'CODE_BLOCK')
     ));
     
-    console.log('Scanning selected nodes:', nodesToScan.length, 'nodes of types:', nodesToScan.map(n => n.type).join(', '));
+    console.log('Found selected nodes:', selectedNodes.length, 'nodes of types:', selectedNodes.map(n => n.type).join(', '));
+    
+    // Collect ALL nodes to scan (including all descendants)
+    for (const selectedNode of selectedNodes) {
+      // Add the selected node itself
+      nodesToScan.push(selectedNode);
+      
+      // Add all descendants if the node has children and meets visibility criteria
+      if ('children' in selectedNode && selectedNode.children.length > 0) {
+        try {
+          // Use findAll to get ALL descendant nodes
+          const descendants = selectedNode.findAll((node: SceneNode) => {
+            // Apply visibility filter if needed
+            if (ignoreHiddenLayers && 'visible' in node && !node.visible) {
+              return false;
+            }
+            // Include all SceneNode types that can have opacity
+            return 'opacity' in node;
+          });
+          
+          console.log(`Adding ${descendants.length} descendants from ${selectedNode.name}`);
+          nodesToScan.push(...descendants);
+        } catch (error) {
+          console.warn(`Error collecting descendants from ${selectedNode.name}:`, error);
+        }
+      }
+    }
+    
+    console.log('Total nodes to scan (including descendants):', nodesToScan.length);
   } else {
-    // Fallback to current page
-    nodesToScan = Array.from(figma.currentPage.children);
-    console.log('Scanning entire page:', nodesToScan.length, 'top-level nodes');
+    // Fallback to current page - use findAll to get all nodes
+    nodesToScan = figma.currentPage.findAll((node: SceneNode) => {
+      // Apply visibility filter if needed
+      if (ignoreHiddenLayers && 'visible' in node && !node.visible) {
+        return false;
+      }
+      // Include all nodes that can have opacity
+      return 'opacity' in node;
+    });
+    console.log('Scanning entire page:', nodesToScan.length, 'nodes with opacity capability');
   }
   
   // Check if scan was cancelled after getting nodes
@@ -75,23 +128,7 @@ export async function scanForAppearance(
   
   // Total count for progress tracking
   let totalNodesProcessed = 0;
-  let totalNodesToProcess = 0;
-  
-  // Count total nodes to process for progress calculation
-  const countNodes = (node: SceneNode): number => {
-    let count = 1;
-    if ('children' in node) {
-      for (const child of node.children) {
-        count += countNodes(child as SceneNode);
-      }
-    }
-    return count;
-  };
-  
-  // Calculate total nodes for progress reporting
-  for (const node of nodesToScan) {
-    totalNodesToProcess += countNodes(node);
-  }
+  let totalNodesToProcess = nodesToScan.length; // Now we know the exact count upfront
   
   console.log(`Found ${totalNodesToProcess} total nodes to scan for ${scanType}`);
   
@@ -150,7 +187,7 @@ export async function scanForAppearance(
     }
   }
   
-  // Process a single node - FOCUS ONLY ON ELEMENT OPACITY
+  // Process a single node - FOCUS ONLY ON ELEMENT OPACITY (no longer recursive)
   function processNode(node: SceneNode) {
     // Skip if we shouldn't include this node
     if (!shouldIncludeNode(node)) return;
@@ -160,9 +197,10 @@ export async function scanForAppearance(
     
     // Update progress occasionally
     totalNodesProcessed++;
-    if (totalNodesProcessed % 100 === 0) {
+    if (totalNodesProcessed % 50 === 0 || totalNodesProcessed === totalNodesToProcess) {
       const progress = Math.min(totalNodesProcessed / totalNodesToProcess, 0.99);
       progressCallback(progress);
+      console.log(`Processing opacity: ${totalNodesProcessed}/${totalNodesToProcess} nodes (${Math.round(progress * 100)}%)`);
     }
     
     // Check element opacity - ONLY FOCUS ON THIS
@@ -193,16 +231,9 @@ export async function scanForAppearance(
         console.log(`Node ${node.name} has opacity ${node.opacity} bound to a variable, skipping`);
       }
     }
-    
-    // Process children recursively
-    if ('children' in node) {
-      for (const child of node.children) {
-        processNode(child as SceneNode);
-      }
-    }
   }
   
-  // Process all root nodes
+  // Process all nodes in the flat list (no longer recursive)
   for (const node of nodesToScan) {
     // Check if scan was cancelled
     if (isScancelled()) {

@@ -42,10 +42,30 @@ figma.showUI(__html__, {
   const selection = figma.currentPage.selection;
   const hasInstances = selection.some(node => node.type === 'INSTANCE');
   const validSelection = selection.filter(node => 
+    // Support ALL SceneNode types that can be meaningfully scanned
     node.type === 'FRAME' || 
     node.type === 'COMPONENT' || 
     node.type === 'COMPONENT_SET' || 
-    node.type === 'SECTION'
+    node.type === 'INSTANCE' ||
+    node.type === 'GROUP' ||
+    node.type === 'SECTION' ||
+    node.type === 'RECTANGLE' ||
+    node.type === 'ELLIPSE' ||
+    node.type === 'POLYGON' ||
+    node.type === 'STAR' ||
+    node.type === 'VECTOR' ||
+    node.type === 'LINE' ||
+    node.type === 'TEXT' ||
+    node.type === 'BOOLEAN_OPERATION' ||
+    node.type === 'SLICE' ||
+    node.type === 'CONNECTOR' ||
+    node.type === 'WIDGET' ||
+    node.type === 'EMBED' ||
+    node.type === 'LINK_UNFURL' ||
+    node.type === 'MEDIA' ||
+    node.type === 'STICKY' ||
+    node.type === 'SHAPE_WITH_TEXT' ||
+    node.type === 'CODE_BLOCK'
   );
   
   // Update lastSelectedFrameIds
@@ -83,10 +103,30 @@ figma.on('selectionchange', async () => {
   const hasInstances = selection.some(node => node.type === 'INSTANCE');
   
   const validSelection = selection.filter(node => 
+    // Support ALL SceneNode types that can be meaningfully scanned
     node.type === 'FRAME' || 
     node.type === 'COMPONENT' || 
     node.type === 'COMPONENT_SET' || 
-    node.type === 'SECTION'
+    node.type === 'INSTANCE' ||
+    node.type === 'GROUP' ||
+    node.type === 'SECTION' ||
+    node.type === 'RECTANGLE' ||
+    node.type === 'ELLIPSE' ||
+    node.type === 'POLYGON' ||
+    node.type === 'STAR' ||
+    node.type === 'VECTOR' ||
+    node.type === 'LINE' ||
+    node.type === 'TEXT' ||
+    node.type === 'BOOLEAN_OPERATION' ||
+    node.type === 'SLICE' ||
+    node.type === 'CONNECTOR' ||
+    node.type === 'WIDGET' ||
+    node.type === 'EMBED' ||
+    node.type === 'LINK_UNFURL' ||
+    node.type === 'MEDIA' ||
+    node.type === 'STICKY' ||
+    node.type === 'SHAPE_WITH_TEXT' ||
+    node.type === 'CODE_BLOCK'
   );
   
   // Only update lastSelectedFrameIds if we have a valid selection
@@ -125,10 +165,30 @@ async function startWatchingDocument(scanType: common.ScanType, scanEntirePage: 
       const selection = figma.currentPage.selection;
       documentState.selectedFrameIds = selection
         .filter(node => 
+          // Support ALL SceneNode types that can be meaningfully scanned
           node.type === 'FRAME' || 
           node.type === 'COMPONENT' || 
           node.type === 'COMPONENT_SET' || 
-          node.type === 'SECTION'
+          node.type === 'INSTANCE' ||
+          node.type === 'GROUP' ||
+          node.type === 'SECTION' ||
+          node.type === 'RECTANGLE' ||
+          node.type === 'ELLIPSE' ||
+          node.type === 'POLYGON' ||
+          node.type === 'STAR' ||
+          node.type === 'VECTOR' ||
+          node.type === 'LINE' ||
+          node.type === 'TEXT' ||
+          node.type === 'BOOLEAN_OPERATION' ||
+          node.type === 'SLICE' ||
+          node.type === 'CONNECTOR' ||
+          node.type === 'WIDGET' ||
+          node.type === 'EMBED' ||
+          node.type === 'LINK_UNFURL' ||
+          node.type === 'MEDIA' ||
+          node.type === 'STICKY' ||
+          node.type === 'SHAPE_WITH_TEXT' ||
+          node.type === 'CODE_BLOCK'
         )
         .map(node => node.id);
     }
@@ -426,9 +486,10 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
     }
     
     // Start watching if not a rescan
-    if (!isRescan && !scanners.isScancelled()) {
-      startWatchingDocument(msg.scanType as common.ScanType, msg.scanEntirePage);
-    }
+    // REMOVED: Automatic document watching - let users manually enable watch mode via UI controls
+    // if (!isRescan && !scanners.isScancelled()) {
+    //   startWatchingDocument(msg.scanType as common.ScanType, msg.scanEntirePage);
+    // }
   }
 
   // Handle watch document requests
@@ -723,10 +784,30 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
     const selection = figma.currentPage.selection;
     const hasInstances = selection.some(node => node.type === 'INSTANCE');
     const validSelection = selection.filter(node => 
+      // Support ALL SceneNode types that can be meaningfully scanned
       node.type === 'FRAME' || 
       node.type === 'COMPONENT' || 
       node.type === 'COMPONENT_SET' || 
-      node.type === 'SECTION'
+      node.type === 'INSTANCE' ||
+      node.type === 'GROUP' ||
+      node.type === 'SECTION' ||
+      node.type === 'RECTANGLE' ||
+      node.type === 'ELLIPSE' ||
+      node.type === 'POLYGON' ||
+      node.type === 'STAR' ||
+      node.type === 'VECTOR' ||
+      node.type === 'LINE' ||
+      node.type === 'TEXT' ||
+      node.type === 'BOOLEAN_OPERATION' ||
+      node.type === 'SLICE' ||
+      node.type === 'CONNECTOR' ||
+      node.type === 'WIDGET' ||
+      node.type === 'EMBED' ||
+      node.type === 'LINK_UNFURL' ||
+      node.type === 'MEDIA' ||
+      node.type === 'STICKY' ||
+      node.type === 'SHAPE_WITH_TEXT' ||
+      node.type === 'CODE_BLOCK'
     );
     
     // Send both the IDs and the count

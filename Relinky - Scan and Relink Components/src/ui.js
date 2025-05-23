@@ -215,7 +215,7 @@ function initializeApp() {
           },
           {
             value: 'layout',
-            label: 'Layout Dimensions',
+            label: 'Layout',
             description: 'Find common width and height values in layouts',
             icon: 'layout'
           },

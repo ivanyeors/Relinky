@@ -1,0 +1,19 @@
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="24" height="24" fill="#1E1E1E"/>
+<g id="Section 1">
+<path d="M-374 -54C-374 -55.1046 -373.105 -56 -372 -56H77C78.1046 -56 79 -55.1046 79 -54V171C79 172.105 78.1046 173 77 173H-372C-373.105 173 -374 172.105 -374 171V-54Z" fill="#444444"/>
+<path d="M-372 -56V-55H77V-56V-57H-372V-56ZM79 -54H78V171H79H80V-54H79ZM77 173V172H-372V173V174H77V173ZM-374 171H-373V-54H-374H-375V171H-374ZM-372 173V172C-372.552 172 -373 171.552 -373 171H-374H-375C-375 172.657 -373.657 174 -372 174V173ZM79 171H78C78 171.552 77.5523 172 77 172V173V174C78.6569 174 80 172.657 80 171H79ZM77 -56V-55C77.5523 -55 78 -54.5523 78 -54H79H80C80 -55.6569 78.6568 -57 77 -57V-56ZM-372 -56V-57C-373.657 -57 -375 -55.6569 -375 -54H-374H-373C-373 -54.5523 -372.552 -55 -372 -55V-56Z" fill="white" fill-opacity="0.1"/>
+<g id="effects">
+<g id="Group 6">
+<path id="Vector 5" d="M18 18L14 14" stroke="white" stroke-linecap="round"/>
+<path id="Vector 6" d="M6 6L10 10" stroke="white" stroke-linecap="round"/>
+<path id="Vector 7" d="M18 6L14 10" stroke="white" stroke-linecap="round"/>
+<path id="Vector 8" d="M6 18L10 14" stroke="white" stroke-linecap="round"/>
+<path id="Vector 9" d="M12 4L12 9" stroke="white" stroke-linecap="round"/>
+<path id="Vector 10" d="M12 20L12 15" stroke="white" stroke-linecap="round"/>
+<path id="Vector 11" d="M4 12H9" stroke="white" stroke-linecap="round"/>
+<path id="Vector 12" d="M20 12L15 12" stroke="white" stroke-linecap="round"/>
+</g>
+</g>
+</g>
+</svg>
