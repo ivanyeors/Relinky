@@ -2302,7 +2302,7 @@ gap: var(--spacing-xs);
 
 .progress-fill {
    height: 100%;
-   transition: width 0.4s ease-out;
+   transition: width 0.2s ease-out;
    background: var(--figma-color-bg-brand);
    border-radius: var(--border-radius-sm);
 }
@@ -2320,7 +2320,7 @@ gap: var(--spacing-xs);
 /* When scanning is in progress */
 .progress-bar.scanning .progress-fill {
    animation: progress-pulse 2s ease-in-out infinite;
-   transition: width 0.4s ease-out;
+   transition: width 0.2s ease-out;
 }
 
 /* When scan is complete with no issues */
