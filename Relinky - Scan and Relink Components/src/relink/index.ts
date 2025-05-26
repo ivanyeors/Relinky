@@ -1370,7 +1370,7 @@ export async function scanForMissingReferences(
     console.log(`Found ${nodesToScan.length} nodes to scan (ignoreHiddenLayers: ${ignoreHiddenLayers})`);
     
     // NEW: Debug node variable bindings to help identify what's available
-    if (['team-library', 'local-library', 'missing-library'].includes(scanType)) {
+    if (['missing-library'].includes(scanType)) {
       console.log('DEBUG: Analyzing variable bindings in all nodes');
       
       // Look for any nodes with boundVariables
@@ -1479,20 +1479,7 @@ export async function scanForMissingReferences(
           ignoreHiddenLayers
         );
         break;
-      case 'team-library':
-        refs = await scanForTeamLibraryVariables(
-          progress => progressCallback?.(progress),
-          nodesToScan,
-          ignoreHiddenLayers
-        );
-        break;
-      case 'local-library':
-        refs = await scanForLocalLibraryVariables(
-          progress => progressCallback?.(progress),
-          nodesToScan,
-          ignoreHiddenLayers
-        );
-        break;
+
       case 'missing-library':
         refs = await scanForMissingLibraryVariables(
           progress => progressCallback?.(progress),
@@ -1515,7 +1502,7 @@ export async function scanForMissingReferences(
     figma.ui.postMessage({
       type: 'missing-references-result',
       references: sanitizedGroups,
-      isLibraryVariableScan: ['team-library', 'local-library', 'missing-library'].includes(scanType),
+      isLibraryVariableScan: ['missing-library'].includes(scanType),
       // Add raw refs array for compatibility with the groupByValue function in UI
       results: refs,
       scanType

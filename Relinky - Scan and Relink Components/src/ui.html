@@ -31,22 +31,7 @@
           >
             <span>Relink</span>
           </button>
-          <button 
-            class="tab-button" 
-            :class="{ 
-              'active': activeTab === 'library-tokens',
-              'inactive': activeTab !== 'library-tokens'
-            }"
-            @click="switchTab('library-tokens')"
-          >
-            <div class="tab-button">
-              <span>Unlink</span>
-              <span class="beta-badge">BETA</span>
-            </div>
-            <span v-if="inactiveLibraryTokens.length" class="tab-badge">
-              {{ inactiveLibraryTokens.length }}
-            </span>
-          </button>
+
         </div>
 
         <!-- Section content -->
@@ -190,17 +175,15 @@
                     
                     <div class="scan-card-content">
                       <div class="scan-card-text">
-                        <div class="scan-card-title">{{ option.value === 'local-library' ? 'Local Variables' : 
-                                                    option.value === 'missing-library' ? 'Missing Variables' : 
-                                                    option.label }}</div>
-                        <div class="scan-card-description">{{ option.description }}</div>
+                        <div class="scan-card-title">{{ option.label }}</div>
+                        <div v-if="!showScanResults" class="scan-card-description">{{ option.description }}</div>
                       </div>
                     </div>
                   </div>
                 </div>
 
                 <!-- Token Type Selection - Only show after source type is selected with a smooth transition -->
-                <div v-if="selectedSourceType && selectedSourceType !== 'missing-library'" class="scan-cards token-type-section">
+                <div v-if="selectedSourceType && selectedSourceType !== 'deleted-variables'" class="scan-cards token-type-section">
                   <div class="scan-card-section-divider">Variable Type</div>
                   
                   <!-- Design Token Cards -->
@@ -223,7 +206,7 @@
                     <div class="scan-card-content">
                       <div class="scan-card-text">
                         <div class="scan-card-title">{{ option.label }}</div>
-                        <div class="scan-card-description">{{ option.description }}</div>
+                        <div v-if="!showScanResults" class="scan-card-description">{{ option.description }}</div>
                       </div>
                     </div>
                   </div>
@@ -326,11 +309,8 @@
 
                   <!-- Add scan results description -->
                   <div class="scan-results-description p-2 rounded m-2 mb-3 bg-secondary">
-                    <p v-if="selectedScanType === 'team-library'" class="text-secondary">
-                      These are team library variables across your design that can be relinked.
-                    </p>
-                    <p v-else-if="selectedScanType === 'local-library'" class="text-secondary">
-                      These are local variables in your document that can be relinked.
+                    <p v-if="selectedScanType === 'deleted-variables' || selectedSourceType === 'deleted-variables'" class="text-secondary">
+                      These are elements that were previously linked to variables that have been deleted or are from libraries that are no longer accessible. You may need to reconnect them to new variables or convert them to raw values.
                     </p>
                     <p v-else-if="selectedScanType === 'fill'" class="text-secondary">
                       Fill colors found in your design. Grouped by similar values.
@@ -370,8 +350,8 @@
                     </p>
                   </div>
                   
-                  <!-- Variable Type Filter Section - only show after scan results for missing library variables -->
-                  <div v-if="showVariableTypeFilters && scanType === 'missing-library'" class="variable-filter-section">
+                  <!-- Variable Type Filter Section - only show after scan results for deleted variables -->
+                  <div v-if="showVariableTypeFilters && scanType === 'deleted-variables'" class="variable-filter-section">
                     <div class="scan-card-section-divider">Filter by Variable Type</div>
                     <div class="scan-cards">
                       <!-- Add "All" option that's selected by default -->
@@ -507,9 +487,7 @@
                            :class="{
                              'expanded': isGroupExpanded(groupKey),
                              'library-scan': isLibraryVariableScan,
-                             'unlinked-reference': group.refs?.[0] && !group.refs[0].isTeamLibrary && !group.refs[0].isLocalLibrary && !group.refs[0].isMissingLibrary,
-                             'team-library-reference': group.refs?.[0] && group.refs[0].isTeamLibrary,
-                             'local-library-reference': group.refs?.[0] && group.refs[0].isLocalLibrary,
+                             'unlinked-reference': group.refs?.[0] && !group.refs[0].isMissingLibrary,
                              'missing-library-reference': group.refs?.[0] && group.refs[0].isMissingLibrary
                            }"
                       >
@@ -522,9 +500,7 @@
                           <span v-if="isLibraryVariableScan && group.refs?.[0]" 
                                 :class="{
                                   'library-badge': true,
-                                  'unlinked-reference': !group.refs[0].isTeamLibrary && !group.refs[0].isLocalLibrary && !group.refs[0].isMissingLibrary,
-                                  'team-library-reference': group.refs[0].isTeamLibrary,
-                                  'local-library-reference': group.refs[0].isLocalLibrary,
+                                  'unlinked-reference': !group.refs[0].isMissingLibrary,
                                   'missing-library-reference': group.refs[0].isMissingLibrary
                                 }">
                             <!-- For missing library variables, show the variable value -->
@@ -596,9 +572,7 @@
                                     'label': true, 
                                     'library-type': true,
                                     'ml-xs': true,
-                                    'unlinked-reference': !group.refs[0].isTeamLibrary && !group.refs[0].isLocalLibrary && !group.refs[0].isMissingLibrary,
-                                    'team-library-reference': group.refs[0].isTeamLibrary,
-                                    'local-library-reference': group.refs[0].isLocalLibrary,
+                                    'unlinked-reference': !group.refs[0].isMissingLibrary,
                                     'missing-library-reference': group.refs[0].isMissingLibrary
                                   }">
                               <!-- For missing library variables, show the variable value -->
@@ -625,9 +599,7 @@
                                       'label': true, 
                                       'library-type': true,
                                       'ml-xs': true,
-                                      'unlinked-reference': !group.refs[0].isTeamLibrary && !group.refs[0].isLocalLibrary && !group.refs[0].isMissingLibrary,
-                                      'team-library-reference': group.refs[0].isTeamLibrary,
-                                      'local-library-reference': group.refs[0].isLocalLibrary,
+                                      'unlinked-reference': !group.refs[0].isMissingLibrary,
                                       'missing-library-reference': group.refs[0].isMissingLibrary
                                     }">
                                 <!-- For missing library variables, show the variable value -->
@@ -662,9 +634,7 @@
                              :key="ref.nodeId" 
                              class="reference-item"
                              :class="{
-                               'unlinked-reference': ref && !ref.isTeamLibrary && !ref.isLocalLibrary && !ref.isMissingLibrary,
-                               'team-library-reference': ref && ref.isTeamLibrary,
-                               'local-library-reference': ref && ref.isLocalLibrary,
+                               'unlinked-reference': ref && !ref.isMissingLibrary,
                                'missing-library-reference': ref && ref.isMissingLibrary
                              }"
                         >
@@ -690,237 +660,7 @@
             </template>
           </div>
 
-            <!-- Unlinked Library Tab -->
-            <div v-if="activeTab === 'library-tokens'" class="tab-content library-tokens-content">
-              <!-- Loading State -->
-              <div v-if="isLoadingVariables" class="loading-state">
-                <div class="loading-spinner"></div>
-                <span>Loading variables...</span>
-              </div>
-              
-              <!-- Variables Content -->
-              <div v-else class="variables-section">
-                <!-- Step 1: Select Variable Types -->
-                <div class="step-container">
-                  <div class="step-content">
-                    <h3 class="step-title">Choose variable types to scan</h3>
-                    
-                    <!-- Variable Type Selection Cards -->
-                    <div class="scan-cards">
-                      <div v-for="option in variableScanOptions"
-                           :key="option.value"
-                           class="scan-card"
-                           :class="{ 
-                             'selected': selectedVariableScanTypes.includes(option.value),
-                             'interactive': true
-                           }"
-                           role="option"
-                           :aria-selected="selectedVariableScanTypes.includes(option.value)"
-                           tabindex="0"
-                           @click="toggleVariableScanType(option.value)"
-                      >
-                        <div class="scan-card-icon">
-                          <div class="icon" v-html="icons[option.icon]"></div>
-                        </div>
-                        
-                        <div class="scan-card-content">
-                          <div class="scan-card-text">
-                            <div class="scan-card-title">{{ option.label }}</div>
-                            <div class="scan-card-description">{{ option.description }}</div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <!-- Scan Controls -->
-                    <div class="progress-container">
-                      <div class="progress-bar"
-                           :class="{
-                             'scanning': isVariableScanning,
-                             'completed-no-issues': !isVariableScanning && variableScanProgress === 100 && linkedVariables.length === 0
-                           }">
-                        <div class="progress-fill" 
-                             :style="{ 
-                               width: `${variableScanProgress}%`,
-                               background: getProgressBarColor('variables')
-                             }"
-                        ></div>
-                        <span class="progress-text" v-if="canStartVariableScan || isVariableScanning || variableScanProgress === 100">{{ getVariableProgressStatus() }}</span>
-                      </div>
-                    </div>
-                    
-                    <!-- Scan Button -->
-                    <div class="scan-buttons">
-                      <button 
-                        v-if="!isVariableScanning"
-                        @click="startVariableScan()" 
-                        class="button primary-button"
-                        :disabled="!canStartVariableScan"
-                        title="Start scanning for variables"
-                      >
-                        {{ showRescanVariablesButton ? 'Rescan Variables' : 'Start Scan' }}
-                      </button>
-                      
-                      <button 
-                        v-if="isVariableScanning"
-                        @click="stopVariableScan()" 
-                        class="button warning-button"
-                      >
-                        Stop
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                
-                <!-- Divider between scan and results -->
-                <div class="divider" v-if="showVariableScanResults"></div>
-                
-                <!-- Variable Results -->
-                <div v-if="showVariableScanResults" class="step-container">
-                  <div class="step-content">
-                    <!-- Results Header -->
-                    <div class="results-header">
-                      <div class="step-title-with-badge">
-                        <h3 class="step-title">Variable scan results</h3>
-                        <span class="results-badge">{{ linkedVariables.length }}</span>
-                      </div>
-                      
-                      <!-- Filter Controls -->
-                      <div class="form-row">
-                        <select v-model="variableFilters.type" class="select">
-                          <option value="all">All Types</option>
-                          <option value="color">Colors</option>
-                          <option value="number">Numbers</option>
-                          <option value="string">Text</option>
-                          <option value="boolean">Boolean</option>
-                        </select>
-                        <select v-model="variableFilters.collection" class="select">
-                          <option value="all">All Collections</option>
-                          <option v-for="collection in variableCollections" 
-                                  :key="collection.id" 
-                                  :value="collection.id">
-                            {{ collection.name }}
-                          </option>
-                        </select>
-                        <!-- Add library type filter -->
-                        <select v-model="variableFilters.libraryType" class="select">
-                          <option value="all">All Libraries</option>
-                          <option value="team-library">Team Library</option>
-                          <option value="local-library">Local Variables</option>
-                          <option value="missing-library">Missing Variables</option>
-                          <option value="deleted-variables">Deleted Variables</option>
-                        </select>
-                        <input type="text" 
-                               v-model="variableFilters.search" 
-                               placeholder="Search variables..."
-                               class="input">
-                      </div>
-                    </div>
-                    
-                    <!-- Grouped Variables List -->
-                    <div class="variables-list">
-                      <div v-for="(group, groupKey) in groupedVariables" 
-                          :key="groupKey" 
-                          class="value-group">
-                        <!-- Group Header -->
-                        <div class="value-group-header" 
-                            @click="toggleGroup(groupKey)"
-                            :class="{ 'expanded': isGroupExpanded(groupKey) }">
-                          <div class="group-info">
-                            <span class="expand-icon">
-                              {{ isGroupExpanded(groupKey) ? '▼' : '▶' }}
-                            </span>
-                            <!-- Group name and count -->
-                            <div class="typography-labels">
-                              <span class="label variable-group-name">{{ group.collectionName }}</span>
-                              <span class="label variable-type">{{ formatVariableType(group.type) }}</span>
-                            </div>
-                            <!-- Add color preview for color type -->
-                            <template v-if="(group.type && group.type.toUpperCase() === 'COLOR') && (!group.variables?.length ? false : true)">
-                              <div class="color-preview-list">
-                                <div v-for="(variable, index) in (group.variables || []).slice(0, 3)" :key="index" class="group-color-preview">
-                                  <color-preview :color="normalizeColorValue(variable.value)" />
-                                </div>
-                                <span v-if="group.variables?.length > 3" class="more-colors-indicator">+{{ group.variables.length - 3 }}</span>
-                              </div>
-                            </template>
-                          </div>
-                          <div class="group-actions">
-                            <span class="label instance-count">{{ group.variables?.length || 0 }}×</span>
-                            <button 
-                              class="button secondary-button"
-                              @click.stop="selectAllVariablesInGroup(group.variables)"
-                            >
-                              Select All
-                            </button>
-                          </div>
-                        </div>
-                        
-                        <!-- Group Variables -->
-                        <div v-if="isGroupExpanded(groupKey)" 
-                            class="value-group-details">
-                          <div v-for="variable in (group.variables || [])" 
-                               :key="variable.id" 
-                               class="variable-card"
-                               :class="{ 'selected': selectedVariableId === variable.id }">
-                            <div class="variable-card-header">
-                              <span class="variable-card-title">{{ variable.name }}</span>
-                              <span class="variable-card-type">{{ formatVariableType(variable.type) }}</span>
-                              <!-- Add library type badge -->
-                              <span :class="['library-badge', variable.isTeamLibrary ? 'team-library-reference' : 
-                                           variable.isLocalLibrary ? 'local-library-reference' : 
-                                           variable.isMissingLibrary ? 'missing-library-reference' : 'unknown-reference']">
-                                {{ variable.isTeamLibrary ? 'Team Library' : 
-                                   variable.isLocalLibrary ? 'Local Variables' : 
-                                   variable.isMissingLibrary ? (variable.value ? formatVariableValue(variable.value, variable.type) : variable.variableName || 'Missing Variable') : 'Unknown' }}
-                              </span>
-                            </div>
-                            <div class="variable-card-content">
-                              <!-- Color Preview -->
-                              <template v-if="variable.type && variable.type.toUpperCase() === 'COLOR'">
-                                <div class="variable-preview">
-                                  <color-preview :color="normalizeColorValue(variable.value)" />
-                                </div>
-                              </template>
-                              <!-- Other Types Preview -->
-                              <template v-else>
-                                <div class="variable-preview">
-                                  {{ formatVariableValue(variable.value, variable.type) }}
-                                </div>
-                              </template>
-                            </div>
-                            <div class="variable-card-actions">
-                              <button 
-                                class="button secondary-button small"
-                                @click.stop="selectVariable(variable.id)"
-                                title="Select nodes using this variable"
-                              >
-                                Select
-                              </button>
-                              <button 
-                                class="button secondary-button small warning-button"
-                                @click.stop="unlinkVariable(variable.id)"
-                                title="Unlink this variable from all usages"
-                              >
-                                Unlink
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <!-- Empty State -->
-                    <div v-if="linkedVariables.length === 0" class="empty-state">
-                      <p>No linked variables found</p>
-                      <p v-if="variableFilters.search || variableFilters.type !== 'all' || variableFilters.collection !== 'all'">
-                        Try adjusting your filters
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+
         </div>
         </div>
 

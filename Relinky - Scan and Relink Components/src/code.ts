@@ -297,7 +297,7 @@ interface ScanForTokensMessage {
   isRescan?: boolean;
   isLibraryVariableScan?: boolean;
   // New properties for the two-level scan approach
-  sourceType: 'raw-values' | 'team-library' | 'local-library' | 'missing-library' | 'deleted-variables';
+  sourceType: 'raw-values' | 'missing-library' | 'deleted-variables';
   tokenType?: string | null;
   variableTypes?: string[];
 }
@@ -677,25 +677,6 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
       });
       
       // Use runScanner instead of direct function calls
-      // Scan for team library variables
-      const teamLibraryVariables = await scanners.runScanner(
-        'team-library',
-        'fill', // default scan type 
-        [], // scan the whole page
-        () => {}, // Skip progress updates for this scan
-        false, // don't ignore hidden layers
-        msg.variableTypes || [] // Pass variable types filter
-      );
-      
-      // Scan for local library variables
-      const localLibraryVariables = await scanners.runScanner(
-        'local-library',
-        'fill', // default scan type
-        [], // scan the whole page
-        () => {}, // Skip progress updates for this scan
-        false, // don't ignore hidden layers
-        msg.variableTypes || [] // Pass variable types filter
-      );
       
       // Scan for missing library variables
       const missingLibraryVariables = await scanners.runScanner(
@@ -722,8 +703,6 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
       
       // Combine all results
       allVariables = [
-        ...teamLibraryVariables,
-        ...localLibraryVariables,
         ...missingLibraryVariables,
         ...deletedVariables
       ];
@@ -1228,7 +1207,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
         
         // Group using the appropriate grouping function
         const groupedReferences = scanners.groupScanResults(
-          sourceType as 'raw-values' | 'team-library' | 'local-library' | 'missing-library', 
+          sourceType as 'raw-values' | 'missing-library' | 'deleted-variables', 
           msg.results
         );
         
