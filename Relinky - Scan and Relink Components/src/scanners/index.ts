@@ -6,8 +6,6 @@ import { ScanType, MissingReference } from '../common';
 
 // Import scanner modules
 import { scanForRawValues, groupRawValueResults } from './raw-values';
-import { scanForTeamLibraryVariables, groupTeamLibraryResults } from './team-library';
-import { scanForLocalLibraryVariables, groupLocalLibraryResults } from './local-library';
 import { scanForDeletedVariables, groupDeletedVariableResults } from './deleted-variables';
 import { scanForGap, groupGapResults } from './gap';
 import { scanForPadding, groupPaddingResults } from './padding';
@@ -20,8 +18,6 @@ import { scanForEffects, groupEffectsResults } from './effects';
 
 // Export all scanner functions - use explicit exports for modules with overlapping types
 export * from './raw-values';
-export * from './team-library';
-export * from './local-library';
 export * from './gap';
 export * from './padding';
 export * from './radius';
@@ -212,10 +208,6 @@ export async function runScanner(
         default:
           return scanForRawValues(scanType, selectedFrameIds, progressHandler, ignoreHiddenLayers);
       }
-    case 'team-library':
-      return scanForTeamLibraryVariables(progressHandler, selectedFrameIds, ignoreHiddenLayers);
-    case 'local-library':
-      return scanForLocalLibraryVariables(progressHandler, selectedFrameIds, ignoreHiddenLayers);
     case 'missing-library':
       return scanForDeletedVariables(progressHandler, selectedFrameIds, ignoreHiddenLayers, variableTypes)
         .then(result => result.results);
@@ -265,10 +257,6 @@ export function groupScanResults(
       } else {
         return groupRawValueResults(results);
       }
-    case 'team-library':
-      return groupTeamLibraryResults(results as any);
-    case 'local-library':
-      return groupLocalLibraryResults(results as any);
     case 'missing-library':
       return groupDeletedVariableResults(results as any);
     case 'deleted-variables':

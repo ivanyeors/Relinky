@@ -144,22 +144,7 @@ function initializeApp() {
         minAnimationDuration: 1500, // Minimum animation duration in ms
         progressAnimationId: null, // Animation frame ID for smooth progress
         actualProgress: 0, // Real scan progress from backend
-        // Library token state
-        hasLibraryResults: false,
-        activeLibraryTokens: [],
-        inactiveLibraryTokens: [],
-        linkedVariables: [],
-        variableFilters: {
-          type: 'all',
-          collection: 'all',
-          search: '',
-          libraryType: 'all'
-        },
-        isVariableScanning: false,
-        variableScanComplete: false,
-        variableScanProgress: 0,
-        selectedVariable: null,
-        selectedVariableScanTypes: ['all'],
+
         selectedVariableTypes: [], // Legacy array for backward compatibility
         selectedVariableTypeFilter: 'all', // New single selection variable type filter
         availableVariableTypes: [], // Array to store available variable types from scan results
@@ -235,30 +220,6 @@ function initializeApp() {
             label: 'Effects',
             description: 'Find layers with unlinked effect properties (shadows, blur, etc.)',
             icon: 'effects'
-          },
-          {
-            value: 'team-library',
-            label: 'Team Library Variables',
-            description: 'Find all elements using team library variables',
-            icon: 'library'
-          },
-          {
-            value: 'local-library',
-            label: 'Local Library Variables',
-            description: 'Find all elements using local document variables',
-            icon: 'local'
-          },
-          {
-            value: 'missing-library',
-            label: 'Missing Library Variables',
-            description: 'Find all elements using variables from missing libraries',
-            icon: 'missing'
-          },
-          {
-            value: 'deleted-variables',
-            label: 'Deleted Variables',
-            description: 'Find elements with deleted variables in selected node',
-            icon: 'missing'
           }
         ],
         showSettings: false,
@@ -267,77 +228,14 @@ function initializeApp() {
           height: 600
         },
         isResizing: false,
-        selectedLibraryTokenScanType: 'all', // Default to 'all' instead of empty
-        isLibraryScanning: false,
-        libraryScanProgress: 0,
-        hasLibraryResults: false,
+
         isPaused: false,
         currentScanNode: null,
         scanSummary: null,
-        variableCollections: [],
+
         lastScannedType: null, // Add this to track the last scan type
         showHiddenOnly: false,
-        variables: [],
-        variableTypeOptions: [
-          { value: 'color', label: 'Colors' },
-          { value: 'typography', label: 'Typography' },
-          { value: 'spacing', label: 'Spacing' },
-          { value: 'radius', label: 'Corner Radius' },
-          { value: 'effect', label: 'Effects' },
-          { value: 'layout', label: 'Layout' },
-          { value: 'opacity', label: 'Opacity' }
-        ],
-        isLoadingVariables: false,
-        selectedVariableId: null,
-        variableScanOptions: [
-          {
-            value: 'all',
-            label: 'All Variables',
-            description: 'Scan for all variable types',
-            icon: 'variable'
-          },
-          {
-            value: 'color',
-            label: 'Color Variables',
-            description: 'Scan for color variables',
-            icon: 'fill'
-          },
-          {
-            value: 'boolean',
-            label: 'Boolean Variables',
-            description: 'Scan for boolean variables',
-            icon: 'toggle'
-          },
-          {
-            value: 'number',
-            label: 'Number Variables',
-            description: 'Scan for number variables',
-            icon: 'spacing'
-          },
-          {
-            value: 'string',
-            label: 'String Variables',
-            description: 'Scan for string variables',
-            icon: 'typography'
-          }
-        ],
-        selectedVariableScanTypes: ['all'],
-        isVariableScanning: false,
-        variableScanProgress: 0,
-        linkedVariables: [],
-        showVariableScanResults: false,
-        showRescanVariablesButton: false,
-        hasProcessedResults: false,
         selectedVariableTypes: [], // Array to store selected variable types for filtering
-        variableTypeOptions: [
-          { value: 'color', label: 'Colors' },
-          { value: 'typography', label: 'Typography' },
-          { value: 'spacing', label: 'Spacing' },
-          { value: 'radius', label: 'Corner Radius' },
-          { value: 'effect', label: 'Effects' },
-          { value: 'layout', label: 'Layout' },
-          { value: 'opacity', label: 'Opacity' }
-        ],
       }
     },
     computed: {
@@ -347,17 +245,17 @@ function initializeApp() {
       canStartScan() {
         const hasSourceType = !!this.selectedSourceType;
         const hasScanType = !!this.selectedScanType;
-        const isMissingLibrary = this.selectedSourceType === 'missing-library' || this.selectedSourceType === 'deleted-variables';
+        const isDeletedVariables = this.selectedSourceType === 'deleted-variables';
         
         console.log('Can start scan?', {
           hasSourceType,
           hasScanType,
-          isMissingLibrary,
+          isDeletedVariables,
           isScanning: this.isScanning
         });
         
-        // Special case for missing-library and deleted-variables: allow scanning without selecting a scan type
-        if (isMissingLibrary) {
+        // Special case for deleted-variables: allow scanning without selecting a scan type
+        if (isDeletedVariables) {
           return hasSourceType && !this.isScanning;
         }
         
@@ -367,22 +265,15 @@ function initializeApp() {
       hasResults() {
         const hasRefs = Object.keys(this.groupedReferences).length > 0;
         
-        // Ensure we properly count missing library results
-        // (the console shows missing library variables but the UI says "no issues found")
-        const hasMissingLibraryRefs = this.scanType === 'missing-library' && 
-          ((this.selectedSourceType === 'missing-library' && Object.keys(this.groupedReferences).length > 0) || 
-           (this.libraryResults && this.libraryResults.missing && this.libraryResults.missing.length > 0));
-        
         console.log('Has results?', {
           groupedReferences: this.groupedReferences,
           count: Object.keys(this.groupedReferences).length,
-          hasMissingLibraryRefs,
-          hasRefs: hasRefs || hasMissingLibraryRefs,
+          hasRefs,
           scanType: this.scanType,
           selectedSourceType: this.selectedSourceType
         });
         
-        return hasRefs || hasMissingLibraryRefs;
+        return hasRefs;
       },
       groupedByValue() {
         const valueGroups = {};
@@ -446,15 +337,8 @@ function initializeApp() {
         // Also check if there are any filtered results
         const hasFilteredResults = Object.keys(this.filteredResults || {}).length > 0;
         
-        // Special check for missing library variables
-        const hasMissingLibraryResults = 
-          this.scanType === 'missing-library' && 
-          this.libraryResults && 
-          this.libraryResults.missing && 
-          this.libraryResults.missing.length > 0;
-        
         // Temporarily force show if we have any results
-        const forceShow = hasGroupedRefs || hasFilteredResults || hasMissingLibraryResults;
+        const forceShow = hasGroupedRefs || hasFilteredResults;
         
         console.log('Show scan results?', {
           isScanning: this.isScanning,
@@ -463,7 +347,6 @@ function initializeApp() {
           shouldShow,
           hasGroupedRefs,
           hasFilteredResults,
-          hasMissingLibraryResults,
           forceShow,
           filteredResultsCount: Object.keys(this.filteredResults || {}).length,
           activeTab: this.activeTab,
@@ -483,7 +366,10 @@ function initializeApp() {
       filteredResults() {
         console.log('Computing filteredResults with groupedReferences:', {
           hasGroupedReferences: !!this.groupedReferences,
-          groupCount: this.groupedReferences ? Object.keys(this.groupedReferences).length : 0
+          groupCount: this.groupedReferences ? Object.keys(this.groupedReferences).length : 0,
+          scanType: this.scanType,
+          selectedSourceType: this.selectedSourceType,
+          isLibraryVariableScan: this.isLibraryVariableScan
         });
         
         // If no grouped references, return empty object
@@ -510,41 +396,6 @@ function initializeApp() {
             
             // Only include group if it has valid references
             if (Array.isArray(refs) && refs.length > 0) {
-              // Check if we should filter by variable type
-              const shouldFilterByType = this.scanType === 'missing-library' && 
-                                        this.selectedVariableTypeFilter !== 'all';
-              
-              if (shouldFilterByType) {
-                // For missing library variables, check if the first reference's type matches the filter
-                const firstRef = refs[0];
-                const variableType = firstRef.variableType || firstRef.variableCategory || '';
-                
-                // Handle special case: merge typography and "other" types
-                if (this.selectedVariableTypeFilter === 'typography') {
-                  // Include both explicit typography variables and 'other' or string variables
-                  // as they are often typography-related
-                  const isTypography = variableType === 'typography' || 
-                                     variableType === 'other' || 
-                                     variableType === 'STRING' ||
-                                     variableType === 'string' ||
-                                     variableType === 'Text';
-                  
-                  if (!isTypography) {
-                    // Skip if not typography-related
-                    console.log(`Filtering out group ${key} with type ${variableType}, not typography-related`);
-                    continue;
-                  } else {
-                    console.log(`Including group ${key} with type ${variableType}, matched as typography-related`);
-                  }
-                } 
-                else if (variableType.toLowerCase() !== this.selectedVariableTypeFilter.toLowerCase()) {
-                  // Skip this group if it doesn't match the selected variable type filter
-                  console.log(`Filtering out group ${key} with type ${variableType}, not matching filter: ${this.selectedVariableTypeFilter}`);
-                  continue;
-                } else {
-                  console.log(`Including group ${key} with type ${variableType}, matches selected filter: ${this.selectedVariableTypeFilter}`);
-                }
-              }
               
               // Apply layout filters if needed
               if (this.selectedScanType === 'layout' && this.layoutFilterType !== 'all') {
@@ -568,6 +419,24 @@ function initializeApp() {
                 
                 // Use filtered refs
                 refs = filteredLayoutRefs;
+              }
+              
+              // Apply variable type filters for deleted variables
+              if (this.scanType === 'deleted-variables' && this.selectedVariableTypeFilter !== 'all') {
+                console.log('Applying variable type filter:', this.selectedVariableTypeFilter);
+                const filteredVariableRefs = refs.filter(ref => {
+                  // Get the variable category from the reference
+                  const variableCategory = ref.variableCategory || ref.variableType || 
+                                          (ref.currentValue && ref.currentValue.variableType) || 'other';
+                  console.log(`Checking ref category: ${variableCategory} against filter: ${this.selectedVariableTypeFilter}`);
+                  return variableCategory === this.selectedVariableTypeFilter;
+                });
+                
+                // Skip empty groups after filtering
+                if (filteredVariableRefs.length === 0) continue;
+                
+                // Use filtered refs
+                refs = filteredVariableRefs;
               }
               
               // Apply effects filters if needed
@@ -604,143 +473,7 @@ function initializeApp() {
         
         return result;
       },
-      filteredVariables() {
-        return this.variables.filter(variable => {
-          // Filter by type
-          if (this.variableFilters.type !== 'all' && 
-              variable.type !== this.variableFilters.type) {
-            return false;
-          }
-          
-          // Filter by collection
-          if (this.variableFilters.collection !== 'all' && 
-              variable.collectionId !== this.variableFilters.collection) {
-            return false;
-          }
-          
-          // Filter by search
-          if (this.variableFilters.search) {
-            const searchLower = this.variableFilters.search.toLowerCase();
-            return variable.name.toLowerCase().includes(searchLower);
-          }
-          
-          return true;
-        });
-      },
-      canStartVariableScan() {
-        // Add null check before accessing length
-        return this.selectedVariableScanTypes && this.selectedVariableScanTypes.length > 0 && !this.isVariableScanning;
-      },
-      showVariableScanResults() {
-        // Add null check before accessing length
-        return this.linkedVariables && this.linkedVariables.length > 0 && !this.isVariableScanning && this.variableScanComplete;
-      },
-      groupedVariables() {
-        if (!this.linkedVariables?.length) {
-          console.log('No linked variables to display');
-          return {};
-        }
-        
-        console.log(`Grouping ${this.linkedVariables.length} variables with filters:`, this.variableFilters);
-        
-        // Apply filters
-        const filteredVariables = this.linkedVariables.filter(variable => {
-          // Skip undefined variables
-          if (!variable) return false;
-          
-          // Filter by type
-          if (this.variableFilters.type !== 'all') {
-            // Handle different type naming conventions (FLOAT vs number, etc.)
-            const varType = (variable.type || '').toUpperCase();
-            if (this.variableFilters.type === 'color' && varType !== 'COLOR') {
-              return false;
-            }
-            if (this.variableFilters.type === 'number' && 
-                varType !== 'FLOAT' && varType !== 'INTEGER' && varType !== 'NUMBER') {
-              return false;
-            }
-            if (this.variableFilters.type === 'string' && varType !== 'STRING') {
-              return false;
-            }
-            if (this.variableFilters.type === 'boolean' && varType !== 'BOOLEAN') {
-              return false;
-            }
-          }
-          
-          // Filter by collection
-          if (this.variableFilters.collection !== 'all' && 
-              (!variable.collection || variable.collection.id !== this.variableFilters.collection)) {
-            return false;
-          }
-          
-          // Filter by library type (new)
-          if (this.variableFilters.libraryType !== 'all') {
-            if (this.variableFilters.libraryType === 'team-library' && !variable.isTeamLibrary) {
-              return false;
-            }
-            if (this.variableFilters.libraryType === 'local-library' && !variable.isLocalLibrary) {
-              return false;
-            }
-                      if (this.variableFilters.libraryType === 'missing-library' && !variable.isMissingLibrary) {
-            return false;
-          }
-          if (this.variableFilters.libraryType === 'deleted-variables' && !variable.isDeletedVariable) {
-            return false;
-          }
-          }
-          
-          // Filter by search term
-          if (this.variableFilters.search) {
-            const searchTerm = this.variableFilters.search.toLowerCase();
-            const variableName = (variable.name || '').toLowerCase();
-            const collectionName = (variable.collection?.name || '').toLowerCase();
-            
-            if (!variableName.includes(searchTerm) && !collectionName.includes(searchTerm)) {
-              return false;
-            }
-          }
-          
-          return true;
-        });
-        
-        console.log(`Filtered to ${filteredVariables.length} variables`);
-        
-        // Group by collection and type
-        const groups = {};
-        for (const variable of filteredVariables) {
-          // Skip incomplete variables
-          if (!variable || !variable.type) continue;
-          
-          const collectionName = variable.collection?.name || 
-                               (variable.isTeamLibrary ? 'Team Library' : 
-                                variable.isLocalLibrary ? 'Local Library' : 
-                                variable.isMissingLibrary ? 'Missing Library' : 'Unknown Collection');
-                                
-          const groupKey = `${collectionName}-${variable.type}`;
-          
-          if (!groups[groupKey]) {
-            groups[groupKey] = {
-              collectionName,
-              type: variable.type,
-              libraryType: variable.isTeamLibrary ? 'team-library' : 
-                          variable.isLocalLibrary ? 'local-library' : 
-                          variable.isMissingLibrary ? 'missing-library' : 
-                          variable.isDeletedVariable ? 'deleted-variables' : 'unknown',
-              variables: []
-            };
-          }
-          
-          // Ensure variables array exists before pushing
-          if (!groups[groupKey].variables) {
-            groups[groupKey].variables = [];
-          }
-          
-          groups[groupKey].variables.push(variable);
-        }
-        
-        console.log(`Grouped into ${Object.keys(groups).length} groups`);
-        return groups;
-      },
+
       designTokenOptions() {
         // Filter for standard design token options (typography, spacing, padding, radius, colors)
         const options = this.tokenScanOptions.filter(option => 
@@ -749,14 +482,8 @@ function initializeApp() {
         console.log('Design token options:', options.map(o => o.value));
         return options;
       },
-      libraryVariableOptions() {
-        // Filter for library-related options
-        return this.tokenScanOptions.filter(option => 
-          ['team-library', 'local-library', 'missing-library'].includes(option.value)
-        );
-      },
       
-      // Source type options (team library, local library, missing library, raw values)
+      // Source type options (missing library, deleted variables, raw values)
       librarySourceOptions() {
         return [
           {
@@ -766,21 +493,9 @@ function initializeApp() {
             icon: 'raw-value'
           },
           {
-            value: 'team-library',
-            label: 'Team Library',
-            description: 'Find elements using variables from shared team libraries',
-            icon: 'team-lib'
-          },
-          {
-            value: 'local-library',
-            label: 'Local Variables',
-            description: 'Find elements using variables defined in this document',
-            icon: 'local-var'
-          },
-          {
-            value: 'missing-library',
-            label: 'Missing Variables',
-            description: 'Find elements using variables from inaccessible libraries',
+            value: 'deleted-variables',
+            label: 'Deleted Variables', 
+            description: 'Find elements with deleted variables or variables from missing libraries',
             icon: 'missing-var'
           }
         ];
@@ -804,32 +519,11 @@ function initializeApp() {
           });
         }
         
-        // For team-library source, return only team library option
-        if (this.selectedSourceType === 'team-library') {
-          return this.tokenScanOptions.filter(option => 
-            option.value === 'team-library'
-          );
-        }
+
         
-        // For local-library source, return only local library option
-        if (this.selectedSourceType === 'local-library') {
-          return this.tokenScanOptions.filter(option => 
-            option.value === 'local-library'
-          );
-        }
-        
-        // For missing-library source, return only missing library option
-        if (this.selectedSourceType === 'missing-library') {
-          return this.tokenScanOptions.filter(option => 
-            option.value === 'missing-library'
-          );
-        }
-        
-        // For deleted-variables source, return only deleted variables option
+        // For deleted-variables source, no additional token type selection needed
         if (this.selectedSourceType === 'deleted-variables') {
-          return this.tokenScanOptions.filter(option => 
-            option.value === 'deleted-variables'
-          );
+          return [];
         }
         
         // Default fallback - return all options
@@ -840,17 +534,12 @@ function initializeApp() {
       getReferenceClass(ref) {
         if (!ref) return 'unknown-reference';
         
-        if (ref.isTeamLibrary) return 'team-library-reference';
-        if (ref.isLocalLibrary) return 'local-library-reference';
         if (ref.isMissingLibrary) return 'missing-library-reference';
-        if (ref.isInactiveLibrary) return 'inactive-library-reference';
         return 'unlinked-reference';
       },
       getReferenceDisplayType(ref) {
         if (!ref) return 'Unknown';
         
-        if (ref.isTeamLibrary) return 'Team Library';
-        if (ref.isLocalLibrary) return 'Local Variables';
         if (ref.isMissingLibrary) {
           // For missing variables, show the variable name or value if available
           if (ref.currentValue && ref.currentValue.variableName) {
@@ -858,7 +547,6 @@ function initializeApp() {
           }
           return 'Missing Variable';
         }
-        if (ref.isInactiveLibrary) return 'Inactive Library';
         return 'Unlinked Value';
       },
       handleScanScopeChange() {
@@ -956,8 +644,6 @@ function initializeApp() {
           
           // If a specific token type is also selected, make it more specific
           if (this.selectedScanType) {
-            // Extract the token part from the combined scan type (e.g., 'team-library-typography' -> 'typography')
-            const tokenPart = this.selectedScanType.split('-').slice(2).join('-');
             const tokenOption = this.filteredTokenOptions.find(option => option.value === this.selectedScanType);
             if (tokenOption) {
               scanDescription = tokenOption.label.toLowerCase() + ' ' + scanDescription;
@@ -986,8 +672,8 @@ function initializeApp() {
           // If we have a specific token type with a library source, include the token type separately
           tokenType: this.selectedSourceType !== 'raw-values' && this.selectedScanType ? 
                      this.selectedScanType.split('-').slice(2).join('-') : null,
-          // Include selected variable types for filtering if we're scanning for missing or deleted variables
-          variableTypes: (this.selectedSourceType === 'missing-library' || this.selectedSourceType === 'deleted-variables') ? this.selectedVariableTypes : []
+          // Include selected variable types for filtering if we're scanning for deleted variables
+          variableTypes: (this.selectedSourceType === 'deleted-variables') ? this.selectedVariableTypes : []
         };
         
         // Make sure all message data is serializable
@@ -1072,29 +758,7 @@ function initializeApp() {
           sourceType: msg.sourceType
         });
         
-        // Special handling for missing library scans
-        if (msg.type === 'scan-complete' && msg.scanType === 'missing-library') {
-          console.log('Processing missing-library scan results');
-          
-          // Ensure we store missing library results even if they arrive in different format
-          if (msg.results && Array.isArray(msg.results) && msg.results.length > 0) {
-            // Store in libraryResults for missing library references
-            this.libraryResults = this.libraryResults || {};
-            this.libraryResults.missing = msg.results;
-            
-            console.log(`Stored ${msg.results.length} missing library references`);
-            
-            // Group the results and store them properly
-            const grouped = this.groupByValue(msg.results);
-            if (Object.keys(grouped).length > 0) {
-              console.log(`Grouped ${msg.results.length} missing library results into ${Object.keys(grouped).length} groups`);
-              this.groupedReferences = grouped;
-            } else {
-              console.warn('Failed to group missing library results');
-            }
-          }
-        }
-        
+
         // Group the results if they're in array form
         if (msg.results && Array.isArray(msg.results) && msg.results.length > 0) {
           console.log(`Processing ${msg.results.length} scan results as array`);
@@ -1238,6 +902,19 @@ function initializeApp() {
         }
         return 'Ready to scan';
       },
+
+      getProgressBarColor(context = 'default') {
+        if (this.scanError) {
+          return 'var(--figma-color-bg-danger)';
+        }
+        if (!this.isScanning && this.scanProgress === 100) {
+          return 'var(--figma-color-bg-success)';
+        }
+        if (this.isScanning) {
+          return 'var(--figma-color-bg-brand)';
+        }
+        return 'var(--figma-color-bg-disabled)';
+      },
       
       getStartScanButtonTitle() {
         if (!this.hasSelection && !this.scanEntirePage) {
@@ -1318,14 +995,7 @@ function initializeApp() {
             // Use our missing library result handler
             this.handleMissingLibraryResult(data);
             break;
-          case 'team-library-result':
-            // Use team library result handler
-            this.handleTeamLibraryResult(data);
-            break;
-          case 'local-library-result':
-            // Use local library result handler
-            this.handleLocalLibraryResult(data);
-            break;
+
           case 'raw-values-result':
             // Default handling for raw values
             this.groupedReferences = data.references || {};
@@ -1333,18 +1003,12 @@ function initializeApp() {
             this.scanComplete = true;
             break;
           case 'missing-references-result':
-            // Special handling for missing library references
-            if (data.scanType === 'missing-library' || 
-                (data.references && Object.keys(data.references).some(key => key.startsWith('missing-library')))) {
-              this.handleMissingLibraryResult(data);
-            } else {
-              // Original handling for other reference types
-              this.handleScanComplete({
-                type: 'scan-complete',
-                references: data.references,
-                scanType: data.scanType || 'unknown'
-              });
-            }
+            // Handle missing references result
+            this.handleScanComplete({
+              type: 'scan-complete',
+              references: data.references,
+              scanType: data.scanType || 'unknown'
+            });
             break;
           case 'scan-error':
             this.isScanning = false;
@@ -1377,39 +1041,7 @@ function initializeApp() {
             this.showSuccessToast = true;
             setTimeout(() => { this.showSuccessToast = false; }, 3000);
             break;
-          case 'variable-scan-complete':
-            this.isVariableScanning = false;
-            this.variableScanComplete = true;
-            
-            if (data.variables && Array.isArray(data.variables)) {
-              this.variables = data.variables;
-              
-              // Find unique collections
-              this.variableCollections = [...new Set(
-                this.variables
-                  .filter(v => v.collectionId)
-                  .map(v => v.collectionId)
-              )];
-              
-              // Set success message
-              this.variableSuccessMessage = 'Variable scan complete!';
-              this.showVariableSuccessToast = true;
-              setTimeout(() => { this.showVariableSuccessToast = false; }, 3000);
-            }
-            break;
-          case 'variable-scan-progress':
-            this.variableScanProgress = data.progress;
-            break;
-          case 'variable-scan-status':
-            this.variableScanStatus = data.message;
-            break;
-          case 'variable-scan-cancelled':
-            this.isVariableScanning = false;
-            this.variableScanProgress = 0;
-            this.variableSuccessMessage = 'Variable scan cancelled';
-            this.showVariableSuccessToast = true;
-            setTimeout(() => { this.showVariableSuccessToast = false; }, 3000);
-            break;
+
           case 'resize':
             if (data.width && data.height) {
               const width = Number(data.width);
@@ -1432,11 +1064,11 @@ function initializeApp() {
           return;
         }
         
-        // Process the references using our new method
-        this.groupedReferences = this.processMissingLibraryVariables(msg.references);
+        // The references are already grouped by the scanner, just use them directly
+        this.groupedReferences = msg.references;
         
-        // Ensure we know it's a missing library scan
-        this.scanType = 'missing-library';
+        // Ensure we know it's a deleted variables scan
+        this.scanType = 'deleted-variables';
         this.isLibraryVariableScan = true;
         
         // Update scan completion state
@@ -1477,6 +1109,8 @@ function initializeApp() {
         }
         
         console.log(`Processed ${Object.keys(msg.references).length} missing library reference groups`);
+        console.log('Grouped references structure:', this.groupedReferences);
+        console.log('First group example:', Object.values(this.groupedReferences)[0]);
         
         // Ensure the UI shows the results
         this.showSuccessToast = true;
@@ -1823,7 +1457,7 @@ function initializeApp() {
             const radiusValue = typeof value === 'number' ? value : (value && value.value ? value.value : 0);
             const cornerType = result.cornerType || result.property || 'all';
             key = `${typeKey}:${radiusValue}:${cornerType}`;
-          } else if (['team-library', 'local-library', 'missing-library'].includes(typeKey)) {
+          } else if (['team-library', 'local-library', 'deleted-variables'].includes(typeKey)) {
             // For library variables, create a key based on variable name and property
             const variableName = result.variableName || (value && value.variableName) || 'Unknown';
             key = `${typeKey}:${variableName}:${property}`;
@@ -1876,72 +1510,8 @@ function initializeApp() {
       toggleHiddenFilter() {
         this.showHiddenOnly = !this.showHiddenOnly;
       },
-      async loadVariables() {
-        this.isLoadingVariables = true;
-        try {
-          // Send message to the plugin code to get variables
-          parent.postMessage({
-            pluginMessage: {
-              type: 'get-variables'
-            }
-          }, '*');
-        } catch (error) {
-          console.error('Error loading variables:', error);
-          this.showError('Failed to load variables');
-        } finally {
-          this.isLoadingVariables = false;
-        }
-      },
-      handleVariablesResponse(data) {
-        this.variables = data.variables || [];
-        this.variableCollections = data.collections || [];
-      },
-      selectVariable(variableId) {
-        if (!variableId) {
-          console.warn('Cannot select variable: No variable ID provided');
-          return;
-        }
-        
-        // Set the selected variable ID for UI highlighting
-        this.selectedVariableId = variableId;
-        
-        // Send a message to the plugin to select nodes using this variable
-        parent.postMessage({
-          pluginMessage: {
-            type: 'select-variable-nodes',
-            variableId: variableId
-          }
-        }, '*');
-      },
-      updateVariableFilters(filters) {
-        this.variableFilters = {
-          ...this.variableFilters,
-          ...filters
-        };
-      },
-      toggleVariableScanType(type) {
-        // If 'all' is selected, deselect others
-        if (type === 'all') {
-          this.selectedVariableScanTypes = ['all'];
-          return;
-        }
-        
-        // If selecting something else while 'all' is selected, deselect 'all'
-        if (this.selectedVariableScanTypes.includes('all')) {
-          this.selectedVariableScanTypes = [type];
-          return;
-        }
-        
-        // Toggle the selected type
-        if (this.selectedVariableScanTypes.includes(type)) {
-          // Don't allow deselecting if it's the only one selected
-          if (this.selectedVariableScanTypes.length > 1) {
-            this.selectedVariableScanTypes = this.selectedVariableScanTypes.filter(t => t !== type);
-          }
-        } else {
-          this.selectedVariableScanTypes.push(type);
-        }
-      },
+
+
       makeSerializable(obj, visited = new WeakMap()) {
         // Handle primitives and null
         if (obj === null || typeof obj !== 'object') {
@@ -2004,251 +1574,7 @@ function initializeApp() {
         }
         return result;
       },
-      startVariableScan() {
-        if (this.isVariableScanning) return;
-        
-        this.isVariableScanning = true;
-        this.variableScanProgress = 0;
-        this.linkedVariables = [];
-        
-        try {
-          const message = this.makeSerializable({
-            type: 'scan-variables',
-            scanTypes: this.selectedVariableScanTypes,
-            ignoreHiddenLayers: this.ignoreHiddenLayers
-          });
-          
-          parent.postMessage({
-            pluginMessage: message
-          }, '*');
-        } catch (error) {
-          console.error('Failed to start variable scan:', error);
-          this.isVariableScanning = false;
-          this.showError('Failed to start variable scan: ' + error.message);
-        }
-      },
-      stopVariableScan() {
-        if (!this.isVariableScanning) return;
-        
-        try {
-          parent.postMessage({
-            pluginMessage: this.makeSerializable({
-              type: 'stop-variable-scan'
-            })
-          }, '*');
-          
-          this.isVariableScanning = false;
-        } catch (error) {
-          console.error('Failed to stop variable scan:', error);
-        }
-      },
-      handleVariableScanProgress(progress) {
-        this.variableScanProgress = progress;
-      },
-      handleVariableScanComplete(variables) {
-        this.isVariableScanning = false;
-        this.variableScanProgress = 100;
-        this.linkedVariables = variables;
-        this.showVariableScanResults = true;
-        this.showRescanVariablesButton = true;
-        
-        // Extract collections from variables
-        const collections = new Map();
-        for (const variable of variables) {
-          if (variable.collection) {
-            if (!collections.has(variable.collection.id)) {
-              collections.set(variable.collection.id, {
-                id: variable.collection.id,
-                name: variable.collection.name,
-                remote: variable.collection.remote,
-                variables: []
-              });
-            }
-            collections.get(variable.collection.id).variables.push(variable);
-          }
-        }
-        
-        this.variableCollections = Array.from(collections.values());
-      },
-      handleVariableScanError(message) {
-        this.isVariableScanning = false;
-        this.errorMessage = message || 'Failed to scan variables';
-        this.showErrorToast = true;
-        
-        // Auto-hide toast after delay
-        setTimeout(() => {
-          if (this.errorMessage === message) {
-            this.showErrorToast = false;
-          }
-        }, 3000);
-      },
-      handleVariableUnlinked(data) {
-        if (!data) return;
-        
-        const { variableId, unlinkedCount } = data;
-        
-        // Show success message
-        this.successMessage = `Unlinked variable from ${unlinkedCount} instances`;
-        this.showSuccessToast = true;
-        
-        // Remove variable from list or update counts
-        this.linkedVariables = this.linkedVariables.filter(v => v.id !== variableId);
-        
-        // Auto-hide toast after delay
-        setTimeout(() => {
-          if (this.successMessage === `Unlinked variable from ${unlinkedCount} instances`) {
-            this.showSuccessToast = false;
-          }
-        }, 3000);
-      },
-      // Get progress bar color for variable scan
-      getProgressBarColor(type) {
-        if (type === 'variables') {
-          if (this.variableScanError) {
-            return 'var(--figma-color-bg-danger)';
-          }
-          if (!this.isVariableScanning && this.variableScanProgress === 100) {
-            return 'var(--figma-color-bg-success)';
-          }
-          if (this.isVariableScanning) {
-            return 'var(--figma-color-bg-brand)';
-          }
-          return 'var(--figma-color-bg-disabled)';
-        }
-        
-        // For type 'default' or any other type, use the standard logic
-        if (this.scanError) {
-          return 'var(--figma-color-bg-danger)';
-        }
-        if (!this.isScanning && this.scanProgress === 100) {
-          return 'var(--figma-color-bg-success)';
-        }
-        if (this.isScanning) {
-          return 'var(--figma-color-bg-brand)';
-        }
-        return 'var(--figma-color-bg-disabled)';
-      },
-      // Get variable scan progress status
-      getVariableProgressStatus() {
-        if (!this.canStartVariableScan) return 'Select variable types to scan';
-        if (this.isVariableScanning) return `Scanning... ${this.variableScanProgress}%`;
-        if (!this.isVariableScanning && this.variableScanProgress === 100) {
-          if (this.linkedVariables.length === 0) return 'No issues found';
-          return `Found ${this.linkedVariables.length} variables`;
-        }
-        return 'Ready to scan';
-      },
-      // Format variable type for display
-      formatVariableType(type) {
-        switch (type) {
-          case 'COLOR': return 'Color';
-          case 'FLOAT': return 'Number';
-          case 'INTEGER': return 'Number';
-          case 'BOOLEAN': return 'Boolean';
-          case 'STRING': return 'Text';
-          default: return type;
-        }
-      },
-      // Format variable value for display
-      formatVariableValue(value, type) {
-        if (value === undefined || value === null) {
-          return 'N/A';
-        }
-        
-        // Normalize type to uppercase
-        const normalizedType = (type || '').toUpperCase();
-        
-        // Format based on type
-        if (normalizedType === 'COLOR') {
-          // Handle color values
-          if (typeof value === 'object' && value !== null) {
-            // Handle rgba object
-            if ('r' in value && 'g' in value && 'b' in value) {
-              const r = Math.round((value.r || 0) * 255);
-              const g = Math.round((value.g || 0) * 255);
-              const b = Math.round((value.b || 0) * 255);
-              const a = value.a !== undefined ? value.a : 1;
-              return `RGBA(${r}, ${g}, ${b}, ${a.toFixed(2)})`;
-            }
-            // Handle HSL object
-            else if ('h' in value && 's' in value && 'l' in value) {
-              return `HSL(${value.h}, ${value.s}%, ${value.l}%)`;
-            }
-            // Handle unknown object format
-            return JSON.stringify(value);
-          }
-          // Handle string values (like hex)
-          else if (typeof value === 'string') {
-            return value;
-          }
-        }
-        else if (normalizedType === 'FLOAT' || normalizedType === 'NUMBER' || normalizedType === 'INTEGER') {
-          // Format number with up to 2 decimal places
-          const num = parseFloat(value);
-          return isNaN(num) ? value.toString() : num.toFixed(2);
-        }
-        else if (normalizedType === 'BOOLEAN') {
-          // Format boolean values
-          return value ? 'True' : 'False';
-        }
-        else if (normalizedType === 'STRING') {
-          // Format string values (truncate if too long)
-          const str = value.toString();
-          return str.length > 50 ? str.substring(0, 47) + '...' : str;
-        }
-        
-        // Default to string representation for unknown types
-        return typeof value === 'object' ? JSON.stringify(value) : String(value);
-      },
-      // Select all variables in a group
-      selectAllVariablesInGroup(variables) {
-        if (!variables?.length) {
-          console.warn('Cannot select variables: No valid variables array provided');
-          return;
-        }
-        
-        // Extract all variable IDs
-        const variableIds = variables
-          .filter(v => v && v.id) // Filter out invalid variables
-          .map(v => v.id);
-        
-        if (!variableIds?.length) {
-          console.warn('No valid variable IDs found in the group');
-          return;
-        }
-        
-        // Send a message to the plugin to select nodes using these variables
-        parent.postMessage({
-          pluginMessage: {
-            type: 'select-variable-group-nodes',
-            variableIds: variableIds
-          }
-        }, '*');
-      },
-      // Unlink a specific variable from all its usages
-      unlinkVariable(variableId) {
-        if (!variableId) return;
-        
-        const variable = this.linkedVariables.find(v => v.id === variableId);
-        if (!variable) return;
-        
-        // Confirm with user
-        const confirmMessage = `Unlink variable "${variable.name}" from ${variable.usages?.length || 0} instances?`;
-        
-        if (confirm(confirmMessage)) {
-          try {
-            parent.postMessage({
-              pluginMessage: this.makeSerializable({
-                type: 'unlink-variable',
-                variableId
-              })
-            }, '*');
-          } catch (error) {
-            console.error('Failed to unlink variable:', error);
-            this.showError('Failed to unlink variable');
-          }
-        }
-      },
+
       setPaddingFilter(type) {
         this.paddingFilterType = type;
       },
@@ -2443,9 +1769,6 @@ function initializeApp() {
       // Get readable label for source type
       getSourceTypeLabel(sourceType) {
         switch (sourceType) {
-          case 'team-library': return 'team library';
-          case 'local-library': return 'local variables';
-          case 'missing-library': return 'missing variables';
           case 'deleted-variables': return 'deleted variables';
           case 'raw-values': return 'unlinked';
           default: return sourceType;
@@ -2522,12 +1845,12 @@ function initializeApp() {
         }
         
         // For library variables, check library type
-        if (['team-library', 'local-library', 'missing-library'].includes(this.selectedSourceType)) {
+        if (['team-library', 'local-library', 'deleted-variables'].includes(this.selectedSourceType)) {
           // Check if the reference has the correct library type flag
           const isCorrectLibraryType = 
             (this.selectedSourceType === 'team-library' && firstRef.isTeamLibrary) ||
             (this.selectedSourceType === 'local-library' && firstRef.isLocalLibrary) ||
-            (this.selectedSourceType === 'missing-library' && firstRef.isMissingLibrary);
+            (this.selectedSourceType === 'deleted-variables' && firstRef.isMissingLibrary);
           
           // If no specific token type, just check library type
           if (!this.selectedScanType || this.selectedScanType === this.selectedSourceType) {
@@ -2619,19 +1942,7 @@ function initializeApp() {
         return icons.getVariableTypeIcon(type);
       }
     },
-    watch: {
-      activeLibraryTokens(newVal) {
-        this.hasLibraryResults = newVal.length > 0 || this.inactiveLibraryTokens.length > 0;
-      },
-      inactiveLibraryTokens(newVal) {
-        this.hasLibraryResults = newVal.length > 0 || this.activeLibraryTokens.length > 0;
-      },
-      activeTab(newTab) {
-        if (newTab === 'library-tokens') {
-          this.loadVariables();
-        }
-      }
-    },
+
     mounted() {
       console.log('Vue app mounted');
       

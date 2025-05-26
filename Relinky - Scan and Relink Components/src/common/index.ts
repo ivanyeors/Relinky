@@ -31,7 +31,7 @@ export interface MissingReference {
 }
 
 // Update ScanType to include all scan types
-export type ScanType = 'inactive-tokens' | 'local-library' | 'team-library' | 'missing-library' | 'deleted-variables' |
+export type ScanType = 'inactive-tokens' | 'missing-library' | 'deleted-variables' |
   'gap' | 'horizontal-padding' | 'vertical-padding' | 'corner-radius' | 'fill' | 'stroke' | 'typography' |
   'other' | 'color' | 'padding' | 'dimension' | 'opacity' | 'number' | 'string' | 'visibility' | 'boolean' |
   'layout' | 'effects' | 'effect-opacity'; // Added effects and effect-opacity types
@@ -110,7 +110,7 @@ export interface PluginMessage {
   isLibraryVariableScan?: boolean; // Whether this is a library variable scan
   isScanning?: boolean; // Flag for scan-progress messages
   isGrouped?: boolean; // Flag for grouped results
-  sourceType?: 'raw-values' | 'team-library' | 'local-library' | 'missing-library'; // Source type for scan-for-tokens message
+  sourceType?: 'raw-values' | 'missing-library' | 'deleted-variables'; // Source type for scan-for-tokens message
 }
 
 // Interface for document change tracking
@@ -881,9 +881,7 @@ export function groupMissingReferences(missingRefs: MissingReference[]): Record<
     
     // Define the category for this reference
     let category = 'unlinked';
-    if (ref.isTeamLibrary) category = 'team-library';
-    else if (ref.isLocalLibrary) category = 'local-library';
-    else if (ref.isInactiveLibrary) category = 'inactive-library';
+    if (ref.isInactiveLibrary) category = 'inactive-library';
     else if (ref.isMissingLibrary) category = 'missing-library';
     
     // Create a unique key based on the type of reference
