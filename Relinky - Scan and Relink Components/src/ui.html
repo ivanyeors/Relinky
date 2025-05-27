@@ -21,635 +21,529 @@
       <div class="content-section">
         <!-- Tab Navigation -->
         <div class="tab-navigation">
-          <button 
-            class="tab-button" 
-            :class="{ 
-              'active': activeTab === 'tokens',
-              'inactive': activeTab !== 'tokens'
-            }"
-            @click="switchTab('tokens')"
-          >
-            <span>Relink</span>
-          </button>
-
+          <!-- Removed relink tab button -->
         </div>
 
         <!-- Section content -->
-        <div class="scan-section">
-            <div class="step-container">
-              <div class="step-content">
-                <!-- 1. Title and Watch button -->
-                <div class="step-header">
-                  <h3 class="step-title">Select frames or components</h3>
-                  <button 
-                    class="watch-toggle" 
-                    :class="{ 
-                      'active': isWatching,
-                      'disabled': !scanEntirePage 
-                    }"
-                    @click="toggleWatch"
-                    :disabled="!scanEntirePage"
-                    :title="watchButtonTitle"
-                  >
-                    <div class="watch-toggle-content">
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                        <path v-if="isWatching && scanEntirePage" d="M8 3.33333C11.3333 3.33333 14.1667 5.33333 15.3333 8C14.1667 10.6667 11.3333 12.6667 8 12.6667C4.66667 12.6667 1.83333 10.6667 0.666667 8C1.83333 5.33333 4.66667 3.33333 8 3.33333Z" fill="currentColor"/>
-                        <g v-else>
-                          <path d="M2.66667 2L13.3333 14" stroke="currentColor" stroke-width="1.5"/>
-                          <path d="M8 3.33333C11.3333 3.33333 14.1667 5.33333 15.3333 8C14.1667 10.6667 11.3333 12.6667 8 12.6667C4.66667 12.6667 1.83333 10.6667 0.666667 8C1.83333 5.33333 4.66667 3.33333 8 3.33333Z" fill="currentColor" fill-opacity="0.5"/>
-                        </g>
-                      </svg>
-                      <span class="watch-toggle-text">{{ isWatching && scanEntirePage ? 'Watching' : 'Watch changes' }}</span>
-                    </div>
-                  </button>
-                </div>
-
-                <!-- 2. Scan Settings dropdown (move this before selection status) -->
-                <div class="scan-settings">
-                  <div class="settings-header">
-                    <h4 class="settings-title">Scan Settings</h4>
-                    <button 
-                      class="settings-toggle"
-                      @click="showSettings = !showSettings"
-                    >
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                        <path 
-                          :d="showSettings 
-                            ? 'M4 10L8 6L12 10' 
-                            : 'M4 6L8 10L12 6'" 
-                          stroke="currentColor" 
-                          stroke-width="1.5" 
-                          stroke-linecap="round" 
-                          stroke-linejoin="round"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-                  
-                <div class="settings-content" v-show="showSettings">
-                <!-- Move Scan Entire Page here -->
-                  <div class="setting-item">
-                      <label class="toggle-label">
-                        <div class="toggle-label-content">
-                          <span>Scan Entire Page</span>
-                          <span v-if="scanEntirePage" class="slow-badge">slow</span>
-                          <span class="info-badge" title="Scan the entire page instead of selected frames">ⓘ</span>
-                        </div>
-                        <div class="toggle-wrapper">
-                          <input 
-                            type="checkbox" 
-                            v-model="scanEntirePage"
-                            class="toggle-input"
-                            @change="handleScanScopeChange"
-                          >
-                          <div class="toggle-slider"></div>
-                        </div>
-                      </label>
-                  </div>
-                </div>
-                </div>
-
-                <!-- 3. Selection status -->
-                <div class="selection-container">
-                  <!-- Warning for instances -->
-                  <div v-if="hasInstances" class="toast warning">
-                    <div class="toast-icon">
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                        <path fill-rule="evenodd" clip-rule="evenodd" d="M8 1.33337L14.6667 13.3334H1.33334L8 1.33337ZM8 4.00004L3.73334 12H12.2667L8 4.00004ZM7.33334 6.66671H8.66668V9.33337H7.33334V6.66671ZM7.33334 10.6667H8.66668V12H7.33334V10.6667Z" fill="currentColor"/>
-                      </svg>
-                    </div>
-                    <span class="toast-message">Instances cannot be scanned. Please select frames, components, or sections instead.</span>
-                  </div>
-                  <!-- Existing selection messages -->
-                  <div v-else-if="!hasSelection && !scanEntirePage" class="toast">
-                    <div class="toast-icon">
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                        <path fill-rule="evenodd" clip-rule="evenodd" d="M8 1.33337L14.6667 13.3334H1.33334L8 1.33337ZM8 4.00004L3.73334 12H12.2667L8 4.00004ZM7.33334 6.66671H8.66668V9.33337H7.33334V6.66671ZM7.33334 10.6667H8.66668V12H7.33334V10.6667Z" fill="currentColor"/>
-                      </svg>
-                    </div>
-                    <span class="toast-message">Select frames or sections to start scanning</span>
-                  </div>
-                  <div v-else-if="hasSelection && !scanEntirePage" class="toast success">
-                    <div class="toast-icon">
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                        <path fill-rule="evenodd" clip-rule="evenodd" d="M8 1.33334C4.31811 1.33334 1.33334 4.31811 1.33334 8C1.33334 11.6819 4.31811 14.6667 8 14.6667C11.6819 14.6667 14.6667 11.6819 14.6667 8C14.6667 4.31811 11.6819 1.33334 8 1.33334ZM11.0607 6.27274L7.39401 9.93941L5.27274 7.81814L6.06069 7.03019L7.39401 8.36351L10.2727 5.48479L11.0607 6.27274Z" fill="currentColor"/>
-                      </svg>
-                    </div>
-                    <span class="toast-message">{{ selectedCount }} {{ selectedCount === 1 ? 'item' : 'items' }} selected</span>
-                  </div>
-                </div>
-            </div>
-        </div>
-        <!-- divider -->
-        <div class="divider"></div>
-        <!-- Results section -->
         <div class="results-section">
-          <!-- Design Tokens Tab -->
-          <div v-if="activeTab === 'tokens'" class="tab-content">
-            <!-- Scan Type Selection -->
-            <div class="step-container">
-              <div class="step-content">
-                <!-- 1. Title -->
-                <h3 class="step-title">Choose what to scan for</h3>
+          <!-- Remove tab-based content wrapper and show content directly -->
+          <!-- Scan Type Selection -->
+          <div class="step-container">
+            <div class="step-content">
+              <!-- 1. Title -->
+              <h3 class="step-title">Choose what to scan for</h3>
 
-                <!-- Source Cards - First level filter -->
-                <div class="scan-cards">
-                  <div class="scan-card-section-divider">Scan Type</div>
-                  
-                  <!-- Library Source Cards -->
-                  <div v-for="option in librarySourceOptions"
-                       :key="option.value"
-                       class="scan-card"
-                       :class="{ 
-                         'selected': selectedSourceType === option.value,
-                         'interactive': true
-                       }"
-                       role="option"
-                       :aria-selected="selectedSourceType === option.value"
-                       tabindex="0"
-                       @click="selectSourceType(option.value)"
-                  >
-                    <div class="scan-card-icon svg-icon">
-                      <div class="icon" v-html="icons[option.icon]"></div>
-                    </div>
-                    
-                    <div class="scan-card-content">
-                      <div class="scan-card-text">
-                        <div class="scan-card-title">{{ option.label }}</div>
-                        <div v-if="!showScanResults" class="scan-card-description">{{ option.description }}</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Token Type Selection - Only show after source type is selected with a smooth transition -->
-                <div v-if="selectedSourceType && selectedSourceType !== 'deleted-variables'" class="scan-cards token-type-section">
-                  <div class="scan-card-section-divider">Variable Type</div>
-                  
-                  <!-- Design Token Cards -->
-                  <div v-for="option in filteredTokenOptions"
-                       :key="option.value"
-                       class="scan-card"
-                       :class="{ 
-                         'selected': selectedScanType === option.value,
-                         'interactive': true
-                       }"
-                       role="option"
-                       :aria-selected="selectedScanType === option.value"
-                       tabindex="0"
-                       @click="selectScanType(option.value)"
-                  >
-                    <div class="scan-card-icon svg-icon">
-                      <div class="icon" v-html="icons[option.icon]"></div>
-                    </div>
-                    
-                    <div class="scan-card-content">
-                      <div class="scan-card-text">
-                        <div class="scan-card-title">{{ option.label }}</div>
-                        <div v-if="!showScanResults" class="scan-card-description">{{ option.description }}</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Scan Controls -->
-            <div class="divider"></div>
-
-            <!-- Scanning Section - Following Hierarchy -->
-            <div class="step-container">
-              <div class="step-content">
-                <!-- 1. Title -->
-                <h3 class="step-title">Start scanning</h3>
-
-                <!-- 2. Progress Bar -->
-                <div class="progress-container">
-                  <div class="progress-bar"
-                       :class="{
-                         'scanning': isScanning,
-                         'completed-no-issues': !isScanning && scanProgress === 100 && !hasResults
-                       }">
-                    <div class="progress-fill" 
-                         :style="{ 
-                           width: `${scanProgress}%`,
-                           background: getProgressBarColor('default')
-                         }"
-                    ></div>
-                    <span class="progress-text" v-if="canStartScan || isScanning || scanProgress === 100">{{ getProgressStatus() }}</span>
-                  </div>
-                </div>
-
-                <!-- 3. Buttons -->
-                <div class="scan-buttons">
-                  <!-- Start/Rescan button -->
+              <!-- 2. Scan Settings dropdown -->
+              <div class="scan-settings">
+                <div class="settings-header">
+                  <h4 class="settings-title">Scan Settings</h4>
                   <button 
-                    v-if="!isScanning"
-                    @click="startScan(showRescanButton)" 
-                    class="button"
-                    :class="{
-                      'primary-button': !showRescanButton,
-                      'secondary-button': showRescanButton
-                    }"
-                    :disabled="!canStartScan"
-                    :title="getStartScanButtonTitle()"
+                    class="settings-toggle"
+                    @click="showSettings = !showSettings"
                   >
-                    {{ showRescanButton ? 'Rescan' : 'Start Scan' }}
-                  </button>
-                  
-                  <!-- Stop button - only show when actively scanning -->
-                  <button 
-                    v-if="showStopButton"
-                    @click="stopScan()" 
-                    class="button warning-button"
-                  >
-                    Stop
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <path 
+                        :d="showSettings 
+                          ? 'M4 10L8 6L12 10' 
+                          : 'M4 6L8 10L12 6'" 
+                        stroke="currentColor" 
+                        stroke-width="1.5" 
+                        stroke-linecap="round" 
+                        stroke-linejoin="round"
+                      />
+                    </svg>
                   </button>
                 </div>
-              </div>
-            </div>
-
-            <!-- Add a new section for scan results with consistent styling -->
-            <template v-if="showScanResults">
-              <div class="divider"></div>
-              
-              <div class="step-container">
-                <div class="step-content">
-                  <!-- Results Header -->
-                  <div class="results-header">
-                    <div class="step-title-with-badge">
-                      <h3 class="step-title">Scan results</h3>
-                      <span class="results-badge">{{ getTotalResultsCount() }}</span>
-                    </div>
-                    <div class="action-buttons">
-                      <!-- Add Hidden filter toggle -->
-                      <button 
-                        class="button secondary-button"
-                        :class="{ 'active': showHiddenOnly }"
-                        @click="toggleHiddenFilter"
-                        title="Show hidden layers only"
-                      >
-                        Hidden
-                        <span v-if="showHiddenOnly" class="icon-check">
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <g id="check">
-                              <path d="M20 6L9 17L4 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                            </g>
-                          </svg>
-                        </span>
-                      </button>
-                      <button 
-                        class="button secondary-button"
-                        @click="clearResults"
-                      >
-                        Clear
-                      </button>
-                    </div>
-                  </div>
-
-                  <!-- Add scan results description -->
-                  <div class="scan-results-description p-2 rounded m-2 mb-3 bg-secondary">
-                    <p v-if="selectedScanType === 'deleted-variables' || selectedSourceType === 'deleted-variables'" class="text-secondary">
-                      These are elements that were previously linked to variables that have been deleted or are from libraries that are no longer accessible. You may need to reconnect them to new variables or convert them to raw values.
-                    </p>
-                    <p v-else-if="selectedScanType === 'fill'" class="text-secondary">
-                      Fill colors found in your design. Grouped by similar values.
-                    </p>
-                    <p v-else-if="selectedScanType === 'stroke'" class="text-secondary">
-                      Stroke colors found in your design. Grouped by similar values.
-                    </p>
-                    <p v-else-if="selectedScanType === 'typography'" class="text-secondary">
-                      Typography styles found in your design. Grouped by similar styles.
-                    </p>
-                    <p v-else-if="selectedScanType === 'corner-radius'" class="text-secondary">
-                      Corner radius values found in your design. Grouped by similar values.
-                    </p>
-                    <p v-else-if="selectedScanType === 'vertical-padding'" class="text-secondary">
-                      Vertical padding values found in your design. Use filters to see specific padding types.
-                    </p>
-                    <p v-else-if="selectedScanType === 'horizontal-padding'" class="text-secondary">
-                      Horizontal padding values found in your design. Use filters to see specific padding types.
-                    </p>
-                    <p v-else-if="selectedScanType === 'gap'" class="text-secondary">
-                      These frames have gaps in auto-layout that are using raw values instead of variables. 
-                      Select a group to update them all at once.
-                    </p>
-                    <p v-else-if="selectedScanType === 'opacity'" class="text-secondary">
-                      These layers are using raw opacity values instead of variables. 
-                      This includes element opacity, fill opacity, stroke opacity, and effect opacity.
-                      Select a group to update them all at once.
-                    </p>
-                    <p v-else-if="selectedScanType === 'effects'" class="text-secondary">
-                      These layers have effect properties (shadows, blur, etc.) using raw values instead of variables.
-                      This includes X/Y positions, blur radius, spread, and colors.
-                      Select a group to update them all at once.
-                    </p>
-                    <p v-else class="text-secondary">
-                      The selected values are used directly in the design instead of being linked to variables.
-                      Select a group to update them all at once.
-                    </p>
-                  </div>
-                  
-                  <!-- Variable Type Filter Section - only show after scan results for deleted variables -->
-                  <div v-if="showVariableTypeFilters && scanType === 'deleted-variables'" class="variable-filter-section">
-                    <div class="scan-card-section-divider">Filter by Variable Type</div>
-                    <div class="scan-cards">
-                      <!-- Add "All" option that's selected by default -->
-                      <div class="scan-card"
-                           :class="{ 
-                             'selected': selectedVariableTypeFilter === 'all',
-                             'interactive': true
-                           }"
-                           role="option"
-                           :aria-selected="selectedVariableTypeFilter === 'all'"
-                           tabindex="0"
-                           @click="selectVariableTypeFilter('all')"
-                      >
-                        <div class="scan-card-icon svg-icon">
-                          <div class="icon" v-html="icons.variable"></div>
-                        </div>
-                        
-                        <div class="scan-card-content">
-                          <div class="scan-card-text">
-                            <div class="scan-card-title">All Types</div>
-                            <div class="scan-card-description">Show all variable types</div>
-                          </div>
-                        </div>
+                
+                <div class="settings-content" v-show="showSettings">
+                  <div class="setting-item">
+                    <label class="toggle-label">
+                      <div class="toggle-label-content">
+                        <span>Scan Entire Page</span>
+                        <span v-if="scanEntirePage" class="slow-badge">slow</span>
+                        <span class="info-badge" title="Scan the entire page instead of selected frames">ⓘ</span>
                       </div>
-                      
-                      <!-- Individual Variable Type Cards -->
-                      <div v-for="type in availableVariableTypes" 
-                           :key="type" 
-                           class="scan-card"
-                           :class="{ 
-                             'selected': selectedVariableTypeFilter === type,
-                             'interactive': true
-                           }"
-                           role="option"
-                           :aria-selected="selectedVariableTypeFilter === type"
-                           tabindex="0"
-                           @click="selectVariableTypeFilter(type)"
-                      >
-                        <div class="scan-card-icon svg-icon">
-                          <!-- Using appropriate icon based on variable type -->
-                          <div class="icon" v-html="getVariableTypeIcon(type)"></div>
-                        </div>
-                        
-                        <div class="scan-card-content">
-                          <div class="scan-card-text">
-                            <div class="scan-card-title">{{ type }}</div>
-                            <div class="scan-card-description">Filter by {{ type.toLowerCase() }} variables</div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- Padding Filter (Only shows with vertical-padding scan type) -->
-                  <div id="padding-filter" v-if="selectedScanType === 'vertical-padding'" class="padding-filter">
-                    <button class="filter-btn" :class="{ active: paddingFilterType === 'all' }" @click="setPaddingFilter('all')">All Padding</button>
-                    <button class="filter-btn" :class="{ active: paddingFilterType === 'top' }" @click="setPaddingFilter('top')">Top Padding</button>
-                    <button class="filter-btn" :class="{ active: paddingFilterType === 'bottom' }" @click="setPaddingFilter('bottom')">Bottom Padding</button>
-                  </div>
-
-                  <!-- Horizontal Padding Filter (Only shows with horizontal-padding scan type) -->
-                  <div id="horizontal-padding-filter" v-if="selectedScanType === 'horizontal-padding'" class="padding-filter">
-                    <button class="filter-btn" :class="{ active: paddingFilterType === 'all' }" @click="setPaddingFilter('all')">All Padding</button>
-                    <button class="filter-btn" :class="{ active: paddingFilterType === 'left' }" @click="setPaddingFilter('left')">Left Padding</button>
-                    <button class="filter-btn" :class="{ active: paddingFilterType === 'right' }" @click="setPaddingFilter('right')">Right Padding</button>
-                  </div>
-
-                  <!-- Gap Filter (Only shows with gap scan type) -->
-                  <div id="gap-filter" v-if="selectedScanType === 'gap'" class="padding-filter">
-                    <button class="filter-btn" :class="{ active: gapFilterType === 'all' }" @click="setGapFilter('all')">All Gaps</button>
-                    <button class="filter-btn" :class="{ active: gapFilterType === 'vertical' }" @click="setGapFilter('vertical')">Vertical Gaps</button>
-                    <button class="filter-btn" :class="{ active: gapFilterType === 'horizontal' }" @click="setGapFilter('horizontal')">Horizontal Gaps</button>
-                  </div>
-
-                  <!-- Corner Radius Filter (Only shows with corner-radius scan type) -->
-                  <div id="radius-filter" v-if="selectedScanType === 'corner-radius'" class="padding-filter">
-                    <button class="filter-btn" :class="{ active: radiusFilterType === 'all' }" @click="setRadiusFilter('all')">
-                      <span class="icon" v-html="icons['radius']"></span>
-                    </button>
-                    <button class="filter-btn" :class="{ active: radiusFilterType === 'top-left' }" @click="setRadiusFilter('top-left')">
-                      <span class="icon" v-html="icons['radius-top-left']"></span>
-                    </button>
-                    <button class="filter-btn" :class="{ active: radiusFilterType === 'top-right' }" @click="setRadiusFilter('top-right')">
-                      <span class="icon" v-html="icons['radius-top-right']"></span>
-                    </button>
-                    <button class="filter-btn" :class="{ active: radiusFilterType === 'bottom-left' }" @click="setRadiusFilter('bottom-left')">
-                      <span class="icon" v-html="icons['radius-bottom-left']"></span>
-                    </button>
-                    <button class="filter-btn" :class="{ active: radiusFilterType === 'bottom-right' }" @click="setRadiusFilter('bottom-right')">
-                      <span class="icon" v-html="icons['radius-bottom-right']"></span>
-                    </button>
-                  </div>
-                  
-                  <!-- Layout Filter (Only shows with layout scan type) -->
-                  <div id="layout-filter" v-if="selectedScanType === 'layout'" class="padding-filter">
-                    <button class="filter-btn" :class="{ active: layoutFilterType === 'all' }" @click="setLayoutFilter('all')">All Dimensions</button>
-                    <button class="filter-btn" :class="{ active: layoutFilterType === 'width' }" @click="setLayoutFilter('width')">Width Values</button>
-                    <button class="filter-btn" :class="{ active: layoutFilterType === 'height' }" @click="setLayoutFilter('height')">Height Values</button>
-                    <button class="filter-btn" :class="{ active: layoutFilterType === 'fill' }" @click="setLayoutFilter('fill')">Fill Container</button>
-                    <button class="filter-btn" :class="{ active: layoutFilterType === 'hug' }" @click="setLayoutFilter('hug')">Hug Contents</button>
-                  </div>
-
-                  <!-- Effects Filter (Only shows with effects scan type) -->
-                  <div id="effects-filter" v-if="selectedScanType === 'effects'" class="padding-filter">
-                    <button class="filter-btn" :class="{ active: effectsFilterType === 'all' }" @click="setEffectsFilter('all')">All Effects</button>
-                    <button class="filter-btn" :class="{ active: effectsFilterType === 'x' }" @click="setEffectsFilter('x')">X Position</button>
-                    <button class="filter-btn" :class="{ active: effectsFilterType === 'y' }" @click="setEffectsFilter('y')">Y Position</button>
-                    <button class="filter-btn" :class="{ active: effectsFilterType === 'blur' }" @click="setEffectsFilter('blur')">Blur Radius</button>
-                    <button class="filter-btn" :class="{ active: effectsFilterType === 'spread' }" @click="setEffectsFilter('spread')">Spread</button>
-                    <button class="filter-btn" :class="{ active: effectsFilterType === 'color' }" @click="setEffectsFilter('color')">Color</button>
-                  </div>
-
-                  <!-- Results Container -->
-                  <div class="results-container">
-                    <!-- Debug info - will only show in dev tools but helpful for troubleshooting -->
-                    <div style="display:none">
-                      {{ console.log('Rendering filteredResults:', Object.keys(filteredResults).length, 'groups') }}
-                    </div>
-                    
-                    <!-- Actual results display -->
-                    <div v-for="(group, groupKey) in filteredResults" 
-                         :key="groupKey" 
-                         class="value-group"
-                    >
-                      <!-- Debugging info for each group -->
-                      <div style="display:none">
-                        {{ console.log(`Rendering group ${groupKey}:`, group?.refs?.length || 0, 'refs') }}
-                      </div>
-                      
-                      <!-- Group Header -->
-                      <div class="value-group-header" 
-                           @click="toggleGroup(groupKey)"
-                           :class="{
-                             'expanded': isGroupExpanded(groupKey),
-                             'library-scan': isLibraryVariableScan,
-                             'unlinked-reference': group.refs?.[0] && !group.refs[0].isMissingLibrary,
-                             'missing-library-reference': group.refs?.[0] && group.refs[0].isMissingLibrary
-                           }"
-                      >
-                        <div class="group-info">
-                          <span class="expand-icon">
-                            {{ isGroupExpanded(groupKey) ? '▼' : '▶' }}
-                          </span>
-                          
-                          <!-- Library type badge - show prominently for library scans -->
-                          <span v-if="isLibraryVariableScan && group.refs?.[0]" 
-                                :class="{
-                                  'library-badge': true,
-                                  'unlinked-reference': !group.refs[0].isMissingLibrary,
-                                  'missing-library-reference': group.refs[0].isMissingLibrary
-                                }">
-                            <!-- For missing library variables, show the variable value -->
-                            <template v-if="group.refs[0].isMissingLibrary && group.refs[0].currentValue">
-                              {{ group.refs[0].currentValue.variableName || formatValue(group.refs[0].currentValue) }}
-                            </template>
-                            <template v-else>
-                              {{ getReferenceDisplayType(group.refs[0]) }}
-                            </template>
-                          </span>
-                          
-                          <!-- Add typography-specific template -->
-                          <template v-if="group.refs?.[0]?.type === 'typography' && group.refs[0]?.currentValue">
-                            <div class="typography-labels">
-                              <!-- Show labels from the new structure if available -->
-                              <template v-if="group.refs[0].currentValue.labels">
-                                <span class="label font-family">
-                                  <span v-if="group.refs[0].currentValue.labels.fontFamily">{{ group.refs[0].currentValue.labels.fontFamily.text }}</span>
-                                </span>
-                                <span class="label font-weight">
-                                  <span v-if="group.refs[0].currentValue.labels.fontWeight">{{ group.refs[0].currentValue.labels.fontWeight.text }}</span>
-                                </span>
-                                <span class="label font-size">
-                                  <span v-if="group.refs[0].currentValue.labels.fontSize">{{ group.refs[0].currentValue.labels.fontSize.text }}</span>
-                                </span>
-                              </template>
-                              
-                              <!-- Fallback to old structure if labels not available -->
-                              <template v-else>
-                                <span class="label font-family" v-if="group.refs[0].currentValue && group.refs[0].currentValue.fontFamily">
-                                  {{ group.refs[0].currentValue.fontFamily }}
-                                </span>
-                                <span class="label font-weight" v-if="group.refs[0].currentValue && group.refs[0].currentValue.fontWeight">
-                                  {{ group.refs[0].currentValue.fontWeight }}
-                                </span>
-                                <span class="label font-size" v-if="group.refs[0].currentValue && group.refs[0].currentValue.fontSize">
-                                  {{ group.refs[0].currentValue.fontSize }}px
-                                </span>
-                              </template>
-                              
-                              <!-- Add library type badge for non-library scans -->
-                              <span v-if="!isLibraryVariableScan" 
-                                    :class="{
-                                      'label': true, 
-                                      'library-type': true,
-                                      'ml-xs': true,
-                                      'unlinked-reference': !group.refs[0].isTeamLibrary && !group.refs[0].isLocalLibrary && !group.refs[0].isMissingLibrary,
-                                      'team-library-reference': group.refs[0].isTeamLibrary,
-                                      'local-library-reference': group.refs[0].isLocalLibrary,
-                                      'missing-library-reference': group.refs[0].isMissingLibrary
-                                    }">
-                                <!-- For missing library variables, show the variable value -->
-                                <template v-if="group.refs[0].isMissingLibrary && group.refs[0].currentValue">
-                                  {{ group.refs[0].currentValue.variableName || formatValue(group.refs[0].currentValue) }}
-                                </template>
-                                <template v-else>
-                                  {{ getReferenceDisplayType(group.refs[0]) }}
-                                </template>
-                              </span>
-                            </div>
-                          </template>
-                          
-                          <!-- Keep existing templates for other types - with optional chaining -->
-                          <template v-else-if="group.refs?.[0]?.type === 'fill' || group.refs?.[0]?.type === 'stroke'">
-                            <color-preview v-if="group.refs[0].currentValue" :color="group.refs[0].currentValue" />
-                            <!-- Add library type badge -->
-                            <span v-if="!isLibraryVariableScan" 
-                                  :class="{
-                                    'label': true, 
-                                    'library-type': true,
-                                    'ml-xs': true,
-                                    'unlinked-reference': !group.refs[0].isMissingLibrary,
-                                    'missing-library-reference': group.refs[0].isMissingLibrary
-                                  }">
-                              <!-- For missing library variables, show the variable value -->
-                              <template v-if="group.refs[0].isMissingLibrary && group.refs[0].currentValue">
-                                {{ group.refs[0].currentValue.variableName || formatValue(group.refs[0].currentValue) }}
-                              </template>
-                              <template v-else>
-                                {{ getReferenceDisplayType(group.refs[0]) }}
-                              </template>
-                            </span>
-                          </template>
-                          
-                          <template v-else-if="group.refs?.[0]">
-                            <div class="typography-labels">
-                              <span class="label value font-medium" v-if="group.refs[0].currentValue !== undefined">{{ formatValue(group.refs[0].currentValue) }}</span>
-                              <span v-if="group.refs[0].type === 'gap' && group.refs[0].currentValue !== undefined" class="label gap">
-                                {{ group.refs[0].gapType === 'vertical' ? 'Vertical' : 'Horizontal' }} Gap: {{ group.refs[0].currentValue }}px
-                              </span>
-                              <span v-if="group.refs[0].type === 'horizontalPadding' && group.refs[0].currentValue !== undefined" class="label horizontal-padding">{{ group.refs[0].currentValue }}px</span>
-                              <span v-if="group.refs[0].type === 'verticalPadding' && group.refs[0].currentValue !== undefined" class="label vertical-padding">{{ group.refs[0].currentValue }}px</span>
-                              <!-- Add library type badge -->
-                              <span v-if="!isLibraryVariableScan" 
-                                    :class="{
-                                      'label': true, 
-                                      'library-type': true,
-                                      'ml-xs': true,
-                                      'unlinked-reference': !group.refs[0].isMissingLibrary,
-                                      'missing-library-reference': group.refs[0].isMissingLibrary
-                                    }">
-                                <!-- For missing library variables, show the variable value -->
-                                <template v-if="group.refs[0].isMissingLibrary && group.refs[0].currentValue">
-                                  {{ group.refs[0].currentValue.variableName || formatValue(group.refs[0].currentValue) }}
-                                </template>
-                                <template v-else>
-                                  {{ getReferenceDisplayType(group.refs[0]) }}
-                                </template>
-                              </span>
-                            </div>
-                          </template>
-                        </div>
-                        <div class="group-actions">
-                          <span class="label instance-count">{{ group.refs?.length || 0 }}×</span>
-                          <button 
-                            class="button secondary-button small"
-                            @click.stop="selectGroup(group.refs, $event)"
-                            :disabled="!(group.refs?.length > 0)"
-                          >
-                            Select All
-                          </button>
-                        </div>
-                      </div>
-
-                      <!-- Group Details -->
-                      <div v-if="isGroupExpanded(groupKey)" 
-                           class="value-group-details"
-                           @click.stop
-                      >
-                        <div v-for="ref in (group.refs || [])" 
-                             :key="ref.nodeId" 
-                             class="reference-item"
-                             :class="{
-                               'unlinked-reference': ref && !ref.isMissingLibrary,
-                               'missing-library-reference': ref && ref.isMissingLibrary
-                             }"
+                      <div class="toggle-wrapper">
+                        <input 
+                          type="checkbox" 
+                          v-model="scanEntirePage"
+                          class="toggle-input"
+                          @change="handleScanScopeChange"
                         >
-                          <div class="reference-info">
-                            <div class="reference-name">{{ ref.nodeName || ref.name || 'Unnamed Node' }}</div>
-                            <div class="reference-location">{{ ref.location || 'Unknown Location' }}</div>
-                            <div v-if="ref.variableName" class="reference-variable text-brand font-medium mt-xs">{{ ref.variableName }}</div>
-                            <!-- Don't display library name for missing library variables to simplify the UI -->
-                            <div v-if="ref.libraryName && !ref.isMissingLibrary" class="reference-library">{{ ref.libraryName }}</div>
+                        <div class="toggle-slider"></div>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Source Cards - First level filter -->
+              <div class="scan-cards">
+                <div class="scan-card-section-divider">Scan Type</div>
+                
+                <!-- Library Source Cards -->
+                <div v-for="option in librarySourceOptions"
+                     :key="option.value"
+                     class="scan-card"
+                     :class="{ 
+                       'selected': selectedSourceType === option.value,
+                       'interactive': true
+                     }"
+                     role="option"
+                     :aria-selected="selectedSourceType === option.value"
+                     tabindex="0"
+                     @click="selectSourceType(option.value)"
+                >
+                  <div class="scan-card-icon svg-icon">
+                    <div class="icon" v-html="icons[option.icon]"></div>
+                  </div>
+                  
+                  <div class="scan-card-content">
+                    <div class="scan-card-text">
+                      <div class="scan-card-title">{{ option.label }}<span v-if="option.value === 'deleted-variables'" class="beta-badge">BETA</span></div>
+                      <div v-if="!showScanResults" class="scan-card-description">{{ option.description }}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Token Type Selection - Only show after source type is selected with a smooth transition -->
+              <div v-if="selectedSourceType && selectedSourceType !== 'deleted-variables'" class="scan-cards token-type-section">
+                <div class="scan-card-section-divider">Variable Type</div>
+                
+                <!-- Design Token Cards -->
+                <div v-for="option in filteredTokenOptions"
+                     :key="option.value"
+                     class="scan-card"
+                     :class="{ 
+                       'selected': selectedScanType === option.value,
+                       'interactive': true
+                     }"
+                     role="option"
+                     :aria-selected="selectedScanType === option.value"
+                     tabindex="0"
+                     @click="selectScanType(option.value)"
+                >
+                  <div class="scan-card-icon svg-icon">
+                    <div class="icon" v-html="icons[option.icon]"></div>
+                  </div>
+                  
+                  <div class="scan-card-content">
+                    <div class="scan-card-text">
+                      <div class="scan-card-title">{{ option.label }}</div>
+                      <div v-if="!showScanResults" class="scan-card-description">{{ option.description }}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Scan Controls -->
+          <div class="divider"></div>
+
+          <!-- Scanning Section - Following Hierarchy -->
+          <div class="step-container">
+            <div class="step-content">
+              <!-- 1. Title -->
+              <h3 class="step-title">Start scanning</h3>
+
+              <!-- 2. Progress Bar -->
+              <div class="progress-container">
+                <div class="progress-bar"
+                     :class="{
+                       'scanning': isScanning,
+                       'completed-no-issues': !isScanning && scanProgress === 100 && !hasResults
+                     }">
+                  <div class="progress-fill" 
+                       :style="{ 
+                         width: `${scanProgress}%`,
+                         background: getProgressBarColor('default')
+                       }"
+                  ></div>
+                  <span class="progress-text" v-if="canStartScan || isScanning || scanProgress === 100">{{ getProgressStatus() }}</span>
+                </div>
+              </div>
+
+              <!-- 3. Buttons -->
+              <div class="scan-buttons">
+                <!-- Start/Rescan button -->
+                <button 
+                  v-if="!isScanning"
+                  @click="startScan(showRescanButton)" 
+                  class="button"
+                  :class="{
+                    'primary-button': !showRescanButton,
+                    'secondary-button': showRescanButton
+                  }"
+                  :disabled="!canStartScan"
+                  :title="getStartScanButtonTitle()"
+                >
+                  {{ showRescanButton ? 'Rescan' : 'Start Scan' }}
+                </button>
+                
+                <!-- Stop button - only show when actively scanning -->
+                <button 
+                  v-if="showStopButton"
+                  @click="stopScan()" 
+                  class="button warning-button"
+                >
+                  Stop
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Add a new section for scan results with consistent styling -->
+          <template v-if="showScanResults">
+            <div class="divider"></div>
+            
+            <div class="step-container">
+              <div class="step-content">
+                <!-- Results Header -->
+                <div class="results-header">
+                  <div class="step-title-with-badge">
+                    <h3 class="step-title">Scan results</h3>
+                    <span class="results-badge">{{ getTotalResultsCount() }}</span>
+                  </div>
+                  <div class="action-buttons">
+                    <!-- Add Hidden filter toggle -->
+                    <button 
+                      class="button secondary-button"
+                      :class="{ 'active': showHiddenOnly }"
+                      @click="toggleHiddenFilter"
+                      title="Show hidden layers only"
+                    >
+                      Hidden
+                      <span v-if="showHiddenOnly" class="icon-check">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <g id="check">
+                            <path d="M20 6L9 17L4 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                          </g>
+                        </svg>
+                      </span>
+                    </button>
+                    <button 
+                      class="button secondary-button"
+                      @click="clearResults"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Add scan results description -->
+                <div class="scan-results-description p-2 rounded m-2 mb-3 bg-secondary">
+                  <p v-if="selectedScanType === 'deleted-variables' || selectedSourceType === 'deleted-variables'" class="text-secondary">
+                    These are elements that were previously linked to variables that have been deleted or are from libraries that are no longer accessible. You may need to reconnect them to new variables or convert them to raw values.
+                  </p>
+                  <p v-else-if="selectedScanType === 'fill'" class="text-secondary">
+                    Fill colors found in your design. Grouped by similar values.
+                  </p>
+                  <p v-else-if="selectedScanType === 'stroke'" class="text-secondary">
+                    Stroke colors found in your design. Grouped by similar values.
+                  </p>
+                  <p v-else-if="selectedScanType === 'typography'" class="text-secondary">
+                    Typography styles found in your design. Grouped by similar styles.
+                  </p>
+                  <p v-else-if="selectedScanType === 'corner-radius'" class="text-secondary">
+                    Corner radius values found in your design. Grouped by similar values.
+                  </p>
+                  <p v-else-if="selectedScanType === 'vertical-padding'" class="text-secondary">
+                    Vertical padding values found in your design. Use filters to see specific padding types.
+                  </p>
+                  <p v-else-if="selectedScanType === 'horizontal-padding'" class="text-secondary">
+                    Horizontal padding values found in your design. Use filters to see specific padding types.
+                  </p>
+                  <p v-else-if="selectedScanType === 'gap'" class="text-secondary">
+                    These frames have gaps in auto-layout that are using raw values instead of variables. 
+                    Select a group to update them all at once.
+                  </p>
+                  <p v-else-if="selectedScanType === 'opacity'" class="text-secondary">
+                    These layers are using raw opacity values instead of variables. 
+                    This includes element opacity, fill opacity, stroke opacity, and effect opacity.
+                    Select a group to update them all at once.
+                  </p>
+                  <p v-else-if="selectedScanType === 'effects'" class="text-secondary">
+                    These layers have effect properties (shadows, blur, etc.) using raw values instead of variables.
+                    This includes X/Y positions, blur radius, spread, and colors.
+                    Select a group to update them all at once.
+                  </p>
+                  <p v-else class="text-secondary">
+                    The selected values are used directly in the design instead of being linked to variables.
+                    Select a group to update them all at once.
+                  </p>
+                </div>
+                
+                <!-- Variable Type Filter Section - only show after scan results for deleted variables -->
+                <div v-if="showVariableTypeFilters && scanType === 'deleted-variables'" class="variable-filter-section">
+                  <div class="scan-card-section-divider">Filter by Variable Type</div>
+                  <div class="scan-cards">
+                    <!-- Add "All" option that's selected by default -->
+                    <div class="scan-card"
+                         :class="{ 
+                           'selected': selectedVariableTypeFilter === 'all',
+                           'interactive': true
+                         }"
+                         role="option"
+                         :aria-selected="selectedVariableTypeFilter === 'all'"
+                         tabindex="0"
+                         @click="selectVariableTypeFilter('all')"
+                    >
+                      <div class="scan-card-icon svg-icon">
+                        <div class="icon" v-html="icons.variable"></div>
+                      </div>
+                        
+                      <div class="scan-card-content">
+                        <div class="scan-card-text">
+                          <div class="scan-card-title">All Types</div>
+                          <div class="scan-card-description">Show all variable types</div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <!-- Individual Variable Type Cards -->
+                    <div v-for="type in availableVariableTypes" 
+                         :key="type" 
+                         class="scan-card"
+                         :class="{ 
+                           'selected': selectedVariableTypeFilter === type,
+                           'interactive': true
+                         }"
+                         role="option"
+                         :aria-selected="selectedVariableTypeFilter === type"
+                         tabindex="0"
+                         @click="selectVariableTypeFilter(type)"
+                    >
+                      <div class="scan-card-icon svg-icon">
+                        <!-- Using appropriate icon based on variable type -->
+                        <div class="icon" v-html="getVariableTypeIcon(type)"></div>
+                      </div>
+                        
+                      <div class="scan-card-content">
+                        <div class="scan-card-text">
+                          <div class="scan-card-title">{{ type }}</div>
+                          <div class="scan-card-description">Filter by {{ type.toLowerCase() }} variables</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Padding Filter (Only shows with vertical-padding scan type) -->
+                <div id="padding-filter" v-if="selectedScanType === 'vertical-padding'" class="padding-filter">
+                  <button class="filter-btn" :class="{ active: paddingFilterType === 'all' }" @click="setPaddingFilter('all')">All Padding</button>
+                  <button class="filter-btn" :class="{ active: paddingFilterType === 'top' }" @click="setPaddingFilter('top')">Top Padding</button>
+                  <button class="filter-btn" :class="{ active: paddingFilterType === 'bottom' }" @click="setPaddingFilter('bottom')">Bottom Padding</button>
+                </div>
+
+                <!-- Horizontal Padding Filter (Only shows with horizontal-padding scan type) -->
+                <div id="horizontal-padding-filter" v-if="selectedScanType === 'horizontal-padding'" class="padding-filter">
+                  <button class="filter-btn" :class="{ active: paddingFilterType === 'all' }" @click="setPaddingFilter('all')">All Padding</button>
+                  <button class="filter-btn" :class="{ active: paddingFilterType === 'left' }" @click="setPaddingFilter('left')">Left Padding</button>
+                  <button class="filter-btn" :class="{ active: paddingFilterType === 'right' }" @click="setPaddingFilter('right')">Right Padding</button>
+                </div>
+
+                <!-- Gap Filter (Only shows with gap scan type) -->
+                <div id="gap-filter" v-if="selectedScanType === 'gap'" class="padding-filter">
+                  <button class="filter-btn" :class="{ active: gapFilterType === 'all' }" @click="setGapFilter('all')">All Gaps</button>
+                  <button class="filter-btn" :class="{ active: gapFilterType === 'vertical' }" @click="setGapFilter('vertical')">Vertical Gaps</button>
+                  <button class="filter-btn" :class="{ active: gapFilterType === 'horizontal' }" @click="setGapFilter('horizontal')">Horizontal Gaps</button>
+                </div>
+
+                <!-- Corner Radius Filter (Only shows with corner-radius scan type) -->
+                <div id="radius-filter" v-if="selectedScanType === 'corner-radius'" class="padding-filter">
+                  <button class="filter-btn" :class="{ active: radiusFilterType === 'all' }" @click="setRadiusFilter('all')">
+                    <span class="icon" v-html="icons['radius']"></span>
+                  </button>
+                  <button class="filter-btn" :class="{ active: radiusFilterType === 'top-left' }" @click="setRadiusFilter('top-left')">
+                    <span class="icon" v-html="icons['radius-top-left']"></span>
+                  </button>
+                  <button class="filter-btn" :class="{ active: radiusFilterType === 'top-right' }" @click="setRadiusFilter('top-right')">
+                    <span class="icon" v-html="icons['radius-top-right']"></span>
+                  </button>
+                  <button class="filter-btn" :class="{ active: radiusFilterType === 'bottom-left' }" @click="setRadiusFilter('bottom-left')">
+                    <span class="icon" v-html="icons['radius-bottom-left']"></span>
+                  </button>
+                  <button class="filter-btn" :class="{ active: radiusFilterType === 'bottom-right' }" @click="setRadiusFilter('bottom-right')">
+                    <span class="icon" v-html="icons['radius-bottom-right']"></span>
+                  </button>
+                </div>
+                
+                <!-- Layout Filter (Only shows with layout scan type) -->
+                <div id="layout-filter" v-if="selectedScanType === 'layout'" class="padding-filter">
+                  <button class="filter-btn" :class="{ active: layoutFilterType === 'all' }" @click="setLayoutFilter('all')">All Dimensions</button>
+                  <button class="filter-btn" :class="{ active: layoutFilterType === 'width' }" @click="setLayoutFilter('width')">Width Values</button>
+                  <button class="filter-btn" :class="{ active: layoutFilterType === 'height' }" @click="setLayoutFilter('height')">Height Values</button>
+                  <button class="filter-btn" :class="{ active: layoutFilterType === 'fill' }" @click="setLayoutFilter('fill')">Fill Container</button>
+                  <button class="filter-btn" :class="{ active: layoutFilterType === 'hug' }" @click="setLayoutFilter('hug')">Hug Contents</button>
+                </div>
+
+                <!-- Effects Filter (Only shows with effects scan type) -->
+                <div id="effects-filter" v-if="selectedScanType === 'effects'" class="padding-filter">
+                  <button class="filter-btn" :class="{ active: effectsFilterType === 'all' }" @click="setEffectsFilter('all')">All Effects</button>
+                  <button class="filter-btn" :class="{ active: effectsFilterType === 'x' }" @click="setEffectsFilter('x')">X Position</button>
+                  <button class="filter-btn" :class="{ active: effectsFilterType === 'y' }" @click="setEffectsFilter('y')">Y Position</button>
+                  <button class="filter-btn" :class="{ active: effectsFilterType === 'blur' }" @click="setEffectsFilter('blur')">Blur Radius</button>
+                  <button class="filter-btn" :class="{ active: effectsFilterType === 'spread' }" @click="setEffectsFilter('spread')">Spread</button>
+                  <button class="filter-btn" :class="{ active: effectsFilterType === 'color' }" @click="setEffectsFilter('color')">Color</button>
+                </div>
+
+                <!-- Results Container -->
+                <div class="results-container">
+                  <!-- Debug info - will only show in dev tools but helpful for troubleshooting -->
+                  <div style="display:none">
+                    {{ console.log('Rendering filteredResults:', Object.keys(filteredResults).length, 'groups') }}
+                  </div>
+                  
+                  <!-- Actual results display -->
+                  <div v-for="(group, groupKey) in filteredResults" 
+                       :key="groupKey" 
+                       class="value-group"
+                  >
+                    <!-- Debugging info for each group -->
+                    <div style="display:none">
+                      {{ console.log(`Rendering group ${groupKey}:`, group?.refs?.length || 0, 'refs') }}
+                    </div>
+                    
+                    <!-- Group Header -->
+                    <div class="value-group-header" 
+                         @click="toggleGroup(groupKey)"
+                         :class="{
+                           'expanded': isGroupExpanded(groupKey),
+                           'library-scan': isLibraryVariableScan,
+                           'unlinked-reference': group.refs?.[0] && !group.refs[0].isMissingLibrary,
+                           'missing-library-reference': group.refs?.[0] && group.refs[0].isMissingLibrary
+                         }"
+                    >
+                      <div class="group-info">
+                        <span class="expand-icon">
+                          {{ isGroupExpanded(groupKey) ? '▼' : '▶' }}
+                        </span>
+                        
+                        <!-- Library Badge with Token Type and Raw Value -->
+                        <span v-if="isLibraryVariableScan && group.refs?.[0]" 
+                              :class="{
+                                'library-badge': true,
+                                'unlinked-reference': !group.refs[0].isMissingLibrary,
+                                'missing-library-reference': group.refs[0].isMissingLibrary
+                              }">
+                          <!-- Show Token Type -->
+                          <span class="token-type">{{ getReferenceDisplayType(group.refs[0]) }}</span>
+                          <!-- Show Variable Name and Raw Value -->
+                          <template v-if="group.refs[0].isMissingLibrary && group.refs[0].currentValue">
+                            <span class="variable-name">{{ group.refs[0].currentValue.variableName }}</span>
+                            <span class="raw-value">({{ getRawVariableValue(group.refs[0]) }})</span>
+                          </template>
+                        </span>
+                        
+                        <!-- Add typography-specific template -->
+                        <template v-if="group.refs?.[0]?.type === 'typography' && group.refs[0]?.currentValue">
+                          <div class="typography-labels">
+                            <!-- Show labels from the new structure if available -->
+                            <template v-if="group.refs[0].currentValue.labels">
+                              <span class="label font-family">
+                                <span v-if="group.refs[0].currentValue.labels.fontFamily">{{ group.refs[0].currentValue.labels.fontFamily.text }}</span>
+                              </span>
+                              <span class="label font-weight">
+                                <span v-if="group.refs[0].currentValue.labels.fontWeight">{{ group.refs[0].currentValue.labels.fontWeight.text }}</span>
+                              </span>
+                              <span class="label font-size">
+                                <span v-if="group.refs[0].currentValue.labels.fontSize">{{ group.refs[0].currentValue.labels.fontSize.text }}</span>
+                              </span>
+                            </template>
+                            
+                            <!-- Fallback to old structure if labels not available -->
+                            <template v-else>
+                              <span class="label font-family" v-if="group.refs[0].currentValue && group.refs[0].currentValue.fontFamily">
+                                {{ group.refs[0].currentValue.fontFamily }}
+                              </span>
+                              <span class="label font-weight" v-if="group.refs[0].currentValue && group.refs[0].currentValue.fontWeight">
+                                {{ group.refs[0].currentValue.fontWeight }}
+                              </span>
+                              <span class="label font-size" v-if="group.refs[0].currentValue && group.refs[0].currentValue.fontSize">
+                                {{ group.refs[0].currentValue.fontSize }}px
+                              </span>
+                            </template>
+                            
+                            <!-- Add library type badge for non-library scans only -->
+                            <!-- For library variable scans, the badge is already shown above, so don't duplicate it -->
                           </div>
+                        </template>
+                        
+                        <!-- Keep existing templates for other types - with optional chaining -->
+                        <template v-else-if="group.refs?.[0]?.type === 'fill' || group.refs?.[0]?.type === 'stroke'">
+                          <color-preview v-if="group.refs[0].currentValue" :color="group.refs[0].currentValue" />
+                          <!-- Library type badge removed for library scans to avoid duplication -->
+                        </template>
+                        
+                        <template v-else-if="group.refs?.[0]">
+                          <div class="typography-labels">
+                            <span class="label value font-medium" v-if="group.refs[0].currentValue !== undefined">{{ formatValue(group.refs[0].currentValue) }}</span>
+                            <span v-if="group.refs[0].type === 'gap' && group.refs[0].currentValue !== undefined" class="label gap">
+                              {{ group.refs[0].gapType === 'vertical' ? 'Vertical' : 'Horizontal' }} Gap: {{ group.refs[0].currentValue }}px
+                            </span>
+                            <span v-if="group.refs[0].type === 'horizontalPadding' && group.refs[0].currentValue !== undefined" class="label horizontal-padding">{{ group.refs[0].currentValue }}px</span>
+                            <span v-if="group.refs[0].type === 'verticalPadding' && group.refs[0].currentValue !== undefined" class="label vertical-padding">{{ group.refs[0].currentValue }}px</span>
+                            <!-- Library type badge removed for library scans to avoid duplication -->
+                          </div>
+                        </template>
+                      </div>
+                      <div class="group-actions">
+                        <span class="label instance-count">{{ group.refs?.length || 0 }}×</span>
+                        <button 
+                          class="button secondary-button small"
+                          @click.stop="selectGroup(group.refs, $event)"
+                          :disabled="!(group.refs?.length > 0)"
+                        >
+                          Select All
+                        </button>
+                        <!-- Add Unlink Button for Missing Library Variables -->
+                        <button 
+                          v-if="false && group.refs?.[0]?.isMissingLibrary"
+                          class="button warning-button small"
+                          @click.stop="unlinkGroupVariables(group.refs)"
+                          :disabled="!(group.refs?.length > 0)"
+                        >
+                          Unlink All
+                        </button>
+                      </div>
+                    </div>
+
+                    <!-- Group Details -->
+                    <div v-if="isGroupExpanded(groupKey)" 
+                         class="value-group-details"
+                         @click.stop
+                    >
+                      <div v-for="ref in (group.refs || [])" 
+                           :key="ref.nodeId" 
+                           class="reference-item"
+                           :class="{
+                             'unlinked-reference': ref && !ref.isMissingLibrary,
+                             'missing-library-reference': ref && ref.isMissingLibrary
+                           }"
+                      >
+                        <div class="reference-info">
+                          <div class="reference-name">{{ ref.nodeName || ref.name || 'Unnamed Node' }}</div>
+                          <div class="reference-location">{{ ref.location || 'Unknown Location' }}</div>
+                          <div v-if="ref.variableName" class="reference-variable text-brand font-medium mt-xs">{{ ref.variableName }}</div>
+                          <!-- Don't display library name for missing library variables to simplify the UI -->
+                          <div v-if="ref.libraryName && !ref.isMissingLibrary" class="reference-library">{{ ref.libraryName }}</div>
+                        </div>
+                        <div class="reference-actions">
                           <button 
                             class="button secondary-button small"
                             @click="selectNode(ref.nodeId, $event)"
                           >
                             Select
+                          </button>
+                          <!-- Add Unlink Button for Individual References -->
+                          <button 
+                            v-if="ref.isMissingLibrary"
+                            class="button warning-button small"
+                            @click.stop="unlinkVariable(ref)"
+                          >
+                            Unlink
                           </button>
                         </div>
                       </div>
@@ -659,9 +553,6 @@
               </div>
             </template>
           </div>
-
-
-        </div>
         </div>
 
         <!-- Sticky footer -->
@@ -751,6 +642,38 @@
       </div>
     </div>
   </template>
+
+  <!-- Add CSS for new elements -->
+  <style>
+    .token-type {
+      font-weight: 500;
+      margin-right: 8px;
+    }
+    
+    .variable-name {
+      font-weight: normal;
+    }
+    
+    .raw-value {
+      color: var(--figma-color-text-secondary);
+      margin-left: 4px;
+    }
+    
+    .warning-button {
+      background-color: var(--figma-color-bg-danger);
+      color: var(--figma-color-text-onbrand);
+    }
+    
+    .warning-button:hover {
+      background-color: var(--figma-color-bg-danger-hover);
+    }
+    
+    .reference-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+  </style>
 
 </body>
 </html>

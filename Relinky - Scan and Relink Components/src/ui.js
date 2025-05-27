@@ -127,39 +127,32 @@ function initializeApp() {
         successMessage: '',
         showErrorToast: false,
         errorMessage: '',
-        activeTab: 'tokens',
         // Basic plugin state
         selectedScanType: null, // Currently selected token scan type
         selectedSourceType: 'raw-values', // Source type for scanning (raw, team-library, local-library)
         selectedFrameIds: [], // List of selected frame IDs, empty means scan entire page
-        // Results state
-        groupedReferences: {}, // Grouped scan results
-        expandedGroups: new Set(), // Groups currently expanded
-        scanType: null, // Type of scan that produced the results
-        isTokenScan: false, // Whether the scan was for tokens
-        isLibraryVariableScan: false, // Whether the scan was for library variables
-        ignoreHiddenLayers: false, // Whether to ignore hidden layers when scanning
-        // Progress animation state
-        scanStartTime: null, // Track when scan started
-        minAnimationDuration: 1500, // Minimum animation duration in ms
-        progressAnimationId: null, // Animation frame ID for smooth progress
-        actualProgress: 0, // Real scan progress from backend
+        // Add back scan settings state
+        showSettings: false,
+        scanEntirePage: false,
+        // Initialize groupedReferences as an empty object
+        groupedReferences: {},
+        // Initialize expandedGroups as a new Set
+        expandedGroups: new Set(),
+        windowSize: {
+          width: 400,
+          height: 600
+        },
+        isResizing: false,
 
-        selectedVariableTypes: [], // Legacy array for backward compatibility
-        selectedVariableTypeFilter: 'all', // New single selection variable type filter
-        availableVariableTypes: [], // Array to store available variable types from scan results
-        // Add a flag to control visibility of variable filters
-        showVariableTypeFilters: false,
-        // Filter type for padding (all, top, bottom, left, right)
-        paddingFilterType: 'all',
-        // Filter type for corner radius (all, top-left, top-right, bottom-left, bottom-right)
-        radiusFilterType: 'all',
-        // Filter type for gap (all, vertical, horizontal)
-        gapFilterType: 'all',
-        // Filter type for layout (all, width, height, fill, hug)
-        layoutFilterType: 'all',
-        // Filter type for effects (all, x, y, blur, spread, color)
-        effectsFilterType: 'all',
+        isPaused: false,
+        currentScanNode: null,
+        scanSummary: null,
+
+        lastScannedType: null, // Add this to track the last scan type
+        showHiddenOnly: false,
+        selectedVariableTypes: [], // Array to store selected variable types for filtering
+
+        // Add tokenScanOptions array
         tokenScanOptions: [
           {
             value: 'typography',
@@ -170,7 +163,7 @@ function initializeApp() {
           {
             value: 'gap',
             label: 'Gap',
-            description: 'Find frames with unlinked gaps in auto-layouts',
+            description: 'Find frames with unlinked gap spacing',
             icon: 'spacing'
           },
           {
@@ -206,36 +199,22 @@ function initializeApp() {
           {
             value: 'layout',
             label: 'Layout',
-            description: 'Find common width and height values in layouts',
+            description: 'Find frames with unlinked layout properties',
             icon: 'layout'
           },
           {
             value: 'opacity',
-            label: 'Appearance',
-            description: 'Find layers with unlinked element opacity values',
+            label: 'Opacity',
+            description: 'Find layers with unlinked opacity',
             icon: 'opacity'
           },
           {
             value: 'effects',
             label: 'Effects',
-            description: 'Find layers with unlinked effect properties (shadows, blur, etc.)',
+            description: 'Find layers with unlinked effects',
             icon: 'effects'
           }
         ],
-        showSettings: false,
-        windowSize: {
-          width: 400,
-          height: 600
-        },
-        isResizing: false,
-
-        isPaused: false,
-        currentScanNode: null,
-        scanSummary: null,
-
-        lastScannedType: null, // Add this to track the last scan type
-        showHiddenOnly: false,
-        selectedVariableTypes: [], // Array to store selected variable types for filtering
       }
     },
     computed: {
@@ -263,6 +242,11 @@ function initializeApp() {
         return hasSourceType && hasScanType && !this.isScanning;
       },
       hasResults() {
+        // Ensure groupedReferences exists and is an object
+        if (!this.groupedReferences || typeof this.groupedReferences !== 'object') {
+          return false;
+        }
+        
         const hasRefs = Object.keys(this.groupedReferences).length > 0;
         
         console.log('Has results?', {
@@ -541,28 +525,35 @@ function initializeApp() {
         if (!ref) return 'Unknown';
         
         if (ref.isMissingLibrary) {
-          // For missing variables, show the variable name or value if available
-          if (ref.currentValue && ref.currentValue.variableName) {
-            return ref.currentValue.variableName;
+          // For missing variables, show the token type label
+          const variableType = ref.variableCategory || 
+                             ref.variableType || 
+                             (ref.currentValue && ref.currentValue.variableType) || 
+                             'other';
+          
+          // Map variable type to user-friendly label
+          switch(variableType.toLowerCase()) {
+            case 'typography': return 'Typography Token';
+            case 'color': return 'Color Token';
+            case 'spacing': return 'Spacing Token';
+            case 'radius': return 'Radius Token';
+            case 'effect': return 'Effect Token';
+            case 'layout': return 'Layout Token';
+            case 'opacity': return 'Opacity Token';
+            default: return 'Design Token';
           }
-          return 'Missing Variable';
         }
         return 'Unlinked Value';
       },
       handleScanScopeChange() {
         if (this.scanEntirePage) {
-          this.successMessage = 'Scanning the entire page may take longer';
-          this.showSuccessToast = true;
-          setTimeout(() => {
-            if (this.successMessage === 'Scanning the entire page may take longer') {
-              this.showSuccessToast = false;
-            }
-          }, 3000);
-        } else {
-          this.stopWatching();
+          this.selectedFrameIds = [];
         }
-        // Store the user's preference
-        this.userPrefersScanEntirePage = this.scanEntirePage;
+        // Notify the plugin about the scan scope change
+        parent.postMessage({ pluginMessage: {
+          type: 'scan-scope-changed',
+          scanEntirePage: this.scanEntirePage
+        }}, '*');
       },
       stopWatching() {
         this.isWatching = false;
@@ -1940,7 +1931,80 @@ function initializeApp() {
       getVariableTypeIcon(type) {
         // Use the imported function from icons.js
         return icons.getVariableTypeIcon(type);
-      }
+      },
+      getRawVariableValue(ref) {
+        if (!ref || !ref.currentValue) return 'No Value';
+        
+        // Handle different value types
+        const value = ref.currentValue;
+        
+        // Handle color values
+        if (value.r !== undefined && value.g !== undefined && value.b !== undefined) {
+          const r = Math.round(value.r * 255);
+          const g = Math.round(value.g * 255);
+          const b = Math.round(value.b * 255);
+          const a = value.a !== undefined ? value.a : 1;
+          return a === 1 ? `RGB(${r}, ${g}, ${b})` : `RGBA(${r}, ${g}, ${b}, ${a.toFixed(2)})`;
+        }
+        
+        // Handle typography values
+        if (value.fontFamily || value.fontSize || value.fontWeight) {
+          const family = value.fontFamily || '';
+          const size = value.fontSize ? `${value.fontSize}px` : '';
+          const weight = value.fontWeight || '';
+          return [family, weight, size].filter(Boolean).join(' ');
+        }
+        
+        // Handle numeric values (spacing, radius, etc.)
+        if (typeof value === 'number' || !isNaN(parseFloat(value))) {
+          return `${value}px`;
+        }
+        
+        // Handle opacity values
+        if (typeof value === 'number' && value >= 0 && value <= 1) {
+          return `${Math.round(value * 100)}%`;
+        }
+        
+        // Default to string representation
+        return String(value);
+      },
+      async unlinkVariable(ref) {
+        if (!ref || !ref.nodeId) return;
+        
+        try {
+          parent.postMessage({
+            pluginMessage: {
+              type: 'unlink-variable',
+              nodeId: ref.nodeId,
+              property: ref.property,
+              currentValue: ref.currentValue
+            }
+          }, '*');
+        } catch (error) {
+          console.error('Failed to unlink variable:', error);
+          this.showError('Failed to unlink variable: ' + error.message);
+        }
+      },
+      
+      async unlinkGroupVariables(refs) {
+        if (!refs || !refs.length) return;
+        
+        try {
+          parent.postMessage({
+            pluginMessage: {
+              type: 'unlink-group-variables',
+              refs: refs.map(ref => ({
+                nodeId: ref.nodeId,
+                property: ref.property,
+                currentValue: ref.currentValue
+              }))
+            }
+          }, '*');
+        } catch (error) {
+          console.error('Failed to unlink group variables:', error);
+          this.showError('Failed to unlink variables: ' + error.message);
+        }
+      },
     },
 
     mounted() {
@@ -1971,8 +2035,7 @@ function initializeApp() {
       }, '*');
     },
     created() {
-      // Ensure we stay on the tokens tab
-      this.activeTab = 'tokens';
+      // Remove tab initialization
       
       // Set raw-values as the default source type
       this.selectedSourceType = 'raw-values';
