@@ -2005,6 +2005,10 @@ function initializeApp() {
           this.showError('Failed to unlink variables: ' + error.message);
         }
       },
+
+      openStripePayment() {
+        window.open('https://buy.stripe.com/8wM7wb49NeFD5UYcMM', '_blank');
+      },
     },
 
     mounted() {
