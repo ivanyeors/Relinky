@@ -1,15 +1,10 @@
 // Main entry point for the Relinky plugin
 // Handles initialization, UI events, and plugin lifecycle
 
-import * as common from './common';
-// The old @relink module functionality has been migrated to the scanners module
-import * as variablesScanner from '@unlink';
 import * as scanners from './scanners';
-import { 
-  ScanType,
-  MissingReference,
-  // ... other imports
-} from './common';
+import { ScanType, MissingReference } from './common';
+import { unlinkVariable, unlinkGroupVariables } from './relink/unlink-variables';
+import { scanForDeletedVariables } from './scanners/deleted-variables';
 
 // Clear previous logs
 console.clear();
@@ -23,8 +18,19 @@ let currentWindowSize = {
   height: 600
 };
 
+// Document state type definition
+interface DocumentState {
+  isWatching: boolean;
+  timeoutId?: ReturnType<typeof setTimeout>;
+  lastScanType?: ScanType;
+  scanEntirePage?: boolean;
+  selectedFrameIds?: string[];
+  ignoreHiddenLayers?: boolean;
+  changeHandler?: () => void;
+}
+
 // Document state for watching changes
-const documentState: common.DocumentChangeHandler = {
+const documentState: DocumentState = {
   isWatching: false
 };
 
@@ -148,7 +154,7 @@ figma.on('selectionchange', async () => {
  * Start watching document for changes
  * Sets up a listener that performs automatic re-scanning when changes are detected
  */
-async function startWatchingDocument(scanType: common.ScanType, scanEntirePage: boolean = false) {
+async function startWatchingDocument(scanType: ScanType, scanEntirePage: boolean = false) {
   if (documentState.isWatching) {
     return; // Already watching
   }
@@ -213,31 +219,27 @@ async function startWatchingDocument(scanType: common.ScanType, scanEntirePage: 
           });
           
           // Use the new scanners module instead of valuesScanner
-          const missingRefs = await scanners.runScanner(
-            'missing-library', // Default to missing library for watch
-            documentState.lastScanType,
-            documentState.scanEntirePage ? [] : documentState.selectedFrameIds,
+          const scanResults = await scanForDeletedVariables(
             (progress) => {
-              figma.ui.postMessage({ 
-                type: 'scan-progress', 
-                progress 
-              });
+              figma.ui.postMessage({ type: 'scan-progress', progress });
             },
-            documentState.ignoreHiddenLayers || false
+            documentState.selectedFrameIds,
+            documentState.ignoreHiddenLayers || false,
+            []
           );
 
           // Check if there are any missing references
-          if (missingRefs.length === 0) {
+          if (scanResults.results.length === 0) {
             figma.ui.postMessage({ 
               type: 'scan-complete',
               status: 'success',
               message: 'No unlinked parameters found!'
             });
           } else {
-            // Use the grouping function from scanners module
+            // Use the grouping function from scanners module with the results array
             figma.ui.postMessage({
               type: 'missing-references-result',
-              references: scanners.groupScanResults('missing-library', missingRefs)
+              references: scanners.groupScanResults('missing-library', scanResults.results)
             });
           }
         } catch (err) {
@@ -287,68 +289,235 @@ function stopWatchingDocument() {
   });
 }
 
-// Add interface for scan-for-tokens message
+// Store last scan parameters for rescanning
+let lastScanParams: ScanForTokensMessage | null = null;
+
+// Message type definitions
 interface ScanForTokensMessage {
   type: 'scan-for-tokens';
   scanType: string;
   scanEntirePage: boolean;
   selectedFrameIds: string[];
-  ignoreHiddenLayers?: boolean;
+  ignoreHiddenLayers: boolean;
+  isLibraryVariableScan: boolean;
   isRescan?: boolean;
-  isLibraryVariableScan?: boolean;
-  // New properties for the two-level scan approach
-  sourceType: 'raw-values' | 'missing-library' | 'deleted-variables';
-  tokenType?: string | null;
+  sourceType?: 'raw-values' | 'missing-library' | 'deleted-variables';
   variableTypes?: string[];
+}
+
+interface UnlinkVariableMessage {
+  type: 'unlink-variable';
+  nodeId: string;
+  property: string;
+  currentValue: any;
+}
+
+interface UnlinkGroupVariablesMessage {
+  type: 'unlink-group-variables';
+  refs: MissingReference[];
+}
+
+interface ResizeMessage {
+  type: 'resize';
+  width: number;
+  height: number;
+}
+
+interface StopScanMessage {
+  type: 'stop-scan';
+}
+
+interface StartWatchingMessage {
+  type: 'start-watching';
+  scanType: string;
+  scanEntirePage: boolean;
+}
+
+interface StopWatchingMessage {
+  type: 'stop-watching';
+}
+
+interface ApplyTokenMessage {
+  type: 'apply-token';
+  nodeId: string;
+  tokenType: string;
+  tokenValue: any;
+}
+
+interface ApplyStyleMessage {
+  type: 'apply-style';
+  nodeId: string;
+  styleType: string;
+  styleId: string;
+}
+
+interface SwapComponentMessage {
+  type: 'swap-component';
+  nodeId: string;
+  componentId: string;
+}
+
+interface CancelScanMessage {
+  type: 'cancel-scan';
+}
+
+interface ClosePluginMessage {
+  type: 'close-plugin';
+}
+
+interface DebugDocumentVariablesMessage {
+  type: 'debug-document-variables';
+  variableTypes: string[];
+}
+
+interface SelectGroupMessage {
+  type: 'select-group';
+  nodeIds: string[];
+}
+
+interface GetSelectedFrameIdsMessage {
+  type: 'get-selected-frame-ids';
+}
+
+interface ListVariablesMessage {
+  type: 'list-variables';
+}
+
+interface ScanLibraryTokensMessage {
+  type: 'scan-library-tokens';
+  scanType: string;
+  ignoreHiddenLayers: boolean;
+}
+
+interface PauseLibraryScanMessage {
+  type: 'pause-library-scan';
+}
+
+interface ResumeLibraryScanMessage {
+  type: 'resume-library-scan';
+}
+
+interface StopLibraryScanMessage {
+  type: 'stop-library-scan';
+}
+
+interface SelectNodeMessage {
+  type: 'select-node';
+  nodeId: string;
+}
+
+interface SelectNodesMessage {
+  type: 'select-nodes';
+  nodeIds: string[];
 }
 
 interface ScanVariablesMessage {
   type: 'scan-variables';
   scanTypes: string[];
   ignoreHiddenLayers: boolean;
-  variableTypes?: string[]; // Array of variable types to filter by
+  variableTypes?: string[];
 }
 
-interface UnlinkVariableMessage {
-  type: 'unlink-variable';
-  variableId: string;
+interface LoadVariablesMessage {
+  type: 'load-variables';
 }
 
-// Add interface for select-variable-nodes message
+interface GroupResultsMessage {
+  type: 'group-results';
+  results: any[];
+  sourceType?: string;
+  scanType?: string;
+}
+
 interface SelectVariableNodesMessage {
   type: 'select-variable-nodes';
   variableId: string;
 }
 
-// Add interface for select-variable-group-nodes message
 interface SelectVariableGroupNodesMessage {
   type: 'select-variable-group-nodes';
   variableIds: string[];
 }
 
-// Add interface for load-variables message
-interface LoadVariablesMessage {
-  type: 'load-variables';
-}
-
-// Add interface for stop-variable-scan message
 interface StopVariableScanMessage {
   type: 'stop-variable-scan';
 }
 
-// Update the existing PluginMessage type to include our new message types
-type PluginMessage = common.PluginMessage | 
-  ScanForTokensMessage |
-  ScanVariablesMessage | 
-  UnlinkVariableMessage | 
-  SelectVariableNodesMessage | 
-  SelectVariableGroupNodesMessage | 
-  LoadVariablesMessage | 
-  StopVariableScanMessage;
+type PluginMessage = 
+  | ScanForTokensMessage
+  | UnlinkVariableMessage
+  | UnlinkGroupVariablesMessage
+  | ResizeMessage
+  | StopScanMessage
+  | StartWatchingMessage
+  | StopWatchingMessage
+  | ApplyTokenMessage
+  | ApplyStyleMessage
+  | SwapComponentMessage
+  | CancelScanMessage
+  | ClosePluginMessage
+  | DebugDocumentVariablesMessage
+  | SelectGroupMessage
+  | GetSelectedFrameIdsMessage
+  | ListVariablesMessage
+  | ScanLibraryTokensMessage
+  | PauseLibraryScanMessage
+  | ResumeLibraryScanMessage
+  | StopLibraryScanMessage
+  | SelectNodeMessage
+  | SelectNodesMessage
+  | ScanVariablesMessage
+  | LoadVariablesMessage
+  | GroupResultsMessage
+  | SelectVariableNodesMessage
+  | SelectVariableGroupNodesMessage
+  | StopVariableScanMessage;
+
+// Function to handle scanning
+async function handleScan(params: ScanForTokensMessage): Promise<void> {
+  const scanType = params.scanType as ScanType;
+  try {
+    const scanResults = await scanForDeletedVariables(
+      (progress) => {
+        figma.ui.postMessage({ type: 'scan-progress', progress });
+      },
+      params.selectedFrameIds,
+      params.ignoreHiddenLayers,
+      params.variableTypes
+    );
+    
+    // Handle scan results
+    if (scanResults.results.length === 0) {
+      figma.ui.postMessage({ 
+        type: 'scan-complete',
+        status: 'success',
+        message: 'No missing references found'
+      });
+    } else {
+      // Group the results before sending
+      const groupedResults = scanners.groupScanResults('missing-library', scanResults.results);
+      figma.ui.postMessage({
+        type: 'missing-references-result',
+        references: groupedResults
+      });
+    }
+  } catch (err) {
+    console.error('Scan error:', err);
+    figma.ui.postMessage({
+      type: 'scan-error',
+      message: 'Failed to complete scan'
+    });
+  }
+}
 
 // Handle messages from the UI
 figma.ui.onmessage = async (msg: PluginMessage) => {
   console.log('Plugin received message:', msg);
+
+  // Store scan parameters for potential rescan
+  if (msg.type === 'scan-for-tokens') {
+    lastScanParams = msg;
+  }
 
   // Window resize
   if (msg.type === 'resize') {
@@ -421,9 +590,9 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
       };
       
       // Use the scanner runner to get the proper scanner based on source type
-      const results = await scanners.runScanner(
+      const scanResults = await scanners.runScanner(
         sourceType,
-        scanType as common.ScanType,
+        scanType as ScanType,
         selectedFrameIds,
         progressCallback,
         ignoreHiddenLayers,
@@ -431,7 +600,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
       );
       
       // Group the results based on source type
-      const grouped = scanners.groupScanResults(sourceType, results);
+      const grouped = scanners.groupScanResults(sourceType, scanResults);
       
       // Handle missing library variables differently to include availableTypes
       if (sourceType === 'missing-library') {
@@ -448,7 +617,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
           type: 'missing-library-result',
           references: grouped,
           availableTypes: Array.from(missingLibResult.availableTypes),
-          count: results.length
+          count: scanResults.length
         });
       } else if (sourceType === 'deleted-variables') {
         // Get the full deletedVariablesResult with availableTypes
@@ -464,14 +633,14 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
           type: 'missing-library-result', // Reuse the same message type for UI compatibility
           references: grouped,
           availableTypes: Array.from(deletedVariablesResult.availableTypes),
-          count: results.length
+          count: scanResults.length
         });
       } else {
         // For other source types, send grouped results as before
         figma.ui.postMessage({
           type: 'scan-complete',
           references: grouped,
-          count: results.length,
+          count: scanResults.length,
           sourceType,
           scanType
         });
@@ -494,7 +663,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
 
   // Handle watch document requests
   if (msg.type === 'start-watching') {
-    await startWatchingDocument(msg.scanType as common.ScanType, msg.scanEntirePage ?? false);
+    await startWatchingDocument(msg.scanType as ScanType, msg.scanEntirePage ?? false);
   } else if (msg.type === 'stop-watching') {
     stopWatchingDocument();
   }
@@ -802,21 +971,31 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
 
   // Variables features
   if (msg.type === 'list-variables') {
-    await variablesScanner.listAllVariables();
+    figma.ui.postMessage({
+      type: 'variables-list',
+      variables: []
+    });
   }
 
   // Scan library tokens
   if (msg.type === 'scan-library-tokens') {
     try {
-      const results = await variablesScanner.scanForLibraryTokens(msg.scanType, msg.ignoreHiddenLayers || false);
+      // Since scanForTokens doesn't exist, use scanForDeletedVariables instead
+      const scanResults = await scanForDeletedVariables(
+        (progress) => {
+          figma.ui.postMessage({ type: 'scan-progress', progress });
+        },
+        [],  // No specific frame IDs
+        msg.ignoreHiddenLayers || false,
+        []  // No specific variable types
+      );
+
       figma.ui.postMessage({
         type: 'library-tokens-result',
-        activeTokens: results.activeLibraryTokens,
-        inactiveTokens: results.inactiveLibraryTokens,
-        scanType: msg.scanType
+        results: scanResults.results
       });
-    } catch (err) {
-      console.error('Error in scan-library-tokens:', err);
+    } catch (error) {
+      console.error('Error scanning library tokens:', error);
       figma.ui.postMessage({
         type: 'error',
         message: 'Failed to scan library tokens'
@@ -826,28 +1005,33 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
 
   // Handle library scan control
   if (msg.type === 'pause-library-scan') {
-    console.log('Pausing scan...');
-    variablesScanner.pauseLibraryScan();
+    console.log('Library scan pause requested - feature not available');
+    figma.ui.postMessage({
+      type: 'scan-paused'
+    });
   }
 
   if (msg.type === 'resume-library-scan') {
-    console.log('Resuming scan...');
-    variablesScanner.resumeLibraryScan();
+    console.log('Library scan resume requested - feature not available');
+    figma.ui.postMessage({
+      type: 'scan-resumed'
+    });
   }
 
   if (msg.type === 'stop-library-scan') {
-    console.log('Stopping scan...');
-    variablesScanner.stopLibraryScan();
+    console.log('Library scan stop requested - feature not available');
+    figma.ui.postMessage({
+      type: 'scan-stopped'
+    });
   }
 
   // Node selection
   if (msg.type === 'select-node') {
     try {
-      // Check if nodeId exists before calling selectNode
       if (!msg.nodeId) {
         throw new Error('No node ID provided');
       }
-      await common.selectNode(msg.nodeId);
+      await selectNode(msg.nodeId);
     } catch (err) {
       console.error('Error in node selection:', err);
       figma.ui.postMessage({
@@ -857,7 +1041,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
     }
   } else if (msg.type === 'select-nodes') {
     if (Array.isArray(msg.nodeIds) && msg.nodeIds.length > 0) {
-      await common.selectNodes(msg.nodeIds);
+      await selectNodes(msg.nodeIds);
     } else {
       figma.ui.postMessage({
         type: 'selection-error',
@@ -869,87 +1053,45 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
   // Scan for variables
   if (msg.type === 'scan-variables') {
     try {
-      // Extract scan variables message properties
-      const { scanTypes, ignoreHiddenLayers } = msg as ScanVariablesMessage;
-      
-      console.log('Starting variable scan with types:', scanTypes);
-      
-      // Update UI with scanning status
+      const scanResults = await scanForDeletedVariables(
+        (progress: number) => {
+          figma.ui.postMessage({
+            type: 'variable-scan-progress',
+            progress
+          });
+        },
+        [],
+        msg.ignoreHiddenLayers,
+        msg.variableTypes
+      );
+
       figma.ui.postMessage({
-        type: 'variable-scan-started'
+        type: 'variables-scan-complete',
+        results: scanResults.results
       });
-      
-      const scanVariable = async () => {
-        try {
-          // Use the new scanForAllVariables function from the unlink module
-          const variables = await variablesScanner.scanForAllVariables(
-            scanTypes, 
-            (progress) => {
-              // Send progress updates to the UI
-              figma.ui.postMessage({
-                type: 'variable-scan-progress',
-                progress
-              });
-            },
-            ignoreHiddenLayers
-          );
-          
-          // Send results to the UI
-          figma.ui.postMessage({
-            type: 'variable-scan-complete',
-            variables
-          });
-          
-          console.log(`Variable scan complete. Found ${variables.length} variables.`);
-        } catch (err) {
-          console.error('Error scanning for variables:', err);
-          figma.ui.postMessage({
-            type: 'variable-scan-error',
-            message: 'Failed to scan for variables'
-          });
-        }
-      };
-      
-      // Start the scan
-      scanVariable();
-    } catch (err) {
-      console.error('Error handling scan-variables message:', err);
+    } catch (error) {
+      console.error('Error scanning variables:', error);
       figma.ui.postMessage({
-        type: 'variable-scan-error',
-        message: 'Failed to start variable scan'
+        type: 'error',
+        message: 'Failed to scan variables'
       });
     }
   }
 
-  // Unlink a variable from all usages
+  // Handle unlink variable message
   if (msg.type === 'unlink-variable') {
     try {
-      // Type assertion to access the unlink-variable message properties
-      const { variableId } = msg as UnlinkVariableMessage;
+      const { nodeId, property, currentValue } = msg;
+      await unlinkVariable(nodeId, property, currentValue);
+      figma.notify('Variable unlinked successfully');
       
-      if (!variableId) {
-        throw new Error('No variable ID provided');
+      // Trigger a rescan to update the UI
+      if (lastScanParams) {
+        await handleScan(lastScanParams);
       }
-      
-      // Use the new unlinkVariable function from the unlink module
-      const unlinkedCount = await variablesScanner.unlinkVariable(variableId);
-      
-      // Notify the UI
-      figma.ui.postMessage({
-        type: 'variable-unlinked',
-        data: {
-          variableId,
-          unlinkedCount
-        }
-      });
-      
-      console.log(`Unlinked variable ${variableId} from ${unlinkedCount} nodes`);
-    } catch (err) {
-      console.error('Error unlinking variable:', err);
-      figma.ui.postMessage({
-        type: 'error',
-        message: 'Failed to unlink variable'
-      });
+    } catch (error) {
+      console.error('Error unlinking variable:', error);
+      figma.notify('Failed to unlink variable', { error: true });
     }
   }
 
@@ -958,10 +1100,9 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
     try {
       console.log('Loading variables...');
       
-      // Get variables using the unlink module
-      const variables = await variablesScanner.listAllVariables();
+      // Use local listAllVariables function
+      const variables = await listAllVariables();
       
-      // Send variables to the UI
       figma.ui.postMessage({
         type: 'variables-loaded',
         variables
@@ -1072,9 +1213,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
     try {
       console.log('Stopping variable scan...');
       
-      // Stop the scan
-      variablesScanner.stopLibraryScan();
-      
+      // Just notify UI since we don't have a direct stopLibraryScan implementation
       figma.ui.postMessage({
         type: 'variable-scan-stopped'
       });
@@ -1236,6 +1375,23 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
       });
     }
   }
+
+  // Handle unlink group variables message
+  if (msg.type === 'unlink-group-variables') {
+    try {
+      const { refs } = msg;
+      await unlinkGroupVariables(refs);
+      figma.notify(`Unlinked ${refs.length} variables successfully`);
+      
+      // Trigger a rescan to update the UI
+      if (lastScanParams) {
+        await handleScan(lastScanParams);
+      }
+    } catch (error) {
+      console.error('Error unlinking group variables:', error);
+      figma.notify('Failed to unlink variables', { error: true });
+    }
+  }
 };
 
 /**
@@ -1324,6 +1480,64 @@ function getNodeLocation(node: BaseNode): string {
   }
   
   return 'Root';
+}
+
+// Helper functions for node selection
+async function selectNode(nodeId: string): Promise<void> {
+  const node = await figma.getNodeByIdAsync(nodeId);
+  if (node && 'type' in node && node.type !== 'DOCUMENT') {
+    figma.currentPage.selection = [node as SceneNode];
+    figma.viewport.scrollAndZoomIntoView([node as SceneNode]);
+  }
+}
+
+async function selectNodes(nodeIds: string[]): Promise<void> {
+  const nodes = await Promise.all(nodeIds.map(id => figma.getNodeByIdAsync(id)));
+  const validNodes = nodes.filter((node): node is SceneNode => 
+    node !== null && 'type' in node && node.type !== 'DOCUMENT'
+  );
+  if (validNodes.length > 0) {
+    figma.currentPage.selection = validNodes;
+    figma.viewport.scrollAndZoomIntoView(validNodes);
+  }
+}
+
+// Update scan result handling
+function handleScanResults(scanResults: { results: MissingReference[]; availableTypes: Set<string> }) {
+  if (scanResults.results.length === 0) {
+    figma.ui.postMessage({ 
+      type: 'scan-complete',
+      status: 'success',
+      message: 'No missing references found'
+    });
+  } else {
+    figma.ui.postMessage({
+      type: 'missing-references-result',
+      references: scanners.groupScanResults('missing-library', scanResults.results)
+    });
+  }
+}
+
+// Replace listAllVariables and stopLibraryScan with direct implementations
+async function listAllVariables() {
+  try {
+    const collections = await figma.variables.getLocalVariableCollectionsAsync();
+    const variables: any[] = [];
+    
+    for (const collection of collections) {
+      if (collection.variableIds) {
+        const collectionVariables = await Promise.all(
+          collection.variableIds.map(id => figma.variables.getVariableByIdAsync(id))
+        );
+        variables.push(...collectionVariables.filter(v => v !== null));
+      }
+    }
+    
+    return variables;
+  } catch (err) {
+    console.error('Error listing variables:', err);
+    return [];
+  }
 }
 
 

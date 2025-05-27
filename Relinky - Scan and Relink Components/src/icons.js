@@ -302,16 +302,20 @@ export const icons = {
   fill: fillIcon,
   layout: layoutIcon,
   opacity: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect x="3.5" y="3.5" width="17" height="17" rx="2.5" stroke="currentColor" stroke-linecap="round"/>
-  <path d="M7 7L17 17" stroke="currentColor" stroke-linecap="round"/>
-  <path d="M7 17L17 7" stroke="currentColor" stroke-linecap="round"/>
-  <circle cx="12" cy="12" r="5" stroke="currentColor" stroke-opacity="0.5" stroke-width="1.5"/>
+  <rect id="Rectangle 5" x="3.78979" y="3.78979" width="16.4204" height="16.4204" rx="2.5" stroke="currentColor" stroke-linecap="round"/>
+  <path id="Rectangle 6" d="M12 12L16.7756 7.22444C17.4055 6.59448 18.4827 7.04064 18.4827 7.93155V17.4827C18.4827 18.035 18.035 18.4827 17.4827 18.4827H7.93155C7.04064 18.4827 6.59448 17.4055 7.22444 16.7756L12 12Z" fill="currentColor"/>
 </svg>`,
   effects: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect x="3.5" y="3.5" width="17" height="17" rx="2.5" stroke="currentColor" stroke-linecap="round"/>
-  <circle cx="9" cy="9" r="2.5" stroke="currentColor"/>
-  <path d="M19 19L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-  <path d="M14 14.5C12.3431 14.5 11 13.1569 11 11.5C11 9.84315 12.3431 8.5 14 8.5C15.6569 8.5 17 9.84315 17 11.5C17 13.1569 15.6569 14.5 14 14.5Z" stroke="currentColor" stroke-opacity="0.7" stroke-width="1.5"/>
+  <g id="Group 6">
+    <path id="Vector 5" d="M18 18L14 14" stroke="currentColor" stroke-linecap="round"/>
+    <path id="Vector 6" d="M6 6L10 10" stroke="currentColor" stroke-linecap="round"/>
+    <path id="Vector 7" d="M18 6L14 10" stroke="currentColor" stroke-linecap="round"/>
+    <path id="Vector 8" d="M6 18L10 14" stroke="currentColor" stroke-linecap="round"/>
+    <path id="Vector 9" d="M12 4L12 9" stroke="currentColor" stroke-linecap="round"/>
+    <path id="Vector 10" d="M12 20L12 15" stroke="currentColor" stroke-linecap="round"/>
+    <path id="Vector 11" d="M4 12H9" stroke="currentColor" stroke-linecap="round"/>
+    <path id="Vector 12" d="M20 12L15 12" stroke="currentColor" stroke-linecap="round"/>
+  </g>
 </svg>`,
   
   // Source type icons
