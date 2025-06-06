@@ -151,6 +151,18 @@ function initializeApp() {
         lastScannedType: null, // Add this to track the last scan type
         showHiddenOnly: false,
         selectedVariableTypes: [], // Array to store selected variable types for filtering
+        
+        // Initialize all filter state variables
+        paddingFilterType: 'all', // For vertical/horizontal padding
+        radiusFilterType: 'all',  // For corner radius
+        gapFilterType: 'all',     // For spacing gaps
+        layoutFilterType: 'all',  // For layout properties
+        effectsFilterType: 'all', // For effects properties
+        
+        // For variable type filtering
+        selectedVariableTypeFilter: 'all',
+        showVariableTypeFilters: false,
+        availableVariableTypes: [],
 
         // Add tokenScanOptions array
         tokenScanOptions: [
@@ -381,6 +393,20 @@ function initializeApp() {
             // Only include group if it has valid references
             if (Array.isArray(refs) && refs.length > 0) {
               
+              // Apply hidden filter if enabled
+              if (this.showHiddenOnly) {
+                const filteredHiddenRefs = refs.filter(ref => {
+                  // Include only hidden nodes
+                  return ref.isHidden === true || !ref.isVisible;
+                });
+                
+                // Skip empty groups after filtering
+                if (filteredHiddenRefs.length === 0) continue;
+                
+                // Use filtered refs
+                refs = filteredHiddenRefs;
+              }
+              
               // Apply layout filters if needed
               if (this.selectedScanType === 'layout' && this.layoutFilterType !== 'all') {
                 const filteredLayoutRefs = refs.filter(ref => {
@@ -403,6 +429,86 @@ function initializeApp() {
                 
                 // Use filtered refs
                 refs = filteredLayoutRefs;
+              }
+              
+              // Apply corner radius filters
+              if (this.selectedScanType === 'corner-radius' && this.radiusFilterType !== 'all') {
+                const filteredRadiusRefs = refs.filter(ref => {
+                  // Skip if not a radius reference
+                  if (ref.type !== 'corner-radius' && ref.type !== 'cornerRadius') return false;
+                  
+                  // Get the corner type from the reference
+                  const cornerType = ref.cornerType || ref.property || 'all';
+                  
+                  // Match the specific corner
+                  return cornerType === this.radiusFilterType;
+                });
+                
+                // Skip empty groups after filtering
+                if (filteredRadiusRefs.length === 0) continue;
+                
+                // Use filtered refs
+                refs = filteredRadiusRefs;
+              }
+              
+              // Apply padding filters
+              if (this.selectedScanType === 'vertical-padding' && this.paddingFilterType !== 'all') {
+                const filteredPaddingRefs = refs.filter(ref => {
+                  // Skip if not a padding reference
+                  if (ref.type !== 'vertical-padding' && ref.type !== 'verticalPadding') return false;
+                  
+                  // Get padding direction (top/bottom)
+                  const paddingType = ref.paddingType || ref.property || 'all';
+                  
+                  // Match the specific padding direction
+                  return paddingType === this.paddingFilterType;
+                });
+                
+                // Skip empty groups after filtering
+                if (filteredPaddingRefs.length === 0) continue;
+                
+                // Use filtered refs
+                refs = filteredPaddingRefs;
+              }
+              
+              // Apply horizontal padding filters
+              if (this.selectedScanType === 'horizontal-padding' && this.paddingFilterType !== 'all') {
+                const filteredPaddingRefs = refs.filter(ref => {
+                  // Skip if not a padding reference
+                  if (ref.type !== 'horizontal-padding' && ref.type !== 'horizontalPadding') return false;
+                  
+                  // Get padding direction (left/right)
+                  const paddingType = ref.paddingType || ref.property || 'all';
+                  
+                  // Match the specific padding direction
+                  return paddingType === this.paddingFilterType;
+                });
+                
+                // Skip empty groups after filtering
+                if (filteredPaddingRefs.length === 0) continue;
+                
+                // Use filtered refs
+                refs = filteredPaddingRefs;
+              }
+              
+              // Apply gap filters
+              if (this.selectedScanType === 'gap' && this.gapFilterType !== 'all') {
+                const filteredGapRefs = refs.filter(ref => {
+                  // Skip if not a gap reference
+                  if (ref.type !== 'gap') return false;
+                  
+                  // Get gap direction (horizontal/vertical)
+                  const gapType = ref.gapType || 'all';
+                  
+                  // Match the specific gap direction
+                  return gapType === this.gapFilterType;
+                });
+                
+                // Skip empty groups after filtering
+                if (filteredGapRefs.length === 0) continue;
+                
+                // Use filtered refs
+                refs = filteredGapRefs;
               }
               
               // Apply variable type filters for deleted variables
@@ -2008,6 +2114,15 @@ function initializeApp() {
 
       openStripePayment() {
         window.open('https://buy.stripe.com/8wM7wb49NeFD5UYcMM', '_blank');
+      },
+      
+      // Add methods to dismiss toast notifications
+      dismissToast() {
+        this.showSuccessToast = false;
+      },
+      
+      dismissErrorToast() {
+        this.showErrorToast = false;
       },
     },
 
