@@ -92,6 +92,7 @@ export async function scanForRawValues(
   // Total count for progress tracking
   let totalNodesProcessed = 0;
   let totalNodesToProcess = 0;
+  let lastProgressUpdate = 0;
   
   // Recursively count nodes for accurate progress reporting
   function countNodes(nodes: readonly SceneNode[]): number {
@@ -104,6 +105,17 @@ export async function scanForRawValues(
       }
     }
     return count;
+  }
+  
+  // Update progress with smoother reporting
+  function updateProgress() {
+    const currentProgress = Math.min(99, (totalNodesProcessed / totalNodesToProcess) * 100);
+    // Only update if progress has changed by at least 0.5%
+    if (currentProgress - lastProgressUpdate >= 0.5) {
+      progressCallback(currentProgress);
+      lastProgressUpdate = currentProgress;
+      console.log(`Scan progress: ${currentProgress.toFixed(1)}%`);
+    }
   }
   
   // Count total nodes to process
@@ -348,10 +360,8 @@ export async function scanForRawValues(
       
       // Update progress
       totalNodesProcessed++;
-      if (totalNodesProcessed % 50 === 0) {
-        progressCallback(Math.min(totalNodesProcessed / totalNodesToProcess, 0.99));
-        console.log(`Processing node: ${node.name} (${String(node.type)}), #${totalNodesProcessed} of ${totalNodesToProcess}`);
-      }
+      updateProgress();
+      console.log(`Processing node: ${node.name} (${String(node.type)}), #${totalNodesProcessed} of ${totalNodesToProcess}`);
       
       // Check if node has children
       const hasChildren = 'children' in node && node.children && node.children.length > 0;

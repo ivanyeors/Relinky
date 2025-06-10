@@ -387,21 +387,34 @@ export async function scanForDeletedVariables(
   
   // Initialize progress
   let currentProgress = 0;
-  const updateProgressWithDebounce = (() => {
-    let lastUpdate = Date.now();
-    return (progress: number) => {
-      const now = Date.now();
-      // Update at least every 100ms to show continuous progress
-      if (now - lastUpdate >= 100 || progress - currentProgress >= 5) {
-        currentProgress = progress;
-        progressCallback(progress);
-        lastUpdate = now;
-      }
-    };
-  })();
+  let lastProgressUpdate = 0;
+  
+  // Update progress with smoother reporting and logging
+  const updateProgress = (progress: number) => {
+    // Ensure progress is between 0 and 100
+    const normalizedProgress = Math.min(99, Math.max(0, progress));
+    
+    // Only update if progress has changed meaningfully (0.5% change)
+    if (normalizedProgress - lastProgressUpdate >= 0.5) {
+      progressCallback(normalizedProgress);
+      lastProgressUpdate = normalizedProgress;
+      console.log(`Deleted variables scan progress: ${normalizedProgress.toFixed(1)}%`);
+    }
+  };
+  
+  // Debounced version of updateProgress to avoid too many updates
+  let updateProgressTimeout: number | null = null;
+  const updateProgressWithDebounce = (progress: number) => {
+    if (updateProgressTimeout) {
+      clearTimeout(updateProgressTimeout);
+    }
+    updateProgressTimeout = setTimeout(() => {
+      updateProgress(progress);
+    }, 100) as unknown as number;
+  };
   
   // Update to show scan has started
-  updateProgressWithDebounce(1);
+  updateProgress(1);
   
   // Get nodes to scan
   let nodesToScan: SceneNode[] = [];
@@ -425,7 +438,7 @@ export async function scanForDeletedVariables(
   }
   
   // Update progress after determining scan scope
-  updateProgressWithDebounce(5);
+  updateProgress(5);
   
   // Nodes with boundVariables and/or missingVariables
   const nodes: SceneNode[] = [];
@@ -449,7 +462,7 @@ export async function scanForDeletedVariables(
   }
   
   // Update progress after estimation
-  updateProgressWithDebounce(10);
+  updateProgress(10);
   console.log(`Estimated ${totalNodesToExamine} total nodes to examine`);
   
   // Now collect nodes with variables
@@ -473,7 +486,7 @@ export async function scanForDeletedVariables(
       if (nodesExamined % 100 === 0) { 
         // Update progress during collection phase
         const collectionProgress = 10 + Math.min(20, Math.round((nodesExamined / totalNodesToExamine) * 20));
-        updateProgressWithDebounce(collectionProgress);
+        updateProgress(collectionProgress);
       }
       
           if (shouldIncludeNode(n, ignoreHiddenLayers)) {
@@ -497,7 +510,7 @@ export async function scanForDeletedVariables(
   
   console.log(`Found ${nodes.length} nodes to scan for deleted variables`);
   // Update progress after node collection
-  updateProgressWithDebounce(30);
+  updateProgress(30);
   
   // Process each node with better error handling and cancellation checks
   let processedNodes = 0;
@@ -574,7 +587,7 @@ export async function scanForDeletedVariables(
           // Update progress during property processing
           if (propertiesProcessed % 5 === 0 || propertiesProcessed === totalProperties) {
             const nodeProgress = 30 + (nodeProcessingWeight * (i + (propertiesProcessed / totalProperties)) / nodes.length);
-            updateProgressWithDebounce(Math.round(nodeProgress));
+            updateProgress(Math.round(nodeProgress));
           }
         }
       }
@@ -688,7 +701,7 @@ export async function scanForDeletedVariables(
           bindingsProcessed += batch.length;
           // Update progress during binding processing
           const nodeProgress = 30 + (nodeProcessingWeight * (i + (bindingsProcessed / variableIdsToCheck.length)) / nodes.length);
-          updateProgressWithDebounce(Math.round(nodeProgress));
+          updateProgress(Math.round(nodeProgress));
           
           // Small delay between batches to prevent UI blocking
           await new Promise(resolve => setTimeout(resolve, 10));

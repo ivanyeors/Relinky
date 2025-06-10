@@ -814,20 +814,29 @@ function initializeApp() {
       handleScanComplete(msg) {
         console.log('Scan complete - full message:', msg);
         
-        // Check if minimum animation duration has elapsed
-        const now = Date.now();
-        const elapsed = this.scanStartTime ? now - this.scanStartTime : this.minAnimationDuration;
-        const remainingTime = Math.max(0, this.minAnimationDuration - elapsed);
-        
-        // Set actual progress to 100%
+        // Set actual progress to 100% immediately
         this.actualProgress = 100;
         
+        // Check if minimum animation duration has elapsed
+        const now = Date.now();
+        const elapsed = this.scanStartTime ? now - this.scanStartTime : 0;
+        
+        // Use a shorter minimum animation duration for a more responsive feel
+        const minAnimationDuration = 300; // Reduced from typical 800ms
+        const remainingTime = Math.max(0, minAnimationDuration - elapsed);
+        
+        // If we're already close to 100%, use a shorter animation
+        const currentProgress = this.scanProgress || 0;
+        const completionTimeMultiplier = currentProgress > 90 ? 0.5 : 1.0;
+        const adjustedRemainingTime = Math.round(remainingTime * completionTimeMultiplier);
+        
         // If minimum duration hasn't elapsed, delay completion
-        if (remainingTime > 0) {
-          // Continue animation to 100% over remaining time
+        if (adjustedRemainingTime > 0) {
+          // Continue animation to 100% over remaining time, but 
+          // only wait briefly if we're already close to completion
           setTimeout(() => {
             this.completeScan(msg);
-          }, remainingTime);
+          }, adjustedRemainingTime);
         } else {
           // Complete immediately if minimum duration has elapsed
           this.completeScan(msg);
@@ -839,11 +848,14 @@ function initializeApp() {
         // Stop progress animation
         this.stopProgressAnimation();
         
+        // Ensure progress is exactly 100% at the end
+        this.scanProgress = 100;
+        this.actualProgress = 100;
+        
         // Update states
         this.isScanning = false;
         this.scanComplete = true;
-        this.scanProgress = 100;
-        
+
         // Detailed logging for better debugging
         console.log('Message structure:', {
           type: msg.type,
@@ -1216,49 +1228,77 @@ function initializeApp() {
       },
       handleScanProgress(msg) {
         if (msg && typeof msg.progress === 'number') {
+          // Ensure progress is between 0 and 100
           this.actualProgress = Math.min(100, Math.max(0, msg.progress));
           this.isScanning = msg.isScanning !== false;
+          
+          // Log progress updates for debugging
+          console.log(`Progress update: ${this.actualProgress}%`);
+          
+          // If we're near completion, ensure visual progress reflects this
+          if (this.actualProgress >= 99.5) {
+            this.scanProgress = this.actualProgress;
+          }
         }
       },
       
-      // Start smooth progress animation with minimum duration
+      // Start smooth progress animation
       startProgressAnimation() {
         // Cancel any existing animation
         if (this.progressAnimationId) {
           cancelAnimationFrame(this.progressAnimationId);
         }
         
+        // Initialize timing variables for better animation control
+        this.lastAnimationTimestamp = Date.now();
+        this.animationDuration = 300; // Base animation duration in ms
+        
         // Start the animation loop
         this.animateProgress();
       },
       
-      // Smooth progress animation loop
+      // Smooth progress animation loop with variable easing
       animateProgress() {
-        if (!this.isScanning || !this.scanStartTime) {
+        if (!this.isScanning) {
           return;
         }
-        
+
+        // Calculate elapsed time since last frame
         const now = Date.now();
-        const elapsed = now - this.scanStartTime;
-        const minProgress = Math.min(95, (elapsed / this.minAnimationDuration) * 100);
+        const elapsed = now - (this.lastAnimationTimestamp || now);
+        this.lastAnimationTimestamp = now;
         
-        // Use the higher of actual progress or minimum time-based progress
-        // But never exceed actual progress if it's meaningful (> 5%)
-        let targetProgress;
-        if (this.actualProgress > 5) {
-          // If we have meaningful actual progress, use it but ensure minimum duration
-          targetProgress = Math.max(minProgress, this.actualProgress);
-        } else {
-          // If actual progress is minimal, use time-based progress
-          targetProgress = minProgress;
-        }
+        // Calculate target progress based on actual progress
+        const targetProgress = this.actualProgress;
         
-        // Smooth transition to target progress
+        // Calculate progress difference
         const progressDiff = targetProgress - this.scanProgress;
+        
+        // Adapt easing based on difference size
         if (Math.abs(progressDiff) > 0.1) {
-          this.scanProgress += progressDiff * 0.1; // Smooth easing
+          // Calculate dynamic easing speed based on size of the change
+          // Larger jumps move faster (up to 30% per second), smaller changes move slower
+          const easingSpeed = Math.min(0.3, Math.max(0.05, Math.abs(progressDiff) / 50));
+          
+          // Apply proportional change based on elapsed time (for frame-rate independence)
+          const changeThisFrame = progressDiff * easingSpeed * (elapsed / 1000);
+          
+          // Apply change with direction awareness
+          this.scanProgress += changeThisFrame;
+          
+          // Prevent overshooting
+          if ((progressDiff > 0 && this.scanProgress > targetProgress) || 
+              (progressDiff < 0 && this.scanProgress < targetProgress)) {
+            this.scanProgress = targetProgress;
+          }
         } else {
-          this.scanProgress = targetProgress;
+          // For very small differences, converge more quickly
+          this.scanProgress = this.scanProgress * 0.8 + targetProgress * 0.2;
+          
+          // If we're very close, just snap to target
+          if (Math.abs(this.scanProgress - targetProgress) < 0.05) {
+            this.scanProgress = targetProgress;
+          }
         }
         
         // Continue animation if still scanning

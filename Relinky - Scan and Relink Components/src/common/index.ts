@@ -648,9 +648,12 @@ export async function isNodeValid(nodeId: string): Promise<boolean> {
 
 // Progress tracking helpers
 export function updateProgress(progress: number) {
+  // Normalize progress to 0-99.5 range during scanning
+  const normalizedProgress = Math.min(99.5, Math.max(0, progress * 99.5));
+  
   figma.ui.postMessage({
     type: 'scan-progress',
-    progress: Math.max(0, Math.min(100, progress)),
+    progress: normalizedProgress,
     isScanning: true
   });
 }
@@ -669,6 +672,40 @@ export function completeProgress() {
     progress: 100,
     isScanning: false
   });
+}
+
+// Helper to create a throttled progress updater with adaptive sensitivity
+export function createThrottledProgress(minChangePercent = 0.5) {
+  let lastProgress = 0;
+  let lastUpdateTime = Date.now();
+  
+  return (progress: number) => {
+    const currentTime = Date.now();
+    const timeSinceLastUpdate = currentTime - lastUpdateTime;
+    
+    // Calculate target normalized progress (0-1 range)
+    const normalizedProgress = Math.min(Math.max(0, progress), 1);
+    
+    // Determine if we should update based on either:
+    // 1. Significant progress change OR
+    // 2. Time-based interval for slow-changing scans (minimum 250ms between updates)
+    const significantChange = Math.abs(normalizedProgress - lastProgress) >= minChangePercent / 100;
+    const timeIntervalMet = timeSinceLastUpdate >= 250;
+    
+    // Always update when we reach specific milestone percentages (10%, 25%, 50%, 75%, 90%, 99%)
+    const isProgressMilestone = 
+      [0.1, 0.25, 0.5, 0.75, 0.9, 0.99].some(milestone => 
+        Math.abs(normalizedProgress - milestone) < 0.01 && 
+        Math.abs(lastProgress - milestone) >= 0.01
+      );
+    
+    // Update progress under any of these conditions
+    if (significantChange || timeIntervalMet || isProgressMilestone || normalizedProgress >= 0.995) {
+      lastProgress = normalizedProgress;
+      lastUpdateTime = currentTime;
+      updateProgress(normalizedProgress);
+    }
+  };
 }
 
 // Node selection helpers

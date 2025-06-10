@@ -2,7 +2,7 @@
 // Handles initialization, UI events, and plugin lifecycle
 
 import * as scanners from './scanners';
-import { ScanType, MissingReference } from './common';
+import { ScanType, MissingReference, updateProgress, resetProgress, completeProgress, createThrottledProgress } from './common';
 import { unlinkVariable, unlinkGroupVariables } from './relink/unlink-variables';
 import { scanForDeletedVariables } from './scanners/deleted-variables';
 
@@ -575,19 +575,9 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
         variableTypes: msg.variableTypes || [] // Log variable types
       });
       
-      // Track progress with a callback
-      let lastProgress = 0;
-      const progressCallback = (progress: number) => {
-        // Only send updates if progress has changed significantly (at least 1%)
-        if (Math.abs(progress - lastProgress) >= 1 || progress >= 100) {
-          lastProgress = progress;
-          figma.ui.postMessage({ 
-            type: 'scan-progress', 
-            progress, 
-            isScanning: progress < 100
-          });
-        }
-      };
+      // Create throttled progress updater with smaller threshold for more frequent updates
+      // Use 0.2% threshold instead of 0.5% for more granular updates
+      const progressCallback = createThrottledProgress(0.2);
       
       // Use the scanner runner to get the proper scanner based on source type
       const scanResults = await scanners.runScanner(

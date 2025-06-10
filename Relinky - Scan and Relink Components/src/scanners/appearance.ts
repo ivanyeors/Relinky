@@ -195,12 +195,16 @@ export async function scanForAppearance(
     // Mark as processed
     processedNodeIds.add(node.id);
     
-    // Update progress occasionally
+    // Update progress more frequently (every 10 nodes instead of every 50)
     totalNodesProcessed++;
-    if (totalNodesProcessed % 50 === 0 || totalNodesProcessed === totalNodesToProcess) {
+    if (totalNodesProcessed % 10 === 0 || totalNodesProcessed === totalNodesToProcess) {
       const progress = Math.min(totalNodesProcessed / totalNodesToProcess, 0.99);
       progressCallback(progress);
-      console.log(`Processing opacity: ${totalNodesProcessed}/${totalNodesToProcess} nodes (${Math.round(progress * 100)}%)`);
+      
+      // Only log occasionally to reduce console spam
+      if (totalNodesProcessed % 50 === 0 || totalNodesProcessed === totalNodesToProcess) {
+        console.log(`Processing opacity: ${totalNodesProcessed}/${totalNodesToProcess} nodes (${Math.round(progress * 100)}%)`);
+      }
     }
     
     // Check element opacity - ONLY FOCUS ON THIS
