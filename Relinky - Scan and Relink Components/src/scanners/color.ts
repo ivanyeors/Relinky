@@ -110,6 +110,27 @@ export async function scanForColors(
            property in node.boundVariables;
   }
   
+  // Enhanced check for component instances to detect raw values in overrides
+  function isComponentInstanceWithRawValues(node: SceneNode, scanType: 'fill' | 'stroke'): boolean {
+    // Only check instance nodes
+    if (node.type !== 'INSTANCE') return false;
+    
+    // Check if the property has values but no variable binding
+    const property = scanType === 'fill' ? 'fills' : 'strokes';
+    
+    // If there's no variable binding and the property has values, it's likely a raw value
+    if (!hasVariableBinding(node, property)) {
+      if (scanType === 'fill' && 'fills' in node && node.fills && Array.isArray(node.fills) && node.fills.length > 0) {
+        return true;
+      }
+      if (scanType === 'stroke' && 'strokes' in node && node.strokes && Array.isArray(node.strokes) && node.strokes.length > 0) {
+        return true;
+      }
+    }
+    
+    return false;
+  }
+
   // Process a single node
   function processNode(node: SceneNode) {
     // Skip if we shouldn't include this node
@@ -125,6 +146,16 @@ export async function scanForColors(
       progressCallback(progress);
     }
     
+    // Enhanced processing for component instances - they will still go through regular processing
+    // but we'll add a note if they contain raw values
+    let isComponentInstance = node.type === 'INSTANCE';
+    let componentInstanceHasRawValues = isComponentInstance && isComponentInstanceWithRawValues(node, scanType);
+    
+    if (componentInstanceHasRawValues) {
+      console.log(`Found component instance with raw ${scanType} values: ${node.name}`);
+    }
+    
+    // Regular processing for all nodes (including component instances)
     if (scanType === 'fill') {
       // Check if node has fills
       if ('fills' in node && node.fills && Array.isArray(node.fills) && node.fills.length > 0) {
@@ -137,9 +168,13 @@ export async function scanForColors(
           
           // Only include solid fills
           if (fill.type === 'SOLID') {
+            // Use enhanced node name for component instances
+            const displayName = componentInstanceHasRawValues ? 
+              `${node.name} (Instance)` : node.name;
+              
             results.push({
               nodeId: node.id,
-              nodeName: node.name,
+              nodeName: displayName,
               location: getNodePath(node),
               property: 'fills',
               type: 'fill',
@@ -166,9 +201,13 @@ export async function scanForColors(
           
           // Only include solid strokes
           if (stroke.type === 'SOLID') {
+            // Use enhanced node name for component instances
+            const displayName = componentInstanceHasRawValues ? 
+              `${node.name} (Instance)` : node.name;
+              
             results.push({
               nodeId: node.id,
-              nodeName: node.name,
+              nodeName: displayName,
               location: getNodePath(node),
               property: 'strokes',
               type: 'stroke',
