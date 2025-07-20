@@ -22,7 +22,8 @@ export async function scanForLayoutDimensions(
   progressCallback: (progress: number) => void,
   nodesToScan?: SceneNode[],
   ignoreHiddenLayers: boolean = false,
-  filterTypes: string[] = []
+  filterTypes: string[] = [],
+  skipInstances: boolean = false
 ): Promise<MissingReference[]> {
   const results: LayoutReference[] = [];
   
@@ -38,6 +39,9 @@ export async function scanForLayoutDimensions(
 
         // Skip invisible nodes if ignoreHiddenLayers is true
         if (ignoreHiddenLayers && 'visible' in node && !node.visible) return false;
+        
+        // Skip instances if skipInstances is true
+        if (skipInstances && node.type === 'INSTANCE') return false;
         
         // Only include nodes with width and height
         return 'width' in node && 'height' in node;

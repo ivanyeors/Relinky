@@ -74,12 +74,42 @@
                       </div>
                     </label>
                   </div>
+                  <div class="setting-item">
+                    <label class="toggle-label">
+                      <div class="toggle-label-content">
+                        <span>Skip Component Instances</span>
+                        <span class="info-badge" title="Exclude component instances from scan results">ⓘ</span>
+                      </div>
+                      <div class="toggle-wrapper">
+                        <input 
+                          type="checkbox" 
+                          v-model="skipInstances"
+                          class="toggle-input"
+                        >
+                        <div class="toggle-slider"></div>
+                      </div>
+                    </label>
+                  </div>
                 </div>
               </div>
 
               <!-- Source Cards - First level filter -->
               <div class="scan-cards">
                 <div class="scan-card-section-divider">Scan Type</div>
+                
+                <!-- Instruction State: Select frames/objects -->
+                <div v-if="showSelectionInstruction" class="instruction-state">
+                  <div class="instruction-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                      <path d="M9 12l2 2 4-4"/>
+                      <circle cx="12" cy="12" r="9"/>
+                    </svg>
+                  </div>
+                  <div class="instruction-content">
+                    <h4 class="instruction-title">Select frames, groups, or objects</h4>
+                    <p class="instruction-description">Choose what you want to scan, or enable "Scan Entire Page" in settings</p>
+                  </div>
+                </div>
                 
                 <!-- Library Source Cards -->
                 <div v-for="option in librarySourceOptions"
@@ -110,6 +140,20 @@
               <!-- Token Type Selection - Only show after source type is selected with a smooth transition -->
               <div v-if="selectedSourceType && selectedSourceType !== 'deleted-variables'" class="scan-cards token-type-section">
                 <div class="scan-card-section-divider">Variable Type</div>
+                
+                <!-- Instruction State: Select Variable Type -->
+                <div v-if="showVariableTypeInstruction" class="instruction-state">
+                  <div class="instruction-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                      <path d="M9 12l2 2 4-4"/>
+                      <circle cx="12" cy="12" r="9"/>
+                    </svg>
+                  </div>
+                  <div class="instruction-content">
+                    <h4 class="instruction-title">Select Variable Type</h4>
+                    <p class="instruction-description">Choose which type of design tokens to scan for</p>
+                  </div>
+                </div>
                 
                 <!-- Design Token Cards -->
                 <div v-for="option in filteredTokenOptions"

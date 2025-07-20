@@ -25,9 +25,13 @@ export async function scanForCornerRadius(
   scanType: 'corner-radius',
   selectedFrameIds: string[] = [],
   progressCallback: (progress: number) => void = () => {},
-  ignoreHiddenLayers: boolean = false
+  ignoreHiddenLayers: boolean = false,
+  skipInstances: boolean = false
 ): Promise<RadiusReference[]> {
-  console.log(`Starting ${scanType} scan`);
+  console.log(`Starting ${scanType} scan - RADIUS SCANNER INITIALIZED`, {
+    selectedFrameIds: selectedFrameIds.length,
+    ignoreHiddenLayers
+  });
   
   // Check if scan was cancelled before starting
   if (isScancelled()) {
@@ -40,16 +44,100 @@ export async function scanForCornerRadius(
   
   // Determine which nodes to scan
   if (selectedFrameIds && selectedFrameIds.length > 0) {
-    // Get selected nodes from IDs
-    nodesToScan = await Promise.all(
+    // Get selected nodes from IDs - supporting ALL node types that can have corner radius
+    const selectedNodes = await Promise.all(
       selectedFrameIds.map(id => figma.getNodeByIdAsync(id))
-    ).then(nodes => nodes.filter((node): node is SceneNode => node !== null && 'type' in node));
+    ).then(nodes => nodes.filter((node): node is SceneNode => 
+      node !== null && 'type' in node && 
+      // Include ALL SceneNode types that can be containers or shapes
+      (node.type === 'FRAME' || 
+       node.type === 'COMPONENT' || 
+       node.type === 'COMPONENT_SET' ||
+       node.type === 'INSTANCE' ||
+       node.type === 'GROUP' ||
+       node.type === 'SECTION' ||
+       node.type === 'RECTANGLE' ||
+       node.type === 'ELLIPSE' ||
+       node.type === 'POLYGON' ||
+       node.type === 'STAR' ||
+       node.type === 'VECTOR' ||
+       node.type === 'LINE' ||
+       node.type === 'TEXT' ||
+       node.type === 'BOOLEAN_OPERATION' ||
+       node.type === 'SLICE' ||
+       node.type === 'CONNECTOR' ||
+       node.type === 'WIDGET' ||
+       node.type === 'EMBED' ||
+       node.type === 'LINK_UNFURL' ||
+       node.type === 'MEDIA' ||
+       node.type === 'STICKY' ||
+       node.type === 'SHAPE_WITH_TEXT' ||
+       node.type === 'CODE_BLOCK')
+    ));
     
-    console.log('Scanning selected frames:', nodesToScan.length, 'nodes');
+    console.log('Found selected nodes:', selectedNodes.length, 'nodes of types:', selectedNodes.map(n => n.type).join(', '));
+    
+    // Collect ALL nodes to scan (including all descendants)
+    for (const selectedNode of selectedNodes) {
+      // Add the selected node itself if it can have corner radius
+      if (selectedNode.type === 'RECTANGLE' || 
+          selectedNode.type === 'FRAME' || 
+          selectedNode.type === 'COMPONENT' || 
+          selectedNode.type === 'INSTANCE' ||
+          selectedNode.type === 'ELLIPSE' ||
+          selectedNode.type === 'POLYGON' ||
+          selectedNode.type === 'STAR' ||
+          selectedNode.type === 'VECTOR') {
+        nodesToScan.push(selectedNode);
+      }
+      
+      // Add all radius-capable descendants if the node has children
+      if ('children' in selectedNode && selectedNode.children.length > 0) {
+        try {
+          // Use findAll to get ALL descendant nodes that can have corner radius
+          const radiusDescendants = selectedNode.findAll((node: SceneNode) => {
+            // Apply visibility filter if needed
+            if (ignoreHiddenLayers && 'visible' in node && !node.visible) {
+              return false;
+            }
+            // Include all nodes that can have corner radius properties
+            return node.type === 'RECTANGLE' || 
+                   node.type === 'FRAME' || 
+                   node.type === 'COMPONENT' || 
+                   node.type === 'INSTANCE' ||
+                   node.type === 'ELLIPSE' ||
+                   node.type === 'POLYGON' ||
+                   node.type === 'STAR' ||
+                   node.type === 'VECTOR';
+          });
+          
+          console.log(`Adding ${radiusDescendants.length} radius-capable descendants from ${selectedNode.name}`);
+          nodesToScan.push(...radiusDescendants);
+        } catch (error) {
+          console.warn(`Error collecting radius descendants from ${selectedNode.name}:`, error);
+        }
+      }
+    }
+    
+    console.log('Total radius-capable nodes to scan (including descendants):', nodesToScan.length);
   } else {
-    // Fallback to current page
-    nodesToScan = Array.from(figma.currentPage.children);
-    console.log('Scanning entire page:', nodesToScan.length, 'top-level nodes');
+    // Fallback to current page - use findAll to get all radius-capable nodes
+    nodesToScan = figma.currentPage.findAll((node: SceneNode) => {
+      // Apply visibility filter if needed
+      if (ignoreHiddenLayers && 'visible' in node && !node.visible) {
+        return false;
+      }
+      // Include all nodes that can have corner radius
+      return node.type === 'RECTANGLE' || 
+             node.type === 'FRAME' || 
+             node.type === 'COMPONENT' || 
+             node.type === 'INSTANCE' ||
+             node.type === 'ELLIPSE' ||
+             node.type === 'POLYGON' ||
+             node.type === 'STAR' ||
+             node.type === 'VECTOR';
+    });
+    console.log('Scanning entire page:', nodesToScan.length, 'radius-capable nodes');
   }
   
   // Check if scan was cancelled after getting nodes
@@ -66,7 +154,9 @@ export async function scanForCornerRadius(
   
   // Total count for progress tracking
   let totalNodesProcessed = 0;
-  let totalNodesToProcess = nodesToScan.length;
+  let totalNodesToProcess = nodesToScan.length; // Now we know the exact count upfront
+  
+  console.log(`Found ${totalNodesToProcess} total radius-capable nodes to scan for ${scanType}`);
   
   // Helper function to get a readable path for a node
   function getNodePath(node: BaseNode): string {
@@ -89,18 +179,52 @@ export async function scanForCornerRadius(
     // Skip if node is hidden and we're ignoring hidden layers
     if (ignoreHiddenLayers && 'visible' in node && !node.visible) return false;
     
-    // Include nodes with cornerRadius property
-    if (node.type === 'RECTANGLE' || 
-        node.type === 'FRAME' || 
-        node.type === 'COMPONENT' || 
-        node.type === 'INSTANCE') {
-      return true;
-    }
+    // Skip instances if skipInstances is true
+    if (skipInstances && node.type === 'INSTANCE') return false;
     
-    return false;
+    // Include nodes with cornerRadius property
+    return node.type === 'RECTANGLE' || 
+           node.type === 'FRAME' || 
+           node.type === 'COMPONENT' || 
+           node.type === 'INSTANCE' ||
+           node.type === 'ELLIPSE' ||
+           node.type === 'POLYGON' ||
+           node.type === 'STAR' ||
+           node.type === 'VECTOR';
   }
   
-  // Helper function to check and process a node for corner radius
+  // Helper function to check if a property is bound to a variable
+  function isRawValue(node: SceneNode, propertyName: string): boolean {
+    try {
+      // Make sure the node has boundVariables property
+      if ('boundVariables' in node) {
+        // If there are no bound variables at all, it's definitely a raw value
+        if (!node.boundVariables) {
+          return true;
+        }
+        
+        // Type-safe check if the property is not in boundVariables
+        // @ts-ignore - Figma API doesn't provide complete typings for all possible property names
+        const boundVariable = node.boundVariables[propertyName];
+        if (!boundVariable) {
+          return true;
+        }
+        
+        // The property is bound to something, so it's not a raw value
+        return false;
+      }
+      
+      // If the node doesn't have boundVariables property at all, 
+      // it's using raw values by definition
+      return true;
+    } catch (error) {
+      console.warn(`Error checking if ${propertyName} is raw on node ${node.name}:`, error);
+      // Default to true in case of errors - better to report potentially false positives
+      return true;
+    }
+  }
+  
+  // Process a single node (no longer recursive since we have all nodes in the flat list)
   function processNode(node: SceneNode) {
     // Skip if we shouldn't include this node
     if (!shouldIncludeNode(node)) return;
@@ -108,40 +232,64 @@ export async function scanForCornerRadius(
     // Mark as processed
     processedNodeIds.add(node.id);
     
+    // Update progress occasionally
+    totalNodesProcessed++;
+    if (totalNodesProcessed % 10 === 0 || totalNodesProcessed === totalNodesToProcess) {
+      const progress = Math.min(totalNodesProcessed / totalNodesToProcess, 0.99);
+      progressCallback(progress);
+      
+      // Only log occasionally to reduce console spam
+      if (totalNodesProcessed % 50 === 0 || totalNodesProcessed === totalNodesToProcess) {
+        console.log(`Processing radius: ${totalNodesProcessed}/${totalNodesToProcess} nodes (${Math.round(progress * 100)}%)`);
+      }
+    }
+    
     // Check if node supports corner radius
     if (node.type === 'RECTANGLE' || 
         node.type === 'FRAME' || 
         node.type === 'COMPONENT' || 
-        node.type === 'INSTANCE') {
+        node.type === 'INSTANCE' ||
+        node.type === 'ELLIPSE' ||
+        node.type === 'POLYGON' ||
+        node.type === 'STAR' ||
+        node.type === 'VECTOR') {
       
-      // Cast to the appropriate type
-      const shapeNode = node as RectangleNode | FrameNode | ComponentNode | InstanceNode;
-      
-      // Handle uniform cornerRadius
-      if (shapeNode.cornerRadius !== undefined && shapeNode.cornerRadius !== null && typeof shapeNode.cornerRadius === 'number' && shapeNode.cornerRadius > 0) {
+      // Handle uniform cornerRadius (supported by most shape types)
+      if ('cornerRadius' in node && 
+          node.cornerRadius !== undefined && 
+          node.cornerRadius !== null && 
+          typeof node.cornerRadius === 'number' && 
+          node.cornerRadius > 0 &&
+          isRawValue(node, 'cornerRadius')) {
+        
+        console.log(`Found raw uniform corner radius in ${node.name}: ${node.cornerRadius}px`);
         results.push({
-          nodeId: shapeNode.id,
-          nodeName: shapeNode.name,
-          location: getNodePath(shapeNode),
+          nodeId: node.id,
+          nodeName: node.name,
+          location: getNodePath(node),
           property: 'cornerRadius',
           type: 'cornerRadius',
-          currentValue: shapeNode.cornerRadius,
-          isVisible: shapeNode.visible !== false,
-          // Additional metadata to help with filtering
-          topLeftRadius: shapeNode.topLeftRadius || 0,
-          topRightRadius: shapeNode.topRightRadius || 0,
-          bottomLeftRadius: shapeNode.bottomLeftRadius || 0,
-          bottomRightRadius: shapeNode.bottomRightRadius || 0
+          currentValue: node.cornerRadius,
+          isVisible: node.visible !== false,
+          // Safely access individual radius properties if they exist
+          topLeftRadius: ('topLeftRadius' in node ? node.topLeftRadius : undefined) || 0,
+          topRightRadius: ('topRightRadius' in node ? node.topRightRadius : undefined) || 0,
+          bottomLeftRadius: ('bottomLeftRadius' in node ? node.bottomLeftRadius : undefined) || 0,
+          bottomRightRadius: ('bottomRightRadius' in node ? node.bottomRightRadius : undefined) || 0
         });
       } 
-      // Handle individual corner radii
-      else if (shapeNode.topLeftRadius !== undefined || 
-               shapeNode.topRightRadius !== undefined || 
-               shapeNode.bottomLeftRadius !== undefined || 
-               shapeNode.bottomRightRadius !== undefined) {
+      // Handle individual corner radii (mainly for rectangles and frames)
+      else if (node.type === 'RECTANGLE' || node.type === 'FRAME' || node.type === 'COMPONENT' || node.type === 'INSTANCE') {
+        const shapeNode = node as RectangleNode | FrameNode | ComponentNode | InstanceNode;
         
         // Check top-left radius
-        if (shapeNode.topLeftRadius !== undefined && shapeNode.topLeftRadius !== null && typeof shapeNode.topLeftRadius === 'number' && shapeNode.topLeftRadius > 0) {
+        if (shapeNode.topLeftRadius !== undefined && 
+            shapeNode.topLeftRadius !== null && 
+            typeof shapeNode.topLeftRadius === 'number' && 
+            shapeNode.topLeftRadius > 0 &&
+            isRawValue(node, 'topLeftRadius')) {
+          
+          console.log(`Found raw top-left radius in ${shapeNode.name}: ${shapeNode.topLeftRadius}px`);
           results.push({
             nodeId: shapeNode.id,
             nodeName: shapeNode.name,
@@ -150,7 +298,6 @@ export async function scanForCornerRadius(
             type: 'cornerRadius',
             currentValue: shapeNode.topLeftRadius,
             isVisible: shapeNode.visible !== false,
-            // Additional metadata to help with filtering
             topLeftRadius: shapeNode.topLeftRadius,
             topRightRadius: shapeNode.topRightRadius || 0,
             bottomLeftRadius: shapeNode.bottomLeftRadius || 0,
@@ -159,7 +306,13 @@ export async function scanForCornerRadius(
         }
         
         // Check top-right radius
-        if (shapeNode.topRightRadius !== undefined && shapeNode.topRightRadius !== null && typeof shapeNode.topRightRadius === 'number' && shapeNode.topRightRadius > 0) {
+        if (shapeNode.topRightRadius !== undefined && 
+            shapeNode.topRightRadius !== null && 
+            typeof shapeNode.topRightRadius === 'number' && 
+            shapeNode.topRightRadius > 0 &&
+            isRawValue(node, 'topRightRadius')) {
+          
+          console.log(`Found raw top-right radius in ${shapeNode.name}: ${shapeNode.topRightRadius}px`);
           results.push({
             nodeId: shapeNode.id,
             nodeName: shapeNode.name,
@@ -168,7 +321,6 @@ export async function scanForCornerRadius(
             type: 'cornerRadius',
             currentValue: shapeNode.topRightRadius,
             isVisible: shapeNode.visible !== false,
-            // Additional metadata to help with filtering
             topLeftRadius: shapeNode.topLeftRadius || 0,
             topRightRadius: shapeNode.topRightRadius,
             bottomLeftRadius: shapeNode.bottomLeftRadius || 0,
@@ -177,7 +329,13 @@ export async function scanForCornerRadius(
         }
         
         // Check bottom-left radius
-        if (shapeNode.bottomLeftRadius !== undefined && shapeNode.bottomLeftRadius !== null && typeof shapeNode.bottomLeftRadius === 'number' && shapeNode.bottomLeftRadius > 0) {
+        if (shapeNode.bottomLeftRadius !== undefined && 
+            shapeNode.bottomLeftRadius !== null && 
+            typeof shapeNode.bottomLeftRadius === 'number' && 
+            shapeNode.bottomLeftRadius > 0 &&
+            isRawValue(node, 'bottomLeftRadius')) {
+          
+          console.log(`Found raw bottom-left radius in ${shapeNode.name}: ${shapeNode.bottomLeftRadius}px`);
           results.push({
             nodeId: shapeNode.id,
             nodeName: shapeNode.name,
@@ -186,7 +344,6 @@ export async function scanForCornerRadius(
             type: 'cornerRadius',
             currentValue: shapeNode.bottomLeftRadius,
             isVisible: shapeNode.visible !== false,
-            // Additional metadata to help with filtering
             topLeftRadius: shapeNode.topLeftRadius || 0,
             topRightRadius: shapeNode.topRightRadius || 0,
             bottomLeftRadius: shapeNode.bottomLeftRadius,
@@ -195,7 +352,13 @@ export async function scanForCornerRadius(
         }
         
         // Check bottom-right radius
-        if (shapeNode.bottomRightRadius !== undefined && shapeNode.bottomRightRadius !== null && typeof shapeNode.bottomRightRadius === 'number' && shapeNode.bottomRightRadius > 0) {
+        if (shapeNode.bottomRightRadius !== undefined && 
+            shapeNode.bottomRightRadius !== null && 
+            typeof shapeNode.bottomRightRadius === 'number' && 
+            shapeNode.bottomRightRadius > 0 &&
+            isRawValue(node, 'bottomRightRadius')) {
+          
+          console.log(`Found raw bottom-right radius in ${shapeNode.name}: ${shapeNode.bottomRightRadius}px`);
           results.push({
             nodeId: shapeNode.id,
             nodeName: shapeNode.name,
@@ -204,7 +367,6 @@ export async function scanForCornerRadius(
             type: 'cornerRadius',
             currentValue: shapeNode.bottomRightRadius,
             isVisible: shapeNode.visible !== false,
-            // Additional metadata to help with filtering
             topLeftRadius: shapeNode.topLeftRadius || 0,
             topRightRadius: shapeNode.topRightRadius || 0,
             bottomLeftRadius: shapeNode.bottomLeftRadius || 0,
@@ -213,16 +375,9 @@ export async function scanForCornerRadius(
         }
       }
     }
-    
-    // Process children recursively
-    if ('children' in node) {
-      for (const child of node.children) {
-        processNode(child as SceneNode);
-      }
-    }
   }
   
-  // Process all nodes
+  // Process all radius-capable nodes in the flat list (no longer recursive)
   for (const node of nodesToScan) {
     // Check if scan was cancelled
     if (isScancelled()) {
@@ -231,11 +386,6 @@ export async function scanForCornerRadius(
     }
     
     processNode(node);
-    
-    // Update progress
-    totalNodesProcessed++;
-    const progress = totalNodesProcessed / totalNodesToProcess;
-    progressCallback(progress > 1 ? 1 : progress);
   }
   
   // Set progress to 100% when done

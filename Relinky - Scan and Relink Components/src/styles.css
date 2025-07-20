@@ -867,6 +867,51 @@ border-radius: var(--border-radius-sm);
    Card Components
    ========================================================================== */
 
+/* Instruction State
+   ------------------------------------------------------------------------- */
+.instruction-state {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  border-radius: var(--border-radius-md);
+  background-color: var(--figma-color-bg-secondary);
+  border: 1px solid var(--figma-color-border);
+  margin-bottom: var(--spacing-sm);
+  grid-column: 1 / -1; /* Span full width across grid */
+}
+
+.instruction-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--border-radius-sm);
+  background-color: var(--figma-color-bg-brand);
+  color: var(--figma-color-text-onbrand);
+  flex-shrink: 0;
+}
+
+.instruction-content {
+  flex: 1;
+}
+
+.instruction-title {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--figma-color-text);
+  margin: 0 0 2px 0;
+  line-height: var(--line-height-tight);
+}
+
+.instruction-description {
+  font-size: var(--font-size-xxs);
+  color: var(--figma-color-text-secondary);
+  margin: 0;
+  line-height: var(--line-height-normal);
+}
+
 /* Scan Card
    ------------------------------------------------------------------------- */
 .scan-cards {
