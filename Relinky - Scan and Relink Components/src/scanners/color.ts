@@ -17,9 +17,13 @@ export async function scanForColors(
   scanType: 'fill' | 'stroke',
   selectedFrameIds: string[] = [],
   progressCallback: (progress: number) => void = () => {},
-  ignoreHiddenLayers: boolean = false
+  ignoreHiddenLayers: boolean = false,
+  skipInstances: boolean = false
 ): Promise<MissingReference[]> {
-  console.log(`Starting ${scanType} scan`);
+  console.log(`Starting ${scanType} scan - COLOR SCANNER INITIALIZED`, {
+    selectedFrameIds: selectedFrameIds.length,
+    ignoreHiddenLayers
+  });
   
   // Check if scan was cancelled before starting
   if (isScancelled()) {
@@ -32,16 +36,79 @@ export async function scanForColors(
   
   // Determine which nodes to scan
   if (selectedFrameIds && selectedFrameIds.length > 0) {
-    // Get selected nodes from IDs
-    nodesToScan = await Promise.all(
+    // Get selected nodes from IDs - supporting ALL node types that can have colors
+    const selectedNodes = await Promise.all(
       selectedFrameIds.map(id => figma.getNodeByIdAsync(id))
-    ).then(nodes => nodes.filter((node): node is SceneNode => node !== null && 'type' in node));
+    ).then(nodes => nodes.filter((node): node is SceneNode => 
+      node !== null && 'type' in node && 
+      // Include ALL SceneNode types that can have fills/strokes
+      (node.type === 'FRAME' || 
+       node.type === 'COMPONENT' || 
+       node.type === 'COMPONENT_SET' ||
+       node.type === 'INSTANCE' ||
+       node.type === 'GROUP' ||
+       node.type === 'SECTION' ||
+       node.type === 'RECTANGLE' ||
+       node.type === 'ELLIPSE' ||
+       node.type === 'POLYGON' ||
+       node.type === 'STAR' ||
+       node.type === 'VECTOR' ||
+       node.type === 'LINE' ||
+       node.type === 'TEXT' ||
+       node.type === 'BOOLEAN_OPERATION' ||
+       node.type === 'SLICE' ||
+       node.type === 'CONNECTOR' ||
+       node.type === 'WIDGET' ||
+       node.type === 'EMBED' ||
+       node.type === 'LINK_UNFURL' ||
+       node.type === 'MEDIA' ||
+       node.type === 'STICKY' ||
+       node.type === 'SHAPE_WITH_TEXT' ||
+       node.type === 'CODE_BLOCK')
+    ));
     
-    console.log('Scanning selected frames:', nodesToScan.length, 'nodes');
+    console.log('Found selected nodes:', selectedNodes.length, 'nodes of types:', selectedNodes.map(n => n.type).join(', '));
+    
+    // Collect ALL nodes to scan (including all descendants)
+    for (const selectedNode of selectedNodes) {
+      // Add the selected node itself if it can have colors
+      if ('fills' in selectedNode || 'strokes' in selectedNode) {
+        nodesToScan.push(selectedNode);
+      }
+      
+      // Add all color-capable descendants if the node has children
+      if ('children' in selectedNode && selectedNode.children.length > 0) {
+        try {
+          // Use findAll to get ALL descendant nodes that can have colors
+          const colorDescendants = selectedNode.findAll((node: SceneNode) => {
+            // Apply visibility filter if needed
+            if (ignoreHiddenLayers && 'visible' in node && !node.visible) {
+              return false;
+            }
+            // Include all nodes that can have fills or strokes
+            return 'fills' in node || 'strokes' in node;
+          });
+          
+          console.log(`Adding ${colorDescendants.length} color-capable descendants from ${selectedNode.name}`);
+          nodesToScan.push(...colorDescendants);
+        } catch (error) {
+          console.warn(`Error collecting color descendants from ${selectedNode.name}:`, error);
+        }
+      }
+    }
+    
+    console.log('Total color-capable nodes to scan (including descendants):', nodesToScan.length);
   } else {
-    // Fallback to current page
-    nodesToScan = Array.from(figma.currentPage.children);
-    console.log('Scanning entire page:', nodesToScan.length, 'top-level nodes');
+    // Fallback to current page - use findAll to get all color-capable nodes
+    nodesToScan = figma.currentPage.findAll((node: SceneNode) => {
+      // Apply visibility filter if needed
+      if (ignoreHiddenLayers && 'visible' in node && !node.visible) {
+        return false;
+      }
+      // Include all nodes that can have fills or strokes
+      return 'fills' in node || 'strokes' in node;
+    });
+    console.log('Scanning entire page:', nodesToScan.length, 'color-capable nodes');
   }
   
   // Check if scan was cancelled after getting nodes
@@ -58,25 +125,9 @@ export async function scanForColors(
   
   // Total count for progress tracking
   let totalNodesProcessed = 0;
-  let totalNodesToProcess = 0;
+  let totalNodesToProcess = nodesToScan.length; // Now we know the exact count upfront
   
-  // Count total nodes to process for progress calculation
-  const countNodes = (node: SceneNode): number => {
-    let count = 1;
-    if ('children' in node) {
-      for (const child of node.children) {
-        count += countNodes(child as SceneNode);
-      }
-    }
-    return count;
-  };
-  
-  // Calculate total nodes for progress reporting
-  for (const node of nodesToScan) {
-    totalNodesToProcess += countNodes(node);
-  }
-  
-  console.log(`Found ${totalNodesToProcess} total nodes to scan for ${scanType}`);
+  console.log(`Found ${totalNodesToProcess} total color-capable nodes to scan for ${scanType}`);
   
   // Helper function to get a readable path for a node
   function getNodePath(node: BaseNode): string {
@@ -98,6 +149,9 @@ export async function scanForColors(
     
     // Skip if node is hidden and we're ignoring hidden layers
     if (ignoreHiddenLayers && 'visible' in node && !node.visible) return false;
+    
+    // Skip instances if skipInstances is true
+    if (skipInstances && node.type === 'INSTANCE') return false;
     
     return true;
   }
@@ -131,7 +185,7 @@ export async function scanForColors(
     return false;
   }
 
-  // Process a single node
+  // Process a single node (no longer recursive since we have all nodes in the flat list)
   function processNode(node: SceneNode) {
     // Skip if we shouldn't include this node
     if (!shouldIncludeNode(node)) return;
@@ -141,9 +195,14 @@ export async function scanForColors(
     
     // Update progress occasionally
     totalNodesProcessed++;
-    if (totalNodesProcessed % 100 === 0) {
+    if (totalNodesProcessed % 10 === 0 || totalNodesProcessed === totalNodesToProcess) {
       const progress = Math.min(totalNodesProcessed / totalNodesToProcess, 0.99);
       progressCallback(progress);
+      
+      // Only log occasionally to reduce console spam
+      if (totalNodesProcessed % 50 === 0 || totalNodesProcessed === totalNodesToProcess) {
+        console.log(`Processing colors: ${totalNodesProcessed}/${totalNodesToProcess} nodes (${Math.round(progress * 100)}%)`);
+      }
     }
     
     // Enhanced processing for component instances - they will still go through regular processing
@@ -160,7 +219,10 @@ export async function scanForColors(
       // Check if node has fills
       if ('fills' in node && node.fills && Array.isArray(node.fills) && node.fills.length > 0) {
         // Skip if this property has a variable binding
-        if (hasVariableBinding(node, 'fills')) return;
+        if (hasVariableBinding(node, 'fills')) {
+          console.log(`Node ${node.name} has fills bound to variables, skipping`);
+          return;
+        }
         
         // Process each fill
         for (let i = 0; i < node.fills.length; i++) {
@@ -172,6 +234,7 @@ export async function scanForColors(
             const displayName = componentInstanceHasRawValues ? 
               `${node.name} (Instance)` : node.name;
               
+            console.log(`Found raw fill color in ${displayName}`);
             results.push({
               nodeId: node.id,
               nodeName: displayName,
@@ -193,7 +256,10 @@ export async function scanForColors(
       // Check if node has strokes
       if ('strokes' in node && node.strokes && Array.isArray(node.strokes) && node.strokes.length > 0) {
         // Skip if this property has a variable binding
-        if (hasVariableBinding(node, 'strokes')) return;
+        if (hasVariableBinding(node, 'strokes')) {
+          console.log(`Node ${node.name} has strokes bound to variables, skipping`);
+          return;
+        }
         
         // Process each stroke
         for (let i = 0; i < node.strokes.length; i++) {
@@ -205,6 +271,7 @@ export async function scanForColors(
             const displayName = componentInstanceHasRawValues ? 
               `${node.name} (Instance)` : node.name;
               
+            console.log(`Found raw stroke color in ${displayName}`);
             results.push({
               nodeId: node.id,
               nodeName: displayName,
@@ -223,16 +290,9 @@ export async function scanForColors(
         }
       }
     }
-    
-    // Process children recursively
-    if ('children' in node) {
-      for (const child of node.children) {
-        processNode(child as SceneNode);
-      }
-    }
   }
   
-  // Process all root nodes
+  // Process all color-capable nodes in the flat list (no longer recursive)
   for (const node of nodesToScan) {
     // Check if scan was cancelled
     if (isScancelled()) {

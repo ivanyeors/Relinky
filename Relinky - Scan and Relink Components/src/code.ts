@@ -299,6 +299,7 @@ interface ScanForTokensMessage {
   scanEntirePage: boolean;
   selectedFrameIds: string[];
   ignoreHiddenLayers: boolean;
+  skipInstances: boolean;
   isLibraryVariableScan: boolean;
   isRescan?: boolean;
   sourceType?: 'raw-values' | 'missing-library' | 'deleted-variables';
@@ -586,7 +587,8 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
         selectedFrameIds,
         progressCallback,
         ignoreHiddenLayers,
-        msg.variableTypes || [] // Pass variable types filter
+        msg.variableTypes || [], // Pass variable types filter
+        msg.skipInstances || false // Pass skip instances setting
       );
       
       // Group the results based on source type
@@ -599,7 +601,8 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
           progressCallback, 
           selectedFrameIds, 
           ignoreHiddenLayers, 
-          msg.variableTypes || []
+          msg.variableTypes || [],
+          msg.skipInstances || false
         );
         
         // Send the complete result to the UI
@@ -615,7 +618,8 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
           progressCallback, 
           selectedFrameIds, 
           ignoreHiddenLayers, 
-          msg.variableTypes || []
+          msg.variableTypes || [],
+          msg.skipInstances || false
         );
         
         // Send the complete result to the UI
@@ -844,7 +848,8 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
         [], // scan the whole page
         () => {}, // Skip progress updates for this scan
         false, // don't ignore hidden layers
-        msg.variableTypes || [] // Pass variable types filter
+        msg.variableTypes || [], // Pass variable types filter
+        false // default skipInstances to false for debug scans
       );
       
       // Scan for deleted variables
@@ -854,7 +859,8 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
         [], // scan the whole page
         () => {}, // Skip progress updates for this scan
         false, // don't ignore hidden layers
-        msg.variableTypes || [] // Pass variable types filter
+        msg.variableTypes || [], // Pass variable types filter
+        false // default skipInstances to false for debug scans
       );
       
       // Collect variables from all library types to show in UI

@@ -134,6 +134,7 @@ function initializeApp() {
         // Add back scan settings state
         showSettings: false,
         scanEntirePage: false,
+        skipInstances: false,
         // Initialize groupedReferences as an empty object
         groupedReferences: {},
         // Initialize expandedGroups as a new Set
@@ -619,6 +620,19 @@ function initializeApp() {
         // Default fallback - return all options
         return this.tokenScanOptions;
       },
+      // Add instruction state computed properties
+      showSelectionInstruction() {
+        // Show if user hasn't selected anything AND hasn't enabled scan entire page
+        // Remove the selectedSourceType condition to show this instruction more broadly
+        return !this.hasSelection && !this.scanEntirePage;
+      },
+      showVariableTypeInstruction() {
+        // Show if user has selected a source type that requires variable type selection
+        // but hasn't selected a variable type yet
+        return this.selectedSourceType && 
+               this.selectedSourceType !== 'deleted-variables' && 
+               !this.selectedScanType;
+      },
     },
     methods: {
       getReferenceClass(ref) {
@@ -762,6 +776,7 @@ function initializeApp() {
           scanEntirePage: scanEntirePage,
           selectedFrameIds: scanEntirePage ? [] : (this.selectedFrameIds || []),
           ignoreHiddenLayers: this.ignoreHiddenLayers,
+          skipInstances: this.skipInstances,
           isRescan,
           isLibraryVariableScan: this.selectedSourceType !== 'raw-values',
           // Include the source type for backend processing

@@ -23,7 +23,8 @@ export async function scanForAppearance(
   scanType: 'opacity',
   selectedFrameIds: string[] = [],
   progressCallback: (progress: number) => void = () => {},
-  ignoreHiddenLayers: boolean = false
+  ignoreHiddenLayers: boolean = false,
+  skipInstances: boolean = false
 ): Promise<AppearanceReference[]> {
   console.log(`Starting ${scanType} scan - APPEARANCE SCANNER INITIALIZED`, {
     selectedFrameIds: selectedFrameIds.length,
@@ -152,6 +153,9 @@ export async function scanForAppearance(
     
     // Skip if node is hidden and we're ignoring hidden layers
     if (ignoreHiddenLayers && 'visible' in node && !node.visible) return false;
+    
+    // Skip instances if skipInstances is true
+    if (skipInstances && node.type === 'INSTANCE') return false;
     
     return true;
   }

@@ -339,10 +339,13 @@ function getNodePath(node: BaseNode): string {
 /**
  * Helper function to determine if a node should be included in scan results
  */
-function shouldIncludeNode(node: SceneNode, ignoreHiddenLayers: boolean): boolean {
+function shouldIncludeNode(node: SceneNode, ignoreHiddenLayers: boolean, skipInstances: boolean = false): boolean {
   if (ignoreHiddenLayers && 'visible' in node && !node.visible) {
     return false;
   }
+  // Skip instances if skipInstances is true
+  if (skipInstances && node.type === 'INSTANCE') return false;
+  
   return true;
 }
 
@@ -358,7 +361,8 @@ export async function scanForDeletedVariables(
   progressCallback: (progress: number) => void = () => {},
   selectedFrameIds: string[] | undefined = undefined,
   ignoreHiddenLayers: boolean = false,
-  variableTypes: string[] = []
+  variableTypes: string[] = [],
+  skipInstances: boolean = false
 ): Promise<{
   results: MissingReference[],
   availableTypes: Set<string>
@@ -489,7 +493,7 @@ export async function scanForDeletedVariables(
         updateProgress(collectionProgress);
       }
       
-          if (shouldIncludeNode(n, ignoreHiddenLayers)) {
+          if (shouldIncludeNode(n, ignoreHiddenLayers, skipInstances)) {
       const hasBoundVariables = 'boundVariables' in n && n.boundVariables && Object.keys(n.boundVariables).length > 0;
       const hasMissingVariables = 'missingVariables' in n && n.missingVariables && Object.keys(n.missingVariables).length > 0;
       

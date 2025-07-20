@@ -114,7 +114,8 @@ export async function runScanner(
   selectedFrameIds: string[] = [],
   progressCallback?: (progress: number) => void,
   ignoreHiddenLayers: boolean = false,
-  variableTypes: string[] = []
+  variableTypes: string[] = [],
+  skipInstances: boolean = false
 ): Promise<MissingReference[]> {
   // Reset cancellation flag
   resetCancellation();
@@ -164,21 +165,33 @@ export async function runScanner(
 
     // Collect all nodes to scan
     for (const frame of validFrames) {
-      nodesToScan.push(frame);
+      // Skip the frame itself if it's an instance and skipInstances is true
+      if (!skipInstances || frame.type !== 'INSTANCE') {
+        nodesToScan.push(frame);
+      }
+      
       // Only add descendants if they're visible or we're not ignoring hidden layers
       // Also check if the node has children (container nodes)
       if ((!ignoreHiddenLayers || ('visible' in frame && frame.visible)) &&
           ('children' in frame)) {
-        nodesToScan = [...nodesToScan, ...frame.findAll((node: SceneNode) =>
-          !ignoreHiddenLayers || ('visible' in node && node.visible)
-        )];
+        nodesToScan = [...nodesToScan, ...frame.findAll((node: SceneNode) => {
+          // Filter out hidden nodes if ignoreHiddenLayers is true
+          const isVisible = !ignoreHiddenLayers || ('visible' in node && node.visible);
+          // Filter out instances if skipInstances is true
+          const isNotInstance = !skipInstances || node.type !== 'INSTANCE';
+          return isVisible && isNotInstance;
+        })];
       }
     }
   } else {
     // Scan entire page
-    nodesToScan = figma.currentPage.findAll(node =>
-      !ignoreHiddenLayers || ('visible' in node && node.visible)
-    );
+    nodesToScan = figma.currentPage.findAll(node => {
+      // Filter out hidden nodes if ignoreHiddenLayers is true
+      const isVisible = !ignoreHiddenLayers || ('visible' in node && node.visible);
+      // Filter out instances if skipInstances is true
+      const isNotInstance = !skipInstances || node.type !== 'INSTANCE';
+      return isVisible && isNotInstance;
+    });
   }
 
   console.log(`Using scanner: ${sourceType} - ${scanType} on ${nodesToScan.length} nodes`);
@@ -188,31 +201,31 @@ export async function runScanner(
     case 'raw-values':
       switch (scanType) {
         case 'gap':
-          return scanForGap('gap', selectedFrameIds, progressHandler, ignoreHiddenLayers);
+          return scanForGap('gap', selectedFrameIds, progressHandler, ignoreHiddenLayers, skipInstances);
         case 'horizontal-padding':
         case 'vertical-padding':
-          return scanForPadding(scanType, selectedFrameIds, progressHandler, ignoreHiddenLayers);
+          return scanForPadding(scanType, selectedFrameIds, progressHandler, ignoreHiddenLayers, skipInstances);
         case 'corner-radius':
-          return scanForCornerRadius('corner-radius', selectedFrameIds, progressHandler, ignoreHiddenLayers);
+          return scanForCornerRadius('corner-radius', selectedFrameIds, progressHandler, ignoreHiddenLayers, skipInstances);
         case 'fill':
         case 'stroke':
-          return scanForColors(scanType, selectedFrameIds, progressHandler, ignoreHiddenLayers);
+          return scanForColors(scanType, selectedFrameIds, progressHandler, ignoreHiddenLayers, skipInstances);
         case 'typography':
-          return scanForTypography('typography', selectedFrameIds, progressHandler, ignoreHiddenLayers);
+          return scanForTypography('typography', selectedFrameIds, progressHandler, ignoreHiddenLayers, skipInstances);
         case 'layout':
-          return scanForLayoutDimensions(progressHandler, nodesToScan, ignoreHiddenLayers, variableTypes);
+          return scanForLayoutDimensions(progressHandler, nodesToScan, ignoreHiddenLayers, variableTypes, skipInstances);
         case 'opacity':
-          return scanForAppearance('opacity', selectedFrameIds, progressHandler, ignoreHiddenLayers);
+          return scanForAppearance('opacity', selectedFrameIds, progressHandler, ignoreHiddenLayers, skipInstances);
         case 'effects':
-          return scanForEffects('effects', selectedFrameIds, progressHandler, ignoreHiddenLayers);
+          return scanForEffects('effects', selectedFrameIds, progressHandler, ignoreHiddenLayers, skipInstances);
         default:
-          return scanForRawValues(scanType, selectedFrameIds, progressHandler, ignoreHiddenLayers);
+          return scanForRawValues(scanType, selectedFrameIds, progressHandler, ignoreHiddenLayers, skipInstances);
       }
     case 'missing-library':
-      return scanForDeletedVariables(progressHandler, selectedFrameIds, ignoreHiddenLayers, variableTypes)
+      return scanForDeletedVariables(progressHandler, selectedFrameIds, ignoreHiddenLayers, variableTypes, skipInstances)
         .then(result => result.results);
     case 'deleted-variables':
-      return scanForDeletedVariables(progressHandler, selectedFrameIds, ignoreHiddenLayers, variableTypes)
+      return scanForDeletedVariables(progressHandler, selectedFrameIds, ignoreHiddenLayers, variableTypes, skipInstances)
         .then(result => result.results);
     default:
       console.error(`Unknown scanner source type: ${sourceType}`);

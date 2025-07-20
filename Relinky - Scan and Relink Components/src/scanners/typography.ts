@@ -17,9 +17,13 @@ export async function scanForTypography(
   scanType: 'typography',
   selectedFrameIds: string[] = [],
   progressCallback: (progress: number) => void = () => {},
-  ignoreHiddenLayers: boolean = false
+  ignoreHiddenLayers: boolean = false,
+  skipInstances: boolean = false
 ): Promise<MissingReference[]> {
-  console.log(`Starting ${scanType} scan`);
+  console.log(`Starting ${scanType} scan - TYPOGRAPHY SCANNER INITIALIZED`, {
+    selectedFrameIds: selectedFrameIds.length,
+    ignoreHiddenLayers
+  });
   
   // Check if scan was cancelled before starting
   if (isScancelled()) {
@@ -32,16 +36,79 @@ export async function scanForTypography(
   
   // Determine which nodes to scan
   if (selectedFrameIds && selectedFrameIds.length > 0) {
-    // Get selected nodes from IDs
-    nodesToScan = await Promise.all(
+    // Get selected nodes from IDs - supporting ALL node types that can contain text
+    const selectedNodes = await Promise.all(
       selectedFrameIds.map(id => figma.getNodeByIdAsync(id))
-    ).then(nodes => nodes.filter((node): node is SceneNode => node !== null && 'type' in node));
+    ).then(nodes => nodes.filter((node): node is SceneNode => 
+      node !== null && 'type' in node && 
+      // Include ALL SceneNode types that can contain text or be containers
+      (node.type === 'FRAME' || 
+       node.type === 'COMPONENT' || 
+       node.type === 'COMPONENT_SET' ||
+       node.type === 'INSTANCE' ||
+       node.type === 'GROUP' ||
+       node.type === 'SECTION' ||
+       node.type === 'RECTANGLE' ||
+       node.type === 'ELLIPSE' ||
+       node.type === 'POLYGON' ||
+       node.type === 'STAR' ||
+       node.type === 'VECTOR' ||
+       node.type === 'LINE' ||
+       node.type === 'TEXT' ||
+       node.type === 'BOOLEAN_OPERATION' ||
+       node.type === 'SLICE' ||
+       node.type === 'CONNECTOR' ||
+       node.type === 'WIDGET' ||
+       node.type === 'EMBED' ||
+       node.type === 'LINK_UNFURL' ||
+       node.type === 'MEDIA' ||
+       node.type === 'STICKY' ||
+       node.type === 'SHAPE_WITH_TEXT' ||
+       node.type === 'CODE_BLOCK')
+    ));
     
-    console.log('Scanning selected frames:', nodesToScan.length, 'nodes');
+    console.log('Found selected nodes:', selectedNodes.length, 'nodes of types:', selectedNodes.map(n => n.type).join(', '));
+    
+    // Collect ALL nodes to scan (including all descendants)
+    for (const selectedNode of selectedNodes) {
+      // Add the selected node itself if it's a text node
+      if (selectedNode.type === 'TEXT') {
+        nodesToScan.push(selectedNode);
+      }
+      
+      // Add all text descendants if the node has children
+      if ('children' in selectedNode && selectedNode.children.length > 0) {
+        try {
+          // Use findAll to get ALL descendant text nodes
+          const textDescendants = selectedNode.findAll((node: SceneNode) => {
+            // Apply visibility filter if needed
+            if (ignoreHiddenLayers && 'visible' in node && !node.visible) {
+              return false;
+            }
+            // Only include TEXT nodes
+            return node.type === 'TEXT';
+          });
+          
+          console.log(`Adding ${textDescendants.length} text descendants from ${selectedNode.name}`);
+          nodesToScan.push(...textDescendants);
+        } catch (error) {
+          console.warn(`Error collecting text descendants from ${selectedNode.name}:`, error);
+        }
+      }
+    }
+    
+    console.log('Total text nodes to scan (including descendants):', nodesToScan.length);
   } else {
-    // Fallback to current page
-    nodesToScan = Array.from(figma.currentPage.children);
-    console.log('Scanning entire page:', nodesToScan.length, 'top-level nodes');
+    // Fallback to current page - use findAll to get all text nodes
+    nodesToScan = figma.currentPage.findAll((node: SceneNode) => {
+      // Apply visibility filter if needed
+      if (ignoreHiddenLayers && 'visible' in node && !node.visible) {
+        return false;
+      }
+      // Only include TEXT nodes
+      return node.type === 'TEXT';
+    });
+    console.log('Scanning entire page:', nodesToScan.length, 'text nodes');
   }
   
   // Check if scan was cancelled after getting nodes
@@ -58,25 +125,9 @@ export async function scanForTypography(
   
   // Total count for progress tracking
   let totalNodesProcessed = 0;
-  let totalNodesToProcess = 0;
+  let totalNodesToProcess = nodesToScan.length; // Now we know the exact count upfront
   
-  // Count total nodes to process for progress calculation
-  const countNodes = (node: SceneNode): number => {
-    let count = 1;
-    if ('children' in node) {
-      for (const child of node.children) {
-        count += countNodes(child as SceneNode);
-      }
-    }
-    return count;
-  };
-  
-  // Calculate total nodes for progress reporting
-  for (const node of nodesToScan) {
-    totalNodesToProcess += countNodes(node);
-  }
-  
-  console.log(`Found ${totalNodesToProcess} total nodes to scan for ${scanType}`);
+  console.log(`Found ${totalNodesToProcess} total text nodes to scan for ${scanType}`);
   
   // Helper function to get a readable path for a node
   function getNodePath(node: BaseNode): string {
@@ -99,6 +150,9 @@ export async function scanForTypography(
     // Skip if node is hidden and we're ignoring hidden layers
     if (ignoreHiddenLayers && 'visible' in node && !node.visible) return false;
     
+    // Skip instances if skipInstances is true
+    if (skipInstances && node.type === 'INSTANCE') return false;
+    
     // Only include text nodes
     return node.type === 'TEXT';
   }
@@ -111,27 +165,24 @@ export async function scanForTypography(
            property in node.boundVariables;
   }
   
-  // Process a single node
+  // Process a single node (no longer recursive since we have all nodes in the flat list)
   function processNode(node: SceneNode) {
     // Skip if we shouldn't include this node
-    if (!shouldIncludeNode(node)) {
-      // Process children recursively even if we skip this node
-      if ('children' in node) {
-        for (const child of node.children) {
-          processNode(child as SceneNode);
-        }
-      }
-      return;
-    }
+    if (!shouldIncludeNode(node)) return;
     
     // Mark as processed
     processedNodeIds.add(node.id);
     
     // Update progress occasionally
     totalNodesProcessed++;
-    if (totalNodesProcessed % 100 === 0) {
+    if (totalNodesProcessed % 10 === 0 || totalNodesProcessed === totalNodesToProcess) {
       const progress = Math.min(totalNodesProcessed / totalNodesToProcess, 0.99);
       progressCallback(progress);
+      
+      // Only log occasionally to reduce console spam
+      if (totalNodesProcessed % 50 === 0 || totalNodesProcessed === totalNodesToProcess) {
+        console.log(`Processing typography: ${totalNodesProcessed}/${totalNodesToProcess} nodes (${Math.round(progress * 100)}%)`);
+      }
     }
     
     // Process text node typography
@@ -142,6 +193,7 @@ export async function scanForTypography(
       if (hasVariableBinding(textNode, 'fontName') || 
           hasVariableBinding(textNode, 'fontSize') || 
           hasVariableBinding(textNode, 'fontWeight')) {
+        console.log(`Node ${textNode.name} has typography bound to variables, skipping`);
         return;
       }
       
@@ -149,6 +201,8 @@ export async function scanForTypography(
       const fontFamily = getFontFamilyFromNode(textNode);
       const fontWeight = getFontWeightFromNode(textNode);
       const fontSize = textNode.fontSize as number;
+      
+      console.log(`Found raw typography in ${textNode.name}: ${fontFamily} ${fontWeight} ${fontSize}px`);
       
       // Create a unique key for this typography style
       const groupKey = `typography-${fontFamily}-${fontWeight}-${fontSize}`;
@@ -186,7 +240,7 @@ export async function scanForTypography(
     }
   }
   
-  // Process all root nodes
+  // Process all text nodes in the flat list (no longer recursive)
   for (const node of nodesToScan) {
     // Check if scan was cancelled
     if (isScancelled()) {

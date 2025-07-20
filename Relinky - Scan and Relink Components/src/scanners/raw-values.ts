@@ -44,7 +44,8 @@ export async function scanForRawValues(
   scanType: ScanType,
   selectedFrameIds: string[] = [],
   progressCallback: (progress: number) => void = () => {},
-  ignoreHiddenLayers: boolean = false
+  ignoreHiddenLayers: boolean = false,
+  skipInstances: boolean = false
 ): Promise<MissingReference[]> {
   console.log('Starting raw values scan:', {
     scanType,
@@ -159,6 +160,9 @@ export async function scanForRawValues(
         console.warn(`Error checking visibility for node ${node.name}:`, e);
       }
     }
+    
+    // Skip instances if skipInstances is true
+    if (skipInstances && node.type === 'INSTANCE') return false;
     
     return true;
   }

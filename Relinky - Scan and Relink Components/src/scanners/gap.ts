@@ -22,9 +22,13 @@ export async function scanForGap(
   scanType: 'gap',
   selectedFrameIds: string[] = [],
   progressCallback: (progress: number) => void = () => {},
-  ignoreHiddenLayers: boolean = false
+  ignoreHiddenLayers: boolean = false,
+  skipInstances: boolean = false
 ): Promise<GapReference[]> {
-  console.log(`Starting ${scanType} scan`);
+  console.log(`Starting ${scanType} scan - GAP SCANNER INITIALIZED`, {
+    selectedFrameIds: selectedFrameIds.length,
+    ignoreHiddenLayers
+  });
   
   // Check if scan was cancelled before starting
   if (isScancelled()) {
@@ -37,16 +41,79 @@ export async function scanForGap(
   
   // Determine which nodes to scan
   if (selectedFrameIds && selectedFrameIds.length > 0) {
-    // Get selected nodes from IDs
-    nodesToScan = await Promise.all(
+    // Get selected nodes from IDs - supporting ALL node types that can have auto-layout
+    const selectedNodes = await Promise.all(
       selectedFrameIds.map(id => figma.getNodeByIdAsync(id))
-    ).then(nodes => nodes.filter((node): node is SceneNode => node !== null && 'type' in node));
+    ).then(nodes => nodes.filter((node): node is SceneNode => 
+      node !== null && 'type' in node && 
+      // Include ALL SceneNode types that can be containers
+      (node.type === 'FRAME' || 
+       node.type === 'COMPONENT' || 
+       node.type === 'COMPONENT_SET' ||
+       node.type === 'INSTANCE' ||
+       node.type === 'GROUP' ||
+       node.type === 'SECTION' ||
+       node.type === 'RECTANGLE' ||
+       node.type === 'ELLIPSE' ||
+       node.type === 'POLYGON' ||
+       node.type === 'STAR' ||
+       node.type === 'VECTOR' ||
+       node.type === 'LINE' ||
+       node.type === 'TEXT' ||
+       node.type === 'BOOLEAN_OPERATION' ||
+       node.type === 'SLICE' ||
+       node.type === 'CONNECTOR' ||
+       node.type === 'WIDGET' ||
+       node.type === 'EMBED' ||
+       node.type === 'LINK_UNFURL' ||
+       node.type === 'MEDIA' ||
+       node.type === 'STICKY' ||
+       node.type === 'SHAPE_WITH_TEXT' ||
+       node.type === 'CODE_BLOCK')
+    ));
     
-    console.log('Scanning selected frames:', nodesToScan.length, 'nodes');
+    console.log('Found selected nodes:', selectedNodes.length, 'nodes of types:', selectedNodes.map(n => n.type).join(', '));
+    
+    // Collect ALL nodes to scan (including all descendants)
+    for (const selectedNode of selectedNodes) {
+      // Add the selected node itself if it can have auto-layout
+      if (selectedNode.type === 'FRAME' || selectedNode.type === 'COMPONENT' || selectedNode.type === 'INSTANCE') {
+        nodesToScan.push(selectedNode);
+      }
+      
+      // Add all auto-layout capable descendants if the node has children
+      if ('children' in selectedNode && selectedNode.children.length > 0) {
+        try {
+          // Use findAll to get ALL descendant nodes that can have auto-layout
+          const autoLayoutDescendants = selectedNode.findAll((node: SceneNode) => {
+            // Apply visibility filter if needed
+            if (ignoreHiddenLayers && 'visible' in node && !node.visible) {
+              return false;
+            }
+            // Only include nodes that can have auto-layout (itemSpacing property)
+            return node.type === 'FRAME' || node.type === 'COMPONENT' || node.type === 'INSTANCE';
+          });
+          
+          console.log(`Adding ${autoLayoutDescendants.length} auto-layout descendants from ${selectedNode.name}`);
+          nodesToScan.push(...autoLayoutDescendants);
+        } catch (error) {
+          console.warn(`Error collecting auto-layout descendants from ${selectedNode.name}:`, error);
+        }
+      }
+    }
+    
+    console.log('Total auto-layout nodes to scan (including descendants):', nodesToScan.length);
   } else {
-    // Fallback to current page
-    nodesToScan = Array.from(figma.currentPage.children);
-    console.log('Scanning entire page:', nodesToScan.length, 'top-level nodes');
+    // Fallback to current page - use findAll to get all auto-layout capable nodes
+    nodesToScan = figma.currentPage.findAll((node: SceneNode) => {
+      // Apply visibility filter if needed
+      if (ignoreHiddenLayers && 'visible' in node && !node.visible) {
+        return false;
+      }
+      // Only include nodes that can have auto-layout
+      return node.type === 'FRAME' || node.type === 'COMPONENT' || node.type === 'INSTANCE';
+    });
+    console.log('Scanning entire page:', nodesToScan.length, 'auto-layout capable nodes');
   }
   
   // Check if scan was cancelled after getting nodes
@@ -61,23 +128,11 @@ export async function scanForGap(
   // Cache for nodes we've already processed to avoid duplicates
   const processedNodeIds = new Set<string>();
   
-  // Recursively count nodes for accurate progress reporting
-  function countNodes(nodes: readonly SceneNode[]): number {
-    let count = nodes.length;
-    for (const node of nodes) {
-      if (isScancelled()) break;
-      
-      if ('children' in node) {
-        count += countNodes(node.children);
-      }
-    }
-    return count;
-  }
-  
-  // Count total nodes to process for better progress reporting
+  // Total count for progress tracking
   let totalNodesProcessed = 0;
-  let totalNodesToProcess = countNodes(nodesToScan);
-  console.log(`Total nodes to process: ${totalNodesToProcess}`);
+  let totalNodesToProcess = nodesToScan.length; // Now we know the exact count upfront
+  
+  console.log(`Found ${totalNodesToProcess} total auto-layout nodes to scan for ${scanType}`);
   
   // Helper function to get a readable path for a node
   function getNodePath(node: BaseNode): string {
@@ -123,13 +178,13 @@ export async function scanForGap(
     if (processedNodeIds.has(node.id)) return false;
     
     // Skip if node is hidden and we're ignoring hidden layers
-    if (ignoreHiddenLayers && 'visible' in node) {
-      if (node.visible === false) {
-        return false;
-      }
-    }
+    if (ignoreHiddenLayers && 'visible' in node && !node.visible) return false;
     
-    return true;
+    // Skip instances if skipInstances is true
+    if (skipInstances && node.type === 'INSTANCE') return false;
+    
+    // Only include auto-layout capable nodes
+    return node.type === 'FRAME' || node.type === 'COMPONENT' || node.type === 'INSTANCE';
   }
   
   /**
@@ -165,78 +220,71 @@ export async function scanForGap(
     }
   }
   
-  // Recursively process nodes
-  async function processNodes(nodes: readonly SceneNode[]) {
-    // Check if scan was cancelled
-    if (isScancelled()) return;
+  // Process a single node (no longer recursive since we have all nodes in the flat list)
+  function processNode(node: SceneNode) {
+    // Skip if we shouldn't include this node
+    if (!shouldIncludeNode(node)) return;
     
-    for (const node of nodes) {
-      // Check if scan was cancelled
-      if (isScancelled()) break;
+    // Mark as processed
+    processedNodeIds.add(node.id);
+    
+    // Update progress occasionally
+    totalNodesProcessed++;
+    if (totalNodesProcessed % 10 === 0 || totalNodesProcessed === totalNodesToProcess) {
+      const progress = Math.min(totalNodesProcessed / totalNodesToProcess, 0.99);
+      progressCallback(progress);
       
-      // Update progress
-      totalNodesProcessed++;
-      if (totalNodesProcessed % 50 === 0) {
-        progressCallback(Math.min(totalNodesProcessed / totalNodesToProcess, 0.99));
+      // Only log occasionally to reduce console spam
+      if (totalNodesProcessed % 50 === 0 || totalNodesProcessed === totalNodesToProcess) {
+        console.log(`Processing gaps: ${totalNodesProcessed}/${totalNodesToProcess} nodes (${Math.round(progress * 100)}%)`);
       }
+    }
+    
+    // Get node visibility for logging
+    const isVisible = getNodeVisibility(node);
+    
+    // Check for auto layout frames with gaps
+    if (node.type === 'FRAME' || node.type === 'COMPONENT' || node.type === 'INSTANCE') {
+      const frameNode = node as FrameNode | ComponentNode | InstanceNode;
       
-      // Determine if this node should be included in the results
-      const includeNode = shouldIncludeNode(node);
-      
-      // Get node visibility for logging
-      const isVisible = getNodeVisibility(node);
-      
-      // Process this node if it meets our criteria
-      if (includeNode) {
-        // Mark this node as processed
-        processedNodeIds.add(node.id);
+      // Only process frames with auto layout
+      if ('layoutMode' in frameNode && frameNode.layoutMode !== 'NONE') {
+        const spacing = frameNode.itemSpacing;
         
-        // Check for auto layout frames with gaps
-        if (node.type === 'FRAME') {
-          const frameNode = node as FrameNode;
+        // If it has a spacing value and it's a raw value (not from a variable)
+        if (spacing > 0 && isRawValue(node, 'itemSpacing')) {
+          console.log(`Found raw gap in ${node.name}: ${spacing}, layout: ${frameNode.layoutMode}`);
           
-          // Only process frames with auto layout
-          if (frameNode.layoutMode !== 'NONE') {
-            const spacing = frameNode.itemSpacing;
-            
-            // If it has a spacing value and it's a raw value (not from a variable)
-            if (spacing > 0 && isRawValue(node, 'itemSpacing')) {
-              console.log(`Found raw gap in ${node.name}: ${spacing}, layout: ${frameNode.layoutMode}`);
-              
-              // Determine if it's vertical or horizontal gap based on layout mode
-              const gapType = frameNode.layoutMode === 'VERTICAL' ? 'vertical' : 'horizontal';
-              
-              // Add to results
-              results.push({
-                nodeId: node.id,
-                nodeName: node.name,
-                location: getNodePath(node),
-                property: 'itemSpacing',
-                type: 'gap',
-                currentValue: spacing,
-                isVisible: isVisible,
-                gapType: gapType
-              });
-            }
-          }
+          // Determine if it's vertical or horizontal gap based on layout mode
+          const gapType = frameNode.layoutMode === 'VERTICAL' ? 'vertical' : 'horizontal';
+          
+          // Add to results
+          results.push({
+            nodeId: node.id,
+            nodeName: node.name,
+            location: getNodePath(node),
+            property: 'itemSpacing',
+            type: 'gap',
+            currentValue: spacing,
+            isVisible: isVisible,
+            gapType: gapType
+          });
+        } else if (spacing > 0) {
+          console.log(`Node ${node.name} has gap ${spacing} bound to a variable, skipping`);
         }
-      }
-      
-      // Always process children regardless of whether this node matched
-      // This ensures we find all gaps in nested components
-      if ('children' in node) {
-        await processNodes(node.children);
       }
     }
   }
   
-  // Start processing nodes
-  await processNodes(nodesToScan);
-  
-  // Check if scan was cancelled after processing
-  if (isScancelled()) {
-    console.log(`${scanType} scan cancelled during processing`);
-    return [];
+  // Process all auto-layout nodes in the flat list (no longer recursive)
+  for (const node of nodesToScan) {
+    // Check if scan was cancelled
+    if (isScancelled()) {
+      console.log(`${scanType} scan cancelled during processing`);
+      return [];
+    }
+    
+    processNode(node);
   }
   
   // Set progress to 100% when done

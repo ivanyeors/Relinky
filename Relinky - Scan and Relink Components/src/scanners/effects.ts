@@ -25,6 +25,7 @@ export async function scanForEffects(
   selectedFrameIds: string[] = [],
   progressCallback: (progress: number) => void = () => {},
   ignoreHiddenLayers: boolean = false,
+  skipInstances: boolean = false,
   propertyFilter?: string
 ): Promise<EffectsReference[]> {
   console.log(`Starting ${scanType} scan - EFFECTS SCANNER INITIALIZED`, {
@@ -155,6 +156,9 @@ export async function scanForEffects(
     
     // Skip if node is hidden and we're ignoring hidden layers
     if (ignoreHiddenLayers && 'visible' in node && !node.visible) return false;
+    
+    // Skip instances if skipInstances is true
+    if (skipInstances && node.type === 'INSTANCE') return false;
     
     // Only process nodes that can have effects
     return 'effects' in node;
