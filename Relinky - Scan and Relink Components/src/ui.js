@@ -635,6 +635,64 @@ function initializeApp() {
       },
     },
     methods: {
+      refreshPlugin() {
+        // Soft reset without reloading the iframe to avoid sandbox warnings
+        // Reset core state
+        this.isScanning = false;
+        this.scanError = false;
+        this.scanComplete = false;
+        this.scanProgress = 0;
+        this.actualProgress = 0;
+        this.lastScannedType = null;
+        this.successMessage = '';
+        this.errorMessage = '';
+        this.showSuccessToast = false;
+        this.showErrorToast = false;
+        
+        // Selection and scope
+        this.hasSelection = false;
+        this.selectedCount = 0;
+        this.selectedFrameIds = [];
+        this.scanEntirePage = false;
+        this.skipInstances = false;
+        
+        // Filters and options
+        this.selectedSourceType = 'raw-values';
+        this.selectedScanType = null;
+        this.selectedVariableTypes = [];
+        this.selectedVariableTypeFilter = 'all';
+        this.availableVariableTypes = [];
+        this.showVariableTypeFilters = false;
+        this.paddingFilterType = 'all';
+        this.radiusFilterType = 'all';
+        this.gapFilterType = 'all';
+        this.layoutFilterType = 'all';
+        this.effectsFilterType = 'all';
+        this.showHiddenOnly = false;
+        
+        // Results and UI collections
+        this.groupedReferences = {};
+        this.expandedGroups = new Set();
+        
+        // Reset UI affordances
+        this.showSettings = false;
+        const tokenTypeSection = document.querySelector('.token-type-section');
+        const resultsSection = document.querySelector('.results-section');
+        if (tokenTypeSection) tokenTypeSection.classList.remove('selected');
+        if (resultsSection) {
+          resultsSection.classList.remove('scan-complete');
+          resultsSection.classList.remove('scroll-target');
+        }
+        const pluginContainer = document.querySelector('.plugin-container');
+        if (pluginContainer) pluginContainer.scrollTop = 0;
+        
+        // Ask plugin for current selection again
+        try {
+          parent.postMessage({ pluginMessage: { type: 'get-selected-frame-ids' } }, '*');
+        } catch (e) {
+          console.warn('Failed to request selection after refresh:', e);
+        }
+      },
       getReferenceClass(ref) {
         if (!ref) return 'unknown-reference';
         
@@ -1109,6 +1167,10 @@ function initializeApp() {
             this.scanProgress = 0;
             this.scanType = data.scanType || this.scanType; // Preserve the scan type
             break;
+          case 'clear-results':
+            // Clear results upon plugin request
+            this.clearResults();
+            break;
           case 'scan-progress':
             this.handleScanProgress(data);
             break;
@@ -1334,6 +1396,8 @@ function initializeApp() {
         console.log(`Selected scan type: ${value}`);
         
         // Always set the selected value (no toggling)
+        // Clear previous results when switching scan type to avoid stale display
+        this.clearResults();
         this.selectedScanType = value;
         
         // Add the selected class to the token type section for animation
@@ -1892,6 +1956,8 @@ function initializeApp() {
         
         // Always set the selected value (no toggling)
         this.selectedSourceType = value;
+        // Clear any existing results when switching source types
+        this.clearResults();
         
         // Reset scan type when changing source type
         this.selectedScanType = null;

@@ -4,6 +4,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Relinky - Scan and Relink Components</title>
+    <!-- Explicitly deny disallowed features to avoid permission policy warnings in DevTools -->
+    <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), clipboard-write=(), display-capture=()">
     <!-- Vue.js from CDN -->
     <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
     <!-- CSS imports -->
@@ -31,7 +33,20 @@
           <div class="step-container">
             <div class="step-content">
               <!-- 1. Title -->
-              <h3 class="step-title">Choose what to scan for</h3>
+              <div class="step-title-row">
+                <h3 class="step-title">Choose what to scan for</h3>
+                <button 
+                  class="button secondary-button small icon-button"
+                  @click="refreshPlugin"
+                  aria-label="Refresh UI"
+                  title="Refresh UI"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M20 12a8 8 0 10-2.343 5.657" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M20 8v4h-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+              </div>
 
               <!-- 2. Scan Settings dropdown -->
               <div class="scan-settings">
@@ -689,6 +704,21 @@
 
   <!-- Add CSS for new elements -->
   <style>
+    .step-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .icon-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px;
+      width: 28px;
+      height: 28px;
+      line-height: 0;
+    }
     .token-type {
       font-weight: 500;
       margin-right: 8px;

@@ -565,6 +565,8 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
     scanners.resetCancellation();
     
     try {
+      // Instruct UI to clear previous results to prevent stale state
+      figma.ui.postMessage({ type: 'clear-results' });
       // Notify UI that scan has started
       figma.ui.postMessage({ type: 'scan-started' });
       
