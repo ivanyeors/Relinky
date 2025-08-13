@@ -582,57 +582,38 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
       // Use 0.2% threshold instead of 0.5% for more granular updates
       const progressCallback = createThrottledProgress(0.2);
       
-      // Use the scanner runner to get the proper scanner based on source type
-      const scanResults = await scanners.runScanner(
-        sourceType,
-        scanType as ScanType,
-        selectedFrameIds,
-        progressCallback,
-        ignoreHiddenLayers,
-        msg.variableTypes || [], // Pass variable types filter
-        msg.skipInstances || false // Pass skip instances setting
-      );
-      
-      // Group the results based on source type
-      const grouped = scanners.groupScanResults(sourceType, scanResults);
-      
-      // Handle missing library variables differently to include availableTypes
-      if (sourceType === 'missing-library') {
-        // Get the full missingLibResult with availableTypes
-        const missingLibResult = await scanners.scanForMissingLibraryVariables(
-          progressCallback, 
-          selectedFrameIds, 
-          ignoreHiddenLayers, 
+      // Optimize deleted/missing library scans by calling the specific scanner once
+      if (sourceType === 'missing-library' || sourceType === 'deleted-variables') {
+        const deletedVariablesResult = await scanners.scanForDeletedVariables(
+          progressCallback,
+          selectedFrameIds,
+          ignoreHiddenLayers,
           msg.variableTypes || [],
           msg.skipInstances || false
         );
-        
-        // Send the complete result to the UI
+
+        const grouped = scanners.groupScanResults(sourceType, deletedVariablesResult.results);
+
         figma.ui.postMessage({
           type: 'missing-library-result',
           references: grouped,
-          availableTypes: Array.from(missingLibResult.availableTypes),
-          count: scanResults.length
+          availableTypes: Array.from(deletedVariablesResult.availableTypes),
+          count: deletedVariablesResult.results.length
         });
-      } else if (sourceType === 'deleted-variables') {
-        // Get the full deletedVariablesResult with availableTypes
-        const deletedVariablesResult = await scanners.scanForDeletedVariables(
-          progressCallback, 
-          selectedFrameIds, 
-          ignoreHiddenLayers, 
+      } else {
+        // Use the scanner runner for all other source types
+        const scanResults = await scanners.runScanner(
+          sourceType,
+          scanType as ScanType,
+          selectedFrameIds,
+          progressCallback,
+          ignoreHiddenLayers,
           msg.variableTypes || [],
           msg.skipInstances || false
         );
-        
-        // Send the complete result to the UI
-        figma.ui.postMessage({
-          type: 'missing-library-result', // Reuse the same message type for UI compatibility
-          references: grouped,
-          availableTypes: Array.from(deletedVariablesResult.availableTypes),
-          count: scanResults.length
-        });
-      } else {
-        // For other source types, send grouped results as before
+
+        const grouped = scanners.groupScanResults(sourceType, scanResults);
+
         figma.ui.postMessage({
           type: 'scan-complete',
           references: grouped,
