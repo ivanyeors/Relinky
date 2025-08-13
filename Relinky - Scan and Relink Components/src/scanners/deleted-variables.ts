@@ -606,14 +606,20 @@ export async function scanForDeletedVariables(
         const variableIdsToCheck: Array<{id: string, property: string, arrayIndex?: number}> = [];
         
         for (const [property, binding] of Object.entries(node.boundVariables)) {
+          // Pre-filter by variable type to avoid unnecessary variable lookups
+          const variableCategory = getVariableCategory(property);
+          if (filterByTypes && !variableTypes.includes(variableCategory)) {
+            continue;
+          }
+
           if (binding && typeof binding === 'object') {
             if ('id' in binding) {
-              variableIdsToCheck.push({id: binding.id as string, property});
+              variableIdsToCheck.push({ id: binding.id as string, property });
             } else if (Array.isArray(binding)) {
               for (let j = 0; j < binding.length; j++) {
                 const item = binding[j];
                 if (item && typeof item === 'object' && 'id' in item) {
-                  variableIdsToCheck.push({id: item.id as string, property, arrayIndex: j});
+                  variableIdsToCheck.push({ id: item.id as string, property, arrayIndex: j });
                 }
               }
             }

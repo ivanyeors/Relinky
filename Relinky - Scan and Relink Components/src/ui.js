@@ -28,6 +28,15 @@ function initializeApp() {
       show: Boolean
     },
     methods: {
+      toggleTypeSelection(current, type) {
+        const set = new Set(current || []);
+        if (set.has(type)) {
+          set.delete(type);
+        } else {
+          set.add(type);
+        }
+        return Array.from(set);
+      },
       close() {
         this.$emit('close');
       }
@@ -248,7 +257,9 @@ function initializeApp() {
         
         // Special case for deleted-variables: allow scanning without selecting a scan type
         if (isDeletedVariables) {
-          return hasSourceType && !this.isScanning;
+          // Require the user to pick at least one variable type to reduce scan size
+          const hasTypeSelection = Array.isArray(this.selectedVariableTypes) && this.selectedVariableTypes.length > 0;
+          return hasSourceType && hasTypeSelection && !this.isScanning;
         }
         
         // For other scan types, require both source type and scan type
@@ -2101,27 +2112,20 @@ function initializeApp() {
       },
       // Add this method with the other selection methods
 
-      // Toggle variable type filter selection
+      // Toggle variable type filter selection (single-select behavior)
       toggleVariableType(value) {
-        console.log(`Toggle variable type: ${value}`);
+        console.log(`Toggle variable type (single-select): ${value}`);
         
-        // Initialize the array if it doesn't exist
-        if (!this.selectedVariableTypes) {
+        if (!Array.isArray(this.selectedVariableTypes)) {
           this.selectedVariableTypes = [];
         }
         
-        // Find the index of the value in the array
-        const index = this.selectedVariableTypes.indexOf(value);
+        const isAlreadyOnlySelection = this.selectedVariableTypes.length === 1 && this.selectedVariableTypes[0] === value;
         
-        if (index === -1) {
-          // Not selected, add it
-          this.selectedVariableTypes.push(value);
-        } else {
-          // Already selected, remove it
-          this.selectedVariableTypes.splice(index, 1);
-        }
+        // If clicking the same selected value when it's the only one, clear selection; otherwise set as the only selection
+        this.selectedVariableTypes = isAlreadyOnlySelection ? [] : [value];
         
-        console.log(`Selected variable types: ${this.selectedVariableTypes.join(', ')}`);
+        console.log(`Selected variable type: ${this.selectedVariableTypes.join(', ') || 'none'}`);
       },
       
       // New method for single-selection variable type filter

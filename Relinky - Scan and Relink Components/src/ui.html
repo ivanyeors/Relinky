@@ -36,15 +36,12 @@
               <div class="step-title-row">
                 <h3 class="step-title">Choose what to scan for</h3>
                 <button 
-                  class="button secondary-button small icon-button"
+                  class="secondary-button"
                   @click="refreshPlugin"
                   aria-label="Refresh UI"
                   title="Refresh UI"
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path d="M20 12a8 8 0 10-2.343 5.657" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M20 8v4h-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
+                  refresh
                 </button>
               </div>
 
@@ -191,6 +188,45 @@
                     <div class="scan-card-text">
                       <div class="scan-card-title">{{ option.label }}</div>
                       <div v-if="!showScanResults" class="scan-card-description">{{ option.description }}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Deleted Variables: Pre-scan type selection -->
+              <div v-if="selectedSourceType === 'deleted-variables'" class="scan-cards token-type-section deleted-variable-types-section">
+                <div class="scan-card-section-divider">Variable Types to scan</div>
+                <div class="instruction-state">
+                  <div class="instruction-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                      <path d="M9 12l2 2 4-4"/>
+                      <circle cx="12" cy="12" r="9"/>
+                    </svg>
+                  </div>
+                  <div class="instruction-content">
+                    <h4 class="instruction-title">Select variable types</h4>
+                    <p class="instruction-description">Choose one or more types to narrow the scan and speed it up</p>
+                  </div>
+                </div>
+                <div class="scan-cards">
+                  <div 
+                    v-for="type in ['typography','color','spacing','radius','effect','layout','opacity']"
+                    :key="type"
+                    class="scan-card"
+                    :class="{ 'selected': selectedVariableTypes.includes(type), 'interactive': true }"
+                    role="option"
+                    :aria-selected="selectedVariableTypes.includes(type)"
+                    tabindex="0"
+                     @click="toggleVariableType(type)"
+                  >
+                    <div class="scan-card-icon svg-icon">
+                      <div class="icon" v-html="getVariableTypeIcon(type)"></div>
+                    </div>
+                    <div class="scan-card-content">
+                      <div class="scan-card-text">
+                        <div class="scan-card-title">{{ type.charAt(0).toUpperCase() + type.slice(1) }}</div>
+                        <div class="scan-card-description">Include {{ type }} tokens</div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -480,21 +516,12 @@
                           {{ isGroupExpanded(groupKey) ? '▼' : '▶' }}
                         </span>
                         
-                        <!-- Library Badge with Token Type and Raw Value -->
-                        <span v-if="isLibraryVariableScan && group.refs?.[0]" 
-                              :class="{
-                                'library-badge': true,
-                                'unlinked-reference': !group.refs[0].isMissingLibrary,
-                                'missing-library-reference': group.refs[0].isMissingLibrary
-                              }">
-                          <!-- Show Token Type -->
-                          <span class="token-type">{{ getReferenceDisplayType(group.refs[0]) }}</span>
-                          <!-- Show Variable Name and Raw Value -->
-                          <template v-if="group.refs[0].isMissingLibrary && group.refs[0].currentValue">
-                            <span class="variable-name">{{ group.refs[0].currentValue.variableName }}</span>
-                            <span class="raw-value">({{ getRawVariableValue(group.refs[0]) }})</span>
-                          </template>
-                        </span>
+                        <!-- Simplified badge for deleted-variables: show token name and count only -->
+                        <template v-if="isLibraryVariableScan && scanType === 'deleted-variables' && group.refs?.[0]">
+                          <span class="library-badge">
+                            <span class="variable-name">{{ group.refs[0].currentValue?.variableName || 'Unknown Token' }}</span>
+                          </span>
+                        </template>
                         
                         <!-- Add typography-specific template -->
                         <template v-if="group.refs?.[0]?.type === 'typography' && group.refs[0]?.currentValue">
@@ -718,6 +745,14 @@
       width: 28px;
       height: 28px;
       line-height: 0;
+    }
+    /* Refresh button: smaller and pinned to the right */
+    .refresh-button {
+      padding: 2px 8px;
+      margin-left: auto;
+      line-height: 1;
+      width: auto;
+      height: auto;
     }
     .token-type {
       font-weight: 500;
