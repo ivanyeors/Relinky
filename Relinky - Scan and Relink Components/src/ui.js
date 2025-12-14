@@ -167,6 +167,7 @@ function initializeApp() {
         showHiddenOnly: false,
         selectedVariableTypes: [], // Array to store selected variable types for filtering
         isLibraryVariableScan: false,
+        selectedLibraryFilterTypes: [],
         
         // Initialize all filter state variables
         paddingFilterType: 'all', // For vertical/horizontal padding
@@ -545,6 +546,24 @@ function initializeApp() {
                 refs = filteredVariableRefs;
               }
               
+              if (
+                this.isLibraryVariableScan &&
+                this.scanType === 'linked-library' &&
+                Array.isArray(this.selectedLibraryFilterTypes) &&
+                this.selectedLibraryFilterTypes.length > 0
+              ) {
+                const filteredByType = refs.filter(ref => {
+                  const category = this.getLinkedLibraryTokenCategory(ref);
+                  return category ? this.selectedLibraryFilterTypes.includes(category) : false;
+                });
+
+                if (filteredByType.length === 0) {
+                  continue;
+                }
+
+                refs = filteredByType;
+              }
+              
               // Apply effects filters if needed
               if (this.selectedScanType === 'effects' && this.effectsFilterType !== 'all') {
                 const filteredEffectsRefs = refs.filter(ref => {
@@ -578,6 +597,46 @@ function initializeApp() {
         });
         
         return result;
+      },
+      linkedLibraryFilterOptions() {
+        if (!this.isLibraryVariableScan || this.scanType !== 'linked-library') {
+          return [];
+        }
+
+        const baseOptions = [
+          { value: 'typography', label: 'Typography', description: 'Text tokens', icon: 'typography' },
+          { value: 'gap', label: 'Gap', description: 'Auto-layout gaps', icon: 'gap' },
+          { value: 'horizontal-padding', label: 'H Padding', description: 'Horizontal padding tokens', icon: 'horizontal-padding' },
+          { value: 'vertical-padding', label: 'V Padding', description: 'Vertical padding tokens', icon: 'vertical-padding' },
+          { value: 'corner-radius', label: 'Radius', description: 'Corner radius tokens', icon: 'radius' },
+          { value: 'fill', label: 'Fill Colors', description: 'Fill color tokens', icon: 'fill' },
+          { value: 'stroke', label: 'Stroke Colors', description: 'Stroke color tokens', icon: 'stroke' },
+          { value: 'layout', label: 'Layout', description: 'Layout + dimension tokens', icon: 'layout' },
+          { value: 'opacity', label: 'Opacity', description: 'Opacity tokens', icon: 'opacity' },
+          { value: 'effects', label: 'Effects', description: 'Shadow & blur tokens', icon: 'effects' },
+        ];
+
+        const counts = {};
+
+        Object.values(this.groupedReferences || {}).forEach(group => {
+          const refs = Array.isArray(group) ? group : group?.refs;
+          if (!Array.isArray(refs)) {
+            return;
+          }
+
+          refs.forEach(ref => {
+            const category = this.getLinkedLibraryTokenCategory(ref);
+            if (!category) {
+              return;
+            }
+            counts[category] = (counts[category] || 0) + 1;
+          });
+        });
+
+        return baseOptions.map(option => ({
+          ...option,
+          count: counts[option.value] || 0,
+        }));
       },
 
       designTokenOptions() {
@@ -686,6 +745,7 @@ function initializeApp() {
         // Results and UI collections
         this.groupedReferences = {};
         this.expandedGroups = new Set();
+        this.selectedLibraryFilterTypes = [];
         
         // Reset UI affordances
         this.showSettings = false;
@@ -802,6 +862,66 @@ function initializeApp() {
 
         return candidates[0] || '';
       },
+      getLinkedLibraryTokenCategory(ref) {
+        if (!ref || ref.type !== 'linked-library') {
+          return null;
+        }
+
+        const property = (ref.property || '').toLowerCase();
+        const tokenKind = (ref.currentValue?.tokenKind || '').toLowerCase();
+        const variableCategory = (
+          ref.variableCategory ||
+          ref.variableType ||
+          ref.currentValue?.variableType ||
+          ''
+        ).toLowerCase();
+
+        const contains = (value) => property.includes(value);
+
+        if (tokenKind === 'style') {
+          if (contains('textstyle')) return 'typography';
+          if (contains('fill')) return 'fill';
+          if (contains('stroke')) return 'stroke';
+          if (contains('effect')) return 'effects';
+          if (contains('grid')) return 'layout';
+        }
+
+        if (variableCategory) {
+          if (variableCategory.includes('typography')) return 'typography';
+          if (variableCategory.includes('radius')) return 'corner-radius';
+          if (variableCategory.includes('opacity')) return 'opacity';
+          if (variableCategory.includes('effect')) return 'effects';
+          if (variableCategory.includes('layout')) return 'layout';
+          if (variableCategory.includes('color')) {
+            if (contains('stroke')) return 'stroke';
+            return 'fill';
+          }
+          if (variableCategory.includes('spacing')) {
+            if (contains('horizontalpadding') || contains('paddingleft') || contains('paddingright')) {
+              return 'horizontal-padding';
+            }
+            if (contains('verticalpadding') || contains('paddingtop') || contains('paddingbottom')) {
+              return 'vertical-padding';
+            }
+            if (contains('gap') || contains('itemspacing')) {
+              return 'gap';
+            }
+          }
+        }
+
+        if (contains('gap') || contains('itemspacing')) return 'gap';
+        if (contains('horizontalpadding') || contains('paddingleft') || contains('paddingright')) return 'horizontal-padding';
+        if (contains('verticalpadding') || contains('paddingtop') || contains('paddingbottom')) return 'vertical-padding';
+        if (contains('corner') || contains('radius')) return 'corner-radius';
+        if (contains('stroke')) return 'stroke';
+        if (contains('fill') || contains('background')) return 'fill';
+        if (contains('opacity')) return 'opacity';
+        if (contains('effect') || contains('shadow') || contains('blur')) return 'effects';
+        if (contains('layout') || contains('grid') || contains('width') || contains('height') || contains('auto')) return 'layout';
+        if (contains('text') || contains('font')) return 'typography';
+
+        return null;
+      },
       getReferenceClass(ref) {
         if (!ref) return 'unknown-reference';
         
@@ -870,6 +990,7 @@ function initializeApp() {
           this.groupedReferences = {};
           this.expandedGroups = new Set();
           this.scanComplete = false;
+          this.selectedLibraryFilterTypes = [];
           
           // Reset variable type filters for missing library scans
           this.selectedVariableTypes = [];
@@ -1033,6 +1154,7 @@ function initializeApp() {
         // Update states
         this.isScanning = false;
         this.scanComplete = true;
+        this.selectedLibraryFilterTypes = [];
 
         // Detailed logging for better debugging
         console.log('Message structure:', {
@@ -2029,6 +2151,42 @@ function initializeApp() {
 
         this.selectGroup(aggregateRefs, event);
       },
+      isLinkedLibraryFilterSelected(value) {
+        if (!Array.isArray(this.selectedLibraryFilterTypes)) {
+          return false;
+        }
+        return this.selectedLibraryFilterTypes.includes(value);
+      },
+      toggleLinkedLibraryFilter(value, event, isDisabled = false) {
+        if (isDisabled) {
+          return;
+        }
+
+        if (event) {
+          event.stopPropagation();
+        }
+
+        if (!value) {
+          return;
+        }
+
+        if (!Array.isArray(this.selectedLibraryFilterTypes)) {
+          this.selectedLibraryFilterTypes = [];
+        }
+
+        const existingIndex = this.selectedLibraryFilterTypes.indexOf(value);
+        if (existingIndex >= 0) {
+          this.selectedLibraryFilterTypes.splice(existingIndex, 1);
+        } else {
+          this.selectedLibraryFilterTypes.push(value);
+        }
+      },
+      clearLinkedLibraryFilters(event) {
+        if (event) {
+          event.stopPropagation();
+        }
+        this.selectedLibraryFilterTypes = [];
+      },
       
       // Add selectNode method
       selectNode(nodeId, event) {
@@ -2262,6 +2420,7 @@ function initializeApp() {
         this.scanProgress = 0;
         this.selectedVariableTypes = [];
         this.showVariableTypeFilters = false;
+        this.selectedLibraryFilterTypes = [];
       },
       // Add this method with the other selection methods
 
