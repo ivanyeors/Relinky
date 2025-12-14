@@ -777,6 +777,11 @@ position: relative;
 overflow: hidden;
 min-height: 72px;
 }
+.scan-card.disabled{
+opacity: 0.5;
+cursor: not-allowed;
+pointer-events: none;
+}
 
 .scan-card:hover:not(.selected),
 .scan-card:active:not(.selected){

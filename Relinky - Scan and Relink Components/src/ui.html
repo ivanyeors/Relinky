@@ -287,6 +287,13 @@
                     >
                       Select All
                     </button>
+                    <button 
+                      v-if="isLibraryVariableScan && selectedLibraryFilterTypes.length"
+                      class="button text-button small"
+                      @click="clearLinkedLibraryFilters"
+                    >
+                      Clear Filters
+                    </button>
                     <!-- Add Hidden filter toggle -->
                     <button 
                       class="button secondary-button"
@@ -353,6 +360,45 @@
                     The selected values are used directly in the design instead of being linked to variables.
                     Select a group to update them all at once.
                   </p>
+                </div>
+
+                <div 
+                  v-if="isLibraryVariableScan && scanType === 'linked-library' && linkedLibraryFilterOptions.length"
+                  class="scan-cards token-type-section"
+                >
+                  <div class="scan-card-section-divider">Filter Linked Tokens</div>
+                  
+                  <div 
+                    v-for="option in linkedLibraryFilterOptions"
+                    :key="option.value"
+                    class="scan-card"
+                    :class="{
+                      'selected': isLinkedLibraryFilterSelected(option.value),
+                      'interactive': option.count > 0,
+                      'disabled': option.count === 0
+                    }"
+                    role="option"
+                    :aria-selected="isLinkedLibraryFilterSelected(option.value)"
+                    :aria-disabled="option.count === 0"
+                    :tabindex="option.count === 0 ? -1 : 0"
+                    @click="toggleLinkedLibraryFilter(option.value, $event, option.count === 0)"
+                    @keydown.enter.prevent="toggleLinkedLibraryFilter(option.value, $event, option.count === 0)"
+                    @keydown.space.prevent="toggleLinkedLibraryFilter(option.value, $event, option.count === 0)"
+                  >
+                    <div class="scan-card-icon svg-icon">
+                      <div class="icon" v-html="icons[option.icon] || icons['team-lib']"></div>
+                    </div>
+                    
+                    <div class="scan-card-content">
+                      <div class="scan-card-text">
+                        <div class="scan-card-title">{{ option.label }}</div>
+                        <div class="scan-card-description">
+                          {{ option.description }}
+                          <span class="scan-card-usage">· {{ option.count }} uses</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
                 
                 <!-- Variable Type Filter Section - only show after scan results for deleted variables -->
