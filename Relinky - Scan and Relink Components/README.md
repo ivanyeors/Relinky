@@ -1,45 +1,33 @@
-# Relinky - Identify Linked Library Tokens
+# Relinky - Scan and Relink Components
 
-A powerful Figma plugin to help you find and manage unlinked design tokens and styles across your files.
+Relinky keeps your Figma documents aligned with their design systems by exposing unlinked variables, raw values, and mismatched library references. Scan focused selections or entire pages, monitor changes live, and act on grouped insights to keep every component connected to the tokens it should use.
 
 ## Features
 
-### 🔍 Comprehensive Scanning
-- **Typography**: Find text layers missing text style variables
-- **Auto-layout Spacing**: 
-  - Detect unlinked vertical gaps
-  - Find frames with unlinked vertical padding
-  - Find frames with unlinked horizontal padding
-- **Corner Radius**: Identify shapes with unlinked corner radius
-- **Colors**: 
-  - Find layers with unlinked fill colors
-  - Detect layers with unlinked stroke colors
-- **Linked Library Tokens**: Identify variables and styles linked from external libraries
+### 🔍 Deep Token Scanning
+- Scan for missing or unlinked tokens across typography, fill and stroke colors, corner radius, auto-layout gaps, and horizontal or vertical padding.
+- Detect raw values that can be converted into variables to expand token coverage.
+- Identify linked library variables and styles from team, local, and missing libraries, surfacing availability issues before they spread.
 
-### 🎯 Smart Selection
-- Scan entire page or selected frames/components/sections
-- Group similar unlinked values for easier management
-- Quick selection of affected layers
-- Navigate to specific instances
-- Automatic viewport adjustment to selected elements
+### 🧠 Token Intelligence
+- Surface library status (active, inactive, remote, local) and collection details for every variable that appears in a result.
+- Support all variable types—color, number, boolean, and string—so mixed-mode collections stay accurately reported.
+- Provide detailed typography breakdowns, color previews, and grouped property insights to speed up decision making.
 
-### 👀 Live Watching
-- Watch for changes in real-time
-- Automatically scan as you work
-- Toggle watching on/off
-- Smart debouncing to prevent performance issues
+### 🎯 Actionable Results
+- Group findings by token type and value so you can bulk-select related layers and resolve them together.
+- Jump straight to affected nodes with automatic viewport focusing and quick selection controls.
+- Unlink variables without losing property values, rescan instantly, and track progress with clear feedback and success notifications.
 
-### 💡 Smart Features
-- Detailed typography information display
-- Grouped results by value
-- Progress tracking during scans
-- Success notifications
-- Rescan and clear results options
-- Library variable analysis
-- Variable collection insights
-- Scan filters:
-  - Ignore hidden layers
-  - Include/exclude specific layer types
+### ⚙️ Flexible Workflow Controls
+- Scan entire pages, specific selections, or sections depending on the task at hand.
+- Toggle inclusion of hidden layers, choose which layer types participate, and target only the token categories you care about.
+- Configure watch mode to only run when whole-page scanning is enabled, preserving document performance.
+
+### 👀 Live Watch Mode
+- Continuously monitor active documents with smart debouncing that prevents performance slowdowns.
+- Catch new unlinked values the moment they appear and stay informed with immediate updates.
+- Toggle watch mode on or off at any time while keeping your current scan context intact.
 
 ## 🗺 Roadmap
 
@@ -49,10 +37,13 @@ A powerful Figma plugin to help you find and manage unlinked design tokens and s
 - Donation button
 - Rename to "Scan Whole Page"
 - Fix progress bar
+- Ignore hidden layers during scans
+- Live watch mode with debounced updates
 
 ### 🛠 In Progress / Experimental
-- Ignore hidden layers for scan
-- Watch for changes to work
+- Progressive scanning safeguards for extremely large documents
+- Cached variable and library lookups
+- Batch processing for variable operations
 
 ### 🧭 Planned
 - Feedback CTA
@@ -77,18 +68,19 @@ A powerful Figma plugin to help you find and manage unlinked design tokens and s
 3. Click "Install"
 
 ### Basic Usage
-1. Select the frames, components, or sections you want to scan (or leave unselected to scan entire page)
+1. Select the frames, components, or sections you want to scan (or leave unselected to scan the entire page)
 2. Open the plugin from Plugins > Relinky
 3. Configure scan settings (optional):
    - Toggle "Ignore Hidden Layers"
-   - Select layer types to include
-4. Choose which references to scan for (typography, spacing, colors, etc.)
-5. Click "Start Scan" to begin the analysis
+   - Include or exclude specific layer types
+   - Choose token categories (typography, spacing, colors, etc.)
+4. Click "Start Scan" to begin the analysis
 
 ### Working with Results
-- Results are grouped by type and value for easier management
+- Results are grouped by type and value for easier management and bulk resolution
+- View typography breakdowns, color previews, and library status to understand each issue
 - Click on any result to select the affected layers in your design
-- Use the navigation arrows to jump between instances
+- Use the navigation arrows to jump between instances, unlink variables, or rescan once resolved
 - Clear results and rescan as needed
 
 ### Live Watching Mode
@@ -101,4 +93,4 @@ A powerful Figma plugin to help you find and manage unlinked design tokens and s
 - Use the grouped results to quickly standardize similar unlinked values
 - Regular scanning helps maintain design system consistency
 - Consider scanning before sharing designs or creating documentation
-- Watch mode works best when scanning the entire page
+- Combine watch mode with hidden-layer filtering to keep working files performing well
