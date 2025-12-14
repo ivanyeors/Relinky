@@ -166,6 +166,7 @@ function initializeApp() {
         lastScannedType: null, // Add this to track the last scan type
         showHiddenOnly: false,
         selectedVariableTypes: [], // Array to store selected variable types for filtering
+        isLibraryVariableScan: false,
         
         // Initialize all filter state variables
         paddingFilterType: 'all', // For vertical/horizontal padding
@@ -704,6 +705,102 @@ function initializeApp() {
         } catch (e) {
           console.warn('Failed to request selection after refresh:', e);
         }
+      },
+      getLibraryDisplayName(ref) {
+        if (!ref) {
+          return '';
+        }
+
+        const disallowedSegment = /(token|variable|mode|kind|key|collection|libraryid|tokenid)/i;
+
+        const extractName = (value) => {
+          if (!value) {
+            return '';
+          }
+
+          if (typeof value === 'string') {
+            const trimmed = value.trim();
+            if (!trimmed) {
+              return '';
+            }
+
+            const patterns = [
+              /"libraryName"\s*[:=]\s*"([^"]+)"/i,
+              /"tokenLibraryName"\s*[:=]\s*"([^"]+)"/i,
+              /"library"\s*[:=]\s*"([^"]+)"/i,
+              /libraryName\s*[:=]\s*([^,"\)\}\]]+)/i,
+            ];
+
+            for (const pattern of patterns) {
+              const match = trimmed.match(pattern);
+              if (match && match[1]) {
+                const candidate = match[1].trim().replace(/[)\]}]+$/, '');
+                if (candidate && !disallowedSegment.test(candidate)) {
+                  return candidate;
+                }
+              }
+            }
+
+            const quotedSegments = trimmed
+              .split('"')
+              .filter((_, index) => index % 2 === 1)
+              .map(segment => segment.trim())
+              .filter(Boolean);
+
+            for (let i = quotedSegments.length - 1; i >= 0; i -= 1) {
+              const segment = quotedSegments[i];
+              if (!segment || disallowedSegment.test(segment) || segment.includes(':')) {
+                continue;
+              }
+              return segment;
+            }
+
+            const colonIndex = trimmed.lastIndexOf(':');
+            if (colonIndex !== -1 && colonIndex + 1 < trimmed.length) {
+              const afterColon = trimmed.slice(colonIndex + 1).replace(/["\)\(\{\}]/g, '').trim();
+              if (afterColon && !disallowedSegment.test(afterColon)) {
+                return afterColon;
+              }
+            }
+
+            const parenSegments = trimmed
+              .split(/[\(\)]/)
+              .map(part => part.trim())
+              .filter(Boolean);
+
+            for (let i = parenSegments.length - 1; i >= 0; i -= 1) {
+              const segment = parenSegments[i];
+              if (!segment || disallowedSegment.test(segment) || segment.includes(':')) {
+                continue;
+              }
+              return segment;
+            }
+
+            return '';
+          }
+
+          if (typeof value === 'object') {
+            if (value && typeof value.name === 'string' && value.name.trim()) {
+              return value.name.trim();
+            }
+
+            if (value && typeof value.title === 'string' && value.title.trim()) {
+              return value.title.trim();
+            }
+          }
+
+          return '';
+        };
+
+        const candidates = [
+          extractName(ref.libraryName),
+          extractName(ref.currentValue?.libraryName),
+          extractName(ref.currentValue?.library),
+          extractName(ref.library),
+          extractName(ref.currentValue?.libraryInfo),
+        ].filter(name => name && name.length > 0);
+
+        return candidates[0] || '';
       },
       getReferenceClass(ref) {
         if (!ref) return 'unknown-reference';
@@ -1702,6 +1799,12 @@ function initializeApp() {
             const radiusValue = typeof value === 'number' ? value : (value && value.value ? value.value : 0);
             const cornerType = result.cornerType || result.property || 'all';
             key = `${typeKey}:${radiusValue}:${cornerType}`;
+          } else if (typeKey === 'linked-library') {
+            const libraryDisplayName = typeof this.getLibraryDisplayName === 'function'
+              ? this.getLibraryDisplayName(result)
+              : (result.libraryName || (value && value.libraryName) || 'Library');
+            const tokenLabel = result.currentValue?.tokenName || result.variableName || 'Unknown Token';
+            key = `${typeKey}:${libraryDisplayName}:${tokenLabel}`;
           } else if (['team-library', 'local-library', 'deleted-variables'].includes(typeKey)) {
             // For library variables, create a key based on variable name and property
             const variableName = result.variableName || (value && value.variableName) || 'Unknown';
@@ -1893,6 +1996,38 @@ function initializeApp() {
             nodeIds: nodeIds
           }
         }, '*');
+      },
+
+      selectAllResults(event) {
+        if (event) {
+          event.stopPropagation();
+        }
+
+        if (!this.filteredResults || typeof this.filteredResults !== 'object') {
+          console.warn('No filtered results available for selectAllResults');
+          return;
+        }
+
+        const aggregateRefs = [];
+
+        Object.values(this.filteredResults).forEach(group => {
+          if (!group) {
+            return;
+          }
+
+          const refs = Array.isArray(group) ? group : group.refs;
+
+          if (Array.isArray(refs) && refs.length > 0) {
+            aggregateRefs.push(...refs);
+          }
+        });
+
+        if (aggregateRefs.length === 0) {
+          console.warn('No references to select in selectAllResults');
+          return;
+        }
+
+        this.selectGroup(aggregateRefs, event);
       },
       
       // Add selectNode method
