@@ -1,7 +1,7 @@
 // Deleted Variables Scanner Module
 // Handles scanning for deleted variables in the document and selected nodes
 
-import { MissingReference, ScanType } from '../common';
+import { MissingReference, ScanType, isNodeFromLibraryInstance, prepareLibraryInstanceFiltering } from '../common';
 import { isScancelled } from './index';
 
 // Define variable type categories for better filtering
@@ -343,8 +343,8 @@ function shouldIncludeNode(node: SceneNode, ignoreHiddenLayers: boolean, skipIns
   if (ignoreHiddenLayers && 'visible' in node && !node.visible) {
     return false;
   }
-  // Skip instances if skipInstances is true
-  if (skipInstances && node.type === 'INSTANCE') return false;
+  // Skip library-backed instances when configured
+  if (skipInstances && isNodeFromLibraryInstance(node)) return false;
   
   return true;
 }
@@ -368,6 +368,8 @@ export async function scanForBrokenVariableReferences(
   availableTypes: Set<string>
 }> {
   console.log('Starting broken variable references scan');
+
+  await prepareLibraryInstanceFiltering(skipInstances);
   
   // Overall timeout to prevent infinite scans
   const overallTimeout = 120000; // 2 minutes max
@@ -492,6 +494,10 @@ export async function scanForBrokenVariableReferences(
         const collectionProgress = 10 + Math.min(20, Math.round((nodesExamined / totalNodesToExamine) * 20));
         updateProgress(collectionProgress);
       }
+
+      if (skipInstances && isNodeFromLibraryInstance(n)) {
+        return;
+      }
       
           if (shouldIncludeNode(n, ignoreHiddenLayers, skipInstances)) {
       const hasBoundVariables = 'boundVariables' in n && n.boundVariables && Object.keys(n.boundVariables).length > 0;
@@ -515,6 +521,15 @@ export async function scanForBrokenVariableReferences(
   console.log(`Found ${nodes.length} nodes to scan for deleted variables`);
   // Update progress after node collection
   updateProgress(30);
+
+  if (nodes.length === 0) {
+    console.log('No nodes require scanning after applying skipInstances filter.');
+    progressCallback(100);
+    return {
+      results,
+      availableTypes
+    };
+  }
   
   // Process each node with better error handling and cancellation checks
   let processedNodes = 0;

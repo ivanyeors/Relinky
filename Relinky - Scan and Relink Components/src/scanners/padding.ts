@@ -1,7 +1,7 @@
 // Padding Scanner Module
 // Handles scanning for horizontal and vertical padding in the document
 
-import { MissingReference, ScanType } from '../common';
+import { MissingReference, ScanType, isNodeFromLibraryInstance, prepareLibraryInstanceFiltering } from '../common';
 import { isScancelled } from './index';
 
 // Extend MissingReference for padding-specific properties
@@ -36,6 +36,8 @@ export async function scanForPadding(
     console.log(`${scanType} scan cancelled before starting`);
     return [];
   }
+  
+  await prepareLibraryInstanceFiltering(skipInstances);
   
   // Get nodes to scan
   let nodesToScan: SceneNode[] = [];
@@ -77,8 +79,9 @@ export async function scanForPadding(
     
     // Collect ALL nodes to scan (including all descendants)
     for (const selectedNode of selectedNodes) {
-      // Add the selected node itself if it can have padding
-      if (selectedNode.type === 'FRAME' || selectedNode.type === 'COMPONENT' || selectedNode.type === 'INSTANCE') {
+      // Add the selected node itself if it can have padding and is not within a library instance
+      if ((selectedNode.type === 'FRAME' || selectedNode.type === 'COMPONENT' || selectedNode.type === 'INSTANCE') &&
+          (!skipInstances || !isNodeFromLibraryInstance(selectedNode))) {
         nodesToScan.push(selectedNode);
       }
       
@@ -91,12 +94,19 @@ export async function scanForPadding(
             if (ignoreHiddenLayers && 'visible' in node && !node.visible) {
               return false;
             }
+            if (skipInstances && isNodeFromLibraryInstance(node)) {
+              return false;
+            }
             // Only include nodes that can have padding properties
             return node.type === 'FRAME' || node.type === 'COMPONENT' || node.type === 'INSTANCE';
           });
           
-          console.log(`Adding ${paddingDescendants.length} padding-capable descendants from ${selectedNode.name}`);
-          nodesToScan.push(...paddingDescendants);
+          const filteredDescendants = skipInstances
+            ? paddingDescendants.filter(descendant => !isNodeFromLibraryInstance(descendant))
+            : paddingDescendants;
+
+          console.log(`Adding ${filteredDescendants.length} padding-capable descendants from ${selectedNode.name}`);
+          nodesToScan.push(...filteredDescendants);
         } catch (error) {
           console.warn(`Error collecting padding descendants from ${selectedNode.name}:`, error);
         }
@@ -111,10 +121,23 @@ export async function scanForPadding(
       if (ignoreHiddenLayers && 'visible' in node && !node.visible) {
         return false;
       }
+      if (skipInstances && isNodeFromLibraryInstance(node)) {
+        return false;
+      }
       // Only include nodes that can have padding
       return node.type === 'FRAME' || node.type === 'COMPONENT' || node.type === 'INSTANCE';
     });
     console.log('Scanning entire page:', nodesToScan.length, 'padding-capable nodes');
+  }
+
+  if (skipInstances) {
+    nodesToScan = nodesToScan.filter(node => !isNodeFromLibraryInstance(node));
+  }
+
+  if (nodesToScan.length === 0) {
+    console.log('No eligible padding-capable nodes to scan after applying skipInstances filter.');
+    progressCallback(1);
+    return [];
   }
   
   // Check if scan was cancelled after getting nodes
@@ -156,8 +179,8 @@ export async function scanForPadding(
     // Skip if node is hidden and we're ignoring hidden layers
     if (ignoreHiddenLayers && 'visible' in node && !node.visible) return false;
     
-    // Skip instances if skipInstances is true
-    if (skipInstances && node.type === 'INSTANCE') return false;
+    // Skip library-backed instances when configured
+    if (skipInstances && isNodeFromLibraryInstance(node)) return false;
     
     // Include frames, components, and instances that can have padding
     return node.type === 'FRAME' || node.type === 'COMPONENT' || node.type === 'INSTANCE';

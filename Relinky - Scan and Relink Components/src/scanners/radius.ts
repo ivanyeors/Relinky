@@ -1,7 +1,7 @@
 // Corner Radius Scanner Module
 // Handles scanning for corner radius in the document
 
-import { MissingReference, ScanType } from '../common';
+import { MissingReference, ScanType, isNodeFromLibraryInstance, prepareLibraryInstanceFiltering } from '../common';
 import { isScancelled } from './index';
 
 // Extend MissingReference for corner-radius-specific properties
@@ -38,6 +38,8 @@ export async function scanForCornerRadius(
     console.log(`${scanType} scan cancelled before starting`);
     return [];
   }
+  
+  await prepareLibraryInstanceFiltering(skipInstances);
   
   // Get nodes to scan
   let nodesToScan: SceneNode[] = [];
@@ -79,15 +81,17 @@ export async function scanForCornerRadius(
     
     // Collect ALL nodes to scan (including all descendants)
     for (const selectedNode of selectedNodes) {
-      // Add the selected node itself if it can have corner radius
-      if (selectedNode.type === 'RECTANGLE' || 
-          selectedNode.type === 'FRAME' || 
-          selectedNode.type === 'COMPONENT' || 
-          selectedNode.type === 'INSTANCE' ||
-          selectedNode.type === 'ELLIPSE' ||
-          selectedNode.type === 'POLYGON' ||
-          selectedNode.type === 'STAR' ||
-          selectedNode.type === 'VECTOR') {
+      // Add the selected node itself if it can have corner radius and is not within a library instance
+      const canHaveRadius = selectedNode.type === 'RECTANGLE' || 
+        selectedNode.type === 'FRAME' || 
+        selectedNode.type === 'COMPONENT' || 
+        selectedNode.type === 'INSTANCE' ||
+        selectedNode.type === 'ELLIPSE' ||
+        selectedNode.type === 'POLYGON' ||
+        selectedNode.type === 'STAR' ||
+        selectedNode.type === 'VECTOR';
+
+      if (canHaveRadius && (!skipInstances || !isNodeFromLibraryInstance(selectedNode))) {
         nodesToScan.push(selectedNode);
       }
       
@@ -98,6 +102,9 @@ export async function scanForCornerRadius(
           const radiusDescendants = selectedNode.findAll((node: SceneNode) => {
             // Apply visibility filter if needed
             if (ignoreHiddenLayers && 'visible' in node && !node.visible) {
+              return false;
+            }
+            if (skipInstances && isNodeFromLibraryInstance(node)) {
               return false;
             }
             // Include all nodes that can have corner radius properties
@@ -111,8 +118,12 @@ export async function scanForCornerRadius(
                    node.type === 'VECTOR';
           });
           
-          console.log(`Adding ${radiusDescendants.length} radius-capable descendants from ${selectedNode.name}`);
-          nodesToScan.push(...radiusDescendants);
+          const filteredDescendants = skipInstances
+            ? radiusDescendants.filter(descendant => !isNodeFromLibraryInstance(descendant))
+            : radiusDescendants;
+
+          console.log(`Adding ${filteredDescendants.length} radius-capable descendants from ${selectedNode.name}`);
+          nodesToScan.push(...filteredDescendants);
         } catch (error) {
           console.warn(`Error collecting radius descendants from ${selectedNode.name}:`, error);
         }
@@ -127,6 +138,9 @@ export async function scanForCornerRadius(
       if (ignoreHiddenLayers && 'visible' in node && !node.visible) {
         return false;
       }
+      if (skipInstances && isNodeFromLibraryInstance(node)) {
+        return false;
+      }
       // Include all nodes that can have corner radius
       return node.type === 'RECTANGLE' || 
              node.type === 'FRAME' || 
@@ -138,6 +152,16 @@ export async function scanForCornerRadius(
              node.type === 'VECTOR';
     });
     console.log('Scanning entire page:', nodesToScan.length, 'radius-capable nodes');
+  }
+
+  if (skipInstances) {
+    nodesToScan = nodesToScan.filter(node => !isNodeFromLibraryInstance(node));
+  }
+  
+  if (nodesToScan.length === 0) {
+    console.log('No eligible radius-capable nodes to scan after applying skipInstances filter.');
+    progressCallback(1);
+    return [];
   }
   
   // Check if scan was cancelled after getting nodes
@@ -179,8 +203,8 @@ export async function scanForCornerRadius(
     // Skip if node is hidden and we're ignoring hidden layers
     if (ignoreHiddenLayers && 'visible' in node && !node.visible) return false;
     
-    // Skip instances if skipInstances is true
-    if (skipInstances && node.type === 'INSTANCE') return false;
+    // Skip library-backed instances when configured
+    if (skipInstances && isNodeFromLibraryInstance(node)) return false;
     
     // Include nodes with cornerRadius property
     return node.type === 'RECTANGLE' || 

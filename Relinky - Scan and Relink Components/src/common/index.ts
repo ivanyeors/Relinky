@@ -374,6 +374,112 @@ export function hasTextStyleBindings(node: BaseNode): node is TextNode & {
          'textStyleId' in (node.boundVariables || {});
 }
 
+/**
+ * Walks up the parent chain to find the closest instance ancestor.
+ * @param node Node to inspect
+ * @returns Nearest instance ancestor or null if none exists
+ */
+const libraryInstanceCache = new Map<string, boolean>();
+let libraryInstanceCachePrimed = false;
+let libraryInstanceCacheSkipEnabled = false;
+
+async function resolveInstanceLibraryStatus(instance: InstanceNode): Promise<boolean> {
+  try {
+    if (typeof instance.getMainComponentAsync === 'function') {
+      const mainComponent = await instance.getMainComponentAsync();
+      if (!mainComponent) {
+        return false;
+      }
+
+      if (mainComponent.remote) {
+        return true;
+      }
+
+      const parent = mainComponent.parent;
+      if (parent && parent.type === 'COMPONENT_SET') {
+        const componentSet = parent as ComponentSetNode & { remote?: boolean };
+        return Boolean(componentSet.remote);
+      }
+
+      return false;
+    }
+
+    const mainComponent = instance.mainComponent;
+    if (!mainComponent) {
+      return false;
+    }
+
+    if (mainComponent.remote) {
+      return true;
+    }
+
+    const parent = mainComponent.parent;
+    if (parent && parent.type === 'COMPONENT_SET') {
+      const componentSet = parent as ComponentSetNode & { remote?: boolean };
+      return Boolean(componentSet.remote);
+    }
+  } catch (error) {
+    console.warn(`Failed to resolve main component for instance ${instance.id}`, error);
+  }
+
+  return false;
+}
+
+export async function prepareLibraryInstanceFiltering(
+  skipInstances: boolean,
+  options: { force?: boolean } = {}
+): Promise<void> {
+  if (!skipInstances) {
+    libraryInstanceCache.clear();
+    libraryInstanceCachePrimed = false;
+    libraryInstanceCacheSkipEnabled = false;
+    return;
+  }
+
+  const force = options.force ?? false;
+
+  if (libraryInstanceCachePrimed && libraryInstanceCacheSkipEnabled && !force) {
+    return;
+  }
+
+  libraryInstanceCache.clear();
+
+  const instances = figma.currentPage.findAll(node => node.type === 'INSTANCE') as InstanceNode[];
+
+  for (const instance of instances) {
+    const isLibrary = await resolveInstanceLibraryStatus(instance);
+    libraryInstanceCache.set(instance.id, isLibrary);
+  }
+
+  libraryInstanceCachePrimed = true;
+  libraryInstanceCacheSkipEnabled = true;
+}
+
+/**
+ * Checks if a node lives within a library-backed component instance.
+ * @param node Node to evaluate
+ * @returns True when the node is an instance (or nested inside one) that originates from a library
+ */
+export function isNodeFromLibraryInstance(node: SceneNode): boolean {
+  if (!libraryInstanceCachePrimed || !libraryInstanceCacheSkipEnabled) {
+    return false;
+  }
+
+  let current: BaseNode | null = node;
+
+  while (current) {
+    if (current.type === 'INSTANCE') {
+      const cachedValue = libraryInstanceCache.get(current.id);
+      if (cachedValue === true) {
+        return true;
+      }
+    }
+    current = current.parent;
+  }
+
+  return false;
+}
+
 // --- Helper Functions ---
 
 // Visibility Helpers

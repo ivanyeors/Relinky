@@ -1,7 +1,7 @@
 // Raw Values Scanner Module
 // Handles scanning for raw values in the document
 
-import { MissingReference, ScanType } from '../common';
+import { MissingReference, ScanType, isNodeFromLibraryInstance, prepareLibraryInstanceFiltering } from '../common';
 import { isScancelled } from './index';
 
 // Type guards for node properties
@@ -59,6 +59,8 @@ export async function scanForRawValues(
     return [];
   }
   
+  await prepareLibraryInstanceFiltering(skipInstances);
+  
   // Get nodes to scan
   let nodesToScan: SceneNode[] = [];
   
@@ -76,6 +78,16 @@ export async function scanForRawValues(
     // Fallback to current page
     nodesToScan = Array.from(figma.currentPage.children);
     console.log('Scanning entire page:', nodesToScan.length, 'top-level nodes');
+  }
+
+  if (skipInstances) {
+    nodesToScan = nodesToScan.filter(node => !isNodeFromLibraryInstance(node));
+  }
+
+  if (nodesToScan.length === 0) {
+    console.log('No eligible nodes to scan after applying skipInstances filter.');
+    progressCallback(100);
+    return [];
   }
 
   // Check if scan was cancelled after getting nodes
@@ -161,8 +173,8 @@ export async function scanForRawValues(
       }
     }
     
-    // Skip instances if skipInstances is true
-    if (skipInstances && node.type === 'INSTANCE') return false;
+    // Skip library-backed instances when configured
+    if (skipInstances && isNodeFromLibraryInstance(node)) return false;
     
     return true;
   }
@@ -477,6 +489,11 @@ export async function scanForRawValues(
       totalNodesProcessed++;
       updateProgress();
       console.log(`Processing node: ${node.name} (${String(node.type)}), #${totalNodesProcessed} of ${totalNodesToProcess}`);
+
+      if (skipInstances && isNodeFromLibraryInstance(node)) {
+        console.log(`Skipping node within library instance: ${node.name} (${node.type})`);
+        continue;
+      }
       
       // Check if node has children
       const hasChildren = 'children' in node && node.children && node.children.length > 0;

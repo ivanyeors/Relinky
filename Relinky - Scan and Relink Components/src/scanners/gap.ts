@@ -1,7 +1,7 @@
 // Gap Scanner Module
 // Handles scanning for vertical and horizontal gaps in the document
 
-import { MissingReference, ScanType } from '../common';
+import { MissingReference, ScanType, isNodeFromLibraryInstance, prepareLibraryInstanceFiltering } from '../common';
 import { isScancelled } from './index';
 
 // Extend MissingReference for gap-specific properties
@@ -35,6 +35,8 @@ export async function scanForGap(
     console.log(`${scanType} scan cancelled before starting`);
     return [];
   }
+  
+  await prepareLibraryInstanceFiltering(skipInstances);
   
   // Get nodes to scan
   let nodesToScan: SceneNode[] = [];
@@ -76,8 +78,9 @@ export async function scanForGap(
     
     // Collect ALL nodes to scan (including all descendants)
     for (const selectedNode of selectedNodes) {
-      // Add the selected node itself if it can have auto-layout
-      if (selectedNode.type === 'FRAME' || selectedNode.type === 'COMPONENT' || selectedNode.type === 'INSTANCE') {
+      // Add the selected node itself if it can have auto-layout and is not within a library instance
+      if ((selectedNode.type === 'FRAME' || selectedNode.type === 'COMPONENT' || selectedNode.type === 'INSTANCE') &&
+          (!skipInstances || !isNodeFromLibraryInstance(selectedNode))) {
         nodesToScan.push(selectedNode);
       }
       
@@ -90,12 +93,19 @@ export async function scanForGap(
             if (ignoreHiddenLayers && 'visible' in node && !node.visible) {
               return false;
             }
+            if (skipInstances && isNodeFromLibraryInstance(node)) {
+              return false;
+            }
             // Only include nodes that can have auto-layout (itemSpacing property)
             return node.type === 'FRAME' || node.type === 'COMPONENT' || node.type === 'INSTANCE';
           });
           
-          console.log(`Adding ${autoLayoutDescendants.length} auto-layout descendants from ${selectedNode.name}`);
-          nodesToScan.push(...autoLayoutDescendants);
+          const filteredDescendants = skipInstances
+            ? autoLayoutDescendants.filter(descendant => !isNodeFromLibraryInstance(descendant))
+            : autoLayoutDescendants;
+
+          console.log(`Adding ${filteredDescendants.length} auto-layout descendants from ${selectedNode.name}`);
+          nodesToScan.push(...filteredDescendants);
         } catch (error) {
           console.warn(`Error collecting auto-layout descendants from ${selectedNode.name}:`, error);
         }
@@ -110,10 +120,23 @@ export async function scanForGap(
       if (ignoreHiddenLayers && 'visible' in node && !node.visible) {
         return false;
       }
+      if (skipInstances && isNodeFromLibraryInstance(node)) {
+        return false;
+      }
       // Only include nodes that can have auto-layout
       return node.type === 'FRAME' || node.type === 'COMPONENT' || node.type === 'INSTANCE';
     });
     console.log('Scanning entire page:', nodesToScan.length, 'auto-layout capable nodes');
+  }
+
+  if (skipInstances) {
+    nodesToScan = nodesToScan.filter(node => !isNodeFromLibraryInstance(node));
+  }
+
+  if (nodesToScan.length === 0) {
+    console.log('No eligible auto-layout nodes to scan after applying skipInstances filter.');
+    progressCallback(1);
+    return [];
   }
   
   // Check if scan was cancelled after getting nodes
@@ -180,8 +203,8 @@ export async function scanForGap(
     // Skip if node is hidden and we're ignoring hidden layers
     if (ignoreHiddenLayers && 'visible' in node && !node.visible) return false;
     
-    // Skip instances if skipInstances is true
-    if (skipInstances && node.type === 'INSTANCE') return false;
+    // Skip library-backed instances when configured
+    if (skipInstances && isNodeFromLibraryInstance(node)) return false;
     
     // Only include auto-layout capable nodes
     return node.type === 'FRAME' || node.type === 'COMPONENT' || node.type === 'INSTANCE';

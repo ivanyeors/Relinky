@@ -1,7 +1,7 @@
 // Effects Scanner Module
 // Handles scanning for effect properties in the document (shadows, blurs, etc.)
 
-import { MissingReference, ScanType } from '../common';
+import { MissingReference, ScanType, isNodeFromLibraryInstance, prepareLibraryInstanceFiltering } from '../common';
 import { isScancelled } from './index';
 
 // Extend MissingReference for effects-specific properties
@@ -39,6 +39,8 @@ export async function scanForEffects(
     console.log(`${scanType} scan cancelled before starting`);
     return [];
   }
+  
+  await prepareLibraryInstanceFiltering(skipInstances);
   
   // Get nodes to scan
   let nodesToScan: SceneNode[] = [];
@@ -80,8 +82,10 @@ export async function scanForEffects(
     
     // Collect ALL nodes to scan (including all descendants)
     for (const selectedNode of selectedNodes) {
-      // Add the selected node itself
-      nodesToScan.push(selectedNode);
+      // Add the selected node itself when not within a library instance
+      if (!skipInstances || !isNodeFromLibraryInstance(selectedNode)) {
+        nodesToScan.push(selectedNode);
+      }
       
       // Add all descendants if the node has children and meets visibility criteria
       if ('children' in selectedNode && selectedNode.children.length > 0) {
@@ -92,12 +96,19 @@ export async function scanForEffects(
             if (ignoreHiddenLayers && 'visible' in node && !node.visible) {
               return false;
             }
+            if (skipInstances && isNodeFromLibraryInstance(node)) {
+              return false;
+            }
             // Include all SceneNode types that can have effects
             return 'effects' in node;
           });
           
-          console.log(`Adding ${descendants.length} descendants from ${selectedNode.name}`);
-          nodesToScan.push(...descendants);
+          const filteredDescendants = skipInstances
+            ? descendants.filter(descendant => !isNodeFromLibraryInstance(descendant))
+            : descendants;
+
+          console.log(`Adding ${filteredDescendants.length} descendants from ${selectedNode.name}`);
+          nodesToScan.push(...filteredDescendants);
         } catch (error) {
           console.warn(`Error collecting descendants from ${selectedNode.name}:`, error);
         }
@@ -112,10 +123,23 @@ export async function scanForEffects(
       if (ignoreHiddenLayers && 'visible' in node && !node.visible) {
         return false;
       }
+      if (skipInstances && isNodeFromLibraryInstance(node)) {
+        return false;
+      }
       // Include all nodes that can have effects
       return 'effects' in node;
     });
     console.log('Scanning entire page:', nodesToScan.length, 'nodes with effects capability');
+  }
+
+  if (skipInstances) {
+    nodesToScan = nodesToScan.filter(node => !isNodeFromLibraryInstance(node));
+  }
+
+  if (nodesToScan.length === 0) {
+    console.log('No eligible effects nodes to scan after applying skipInstances filter.');
+    progressCallback(1);
+    return [];
   }
   
   // Check if scan was cancelled after getting nodes
@@ -157,8 +181,8 @@ export async function scanForEffects(
     // Skip if node is hidden and we're ignoring hidden layers
     if (ignoreHiddenLayers && 'visible' in node && !node.visible) return false;
     
-    // Skip instances if skipInstances is true
-    if (skipInstances && node.type === 'INSTANCE') return false;
+    // Skip library-backed instances when configured
+    if (skipInstances && isNodeFromLibraryInstance(node)) return false;
     
     // Only process nodes that can have effects
     return 'effects' in node;

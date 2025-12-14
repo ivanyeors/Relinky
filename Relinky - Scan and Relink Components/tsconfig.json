@@ -12,9 +12,7 @@
     "baseUrl": ".",
     "paths": {
       "@actions": ["src/actions"],
-      "@actions/*": ["src/actions/*"],
-      "@variableUnlinker": ["src/variable-unlinker"],
-      "@variableUnlinker/*": ["src/variable-unlinker/*"]
+      "@actions/*": ["src/actions/*"]
     }
   },
   "include": ["src/**/*"],
