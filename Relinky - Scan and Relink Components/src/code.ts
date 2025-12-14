@@ -3,8 +3,8 @@
 
 import * as scanners from './scanners';
 import { ScanType, MissingReference, updateProgress, resetProgress, completeProgress, createThrottledProgress } from './common';
-import { unlinkVariable, unlinkGroupVariables } from './actions/unbind-node-variables';
-import { scanForDeletedVariables } from './scanners/broken-variable-references';
+import { unbindNodeVariable, unbindNodeVariableGroup } from './actions/unbind-node-variables';
+import { scanForBrokenVariableReferences } from './scanners/broken-variable-references';
 
 // Clear previous logs
 console.clear();
@@ -219,7 +219,7 @@ async function startWatchingDocument(scanType: ScanType, scanEntirePage: boolean
           });
           
           // Use the new scanners module instead of valuesScanner
-          const scanResults = await scanForDeletedVariables(
+          const scanResults = await scanForBrokenVariableReferences(
             (progress) => {
               figma.ui.postMessage({ type: 'scan-progress', progress });
             },
@@ -306,15 +306,15 @@ interface ScanForTokensMessage {
   variableTypes?: string[];
 }
 
-interface UnlinkVariableMessage {
-  type: 'unlink-variable';
+interface UnbindNodeVariableMessage {
+  type: 'unbind-node-variable';
   nodeId: string;
   property: string;
   currentValue: any;
 }
 
-interface UnlinkGroupVariablesMessage {
-  type: 'unlink-group-variables';
+interface UnbindNodeVariableGroupMessage {
+  type: 'unbind-node-variable-group';
   refs: MissingReference[];
 }
 
@@ -446,8 +446,8 @@ interface StopVariableScanMessage {
 
 type PluginMessage = 
   | ScanForTokensMessage
-  | UnlinkVariableMessage
-  | UnlinkGroupVariablesMessage
+  | UnbindNodeVariableMessage
+  | UnbindNodeVariableGroupMessage
   | ResizeMessage
   | StopScanMessage
   | StartWatchingMessage
@@ -478,7 +478,7 @@ type PluginMessage =
 async function handleScan(params: ScanForTokensMessage): Promise<void> {
   const scanType = params.scanType as ScanType;
   try {
-    const scanResults = await scanForDeletedVariables(
+    const scanResults = await scanForBrokenVariableReferences(
       (progress) => {
         figma.ui.postMessage({ type: 'scan-progress', progress });
       },
@@ -584,7 +584,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
       
       // Optimize deleted/missing library scans by calling the specific scanner once
       if (sourceType === 'missing-library' || sourceType === 'deleted-variables') {
-        const deletedVariablesResult = await scanners.scanForDeletedVariables(
+        const deletedVariablesResult = await scanners.scanForBrokenVariableReferences(
           progressCallback,
           selectedFrameIds,
           ignoreHiddenLayers,
@@ -960,8 +960,8 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
   // Scan library tokens
   if (msg.type === 'scan-library-tokens') {
     try {
-      // Since scanForTokens doesn't exist, use scanForDeletedVariables instead
-      const scanResults = await scanForDeletedVariables(
+      // Legacy: use broken variable reference scan
+      const scanResults = await scanForBrokenVariableReferences(
         (progress) => {
           figma.ui.postMessage({ type: 'scan-progress', progress });
         },
@@ -1033,7 +1033,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
   // Scan for variables
   if (msg.type === 'scan-variables') {
     try {
-      const scanResults = await scanForDeletedVariables(
+      const scanResults = await scanForBrokenVariableReferences(
         (progress: number) => {
           figma.ui.postMessage({
             type: 'variable-scan-progress',
@@ -1058,11 +1058,11 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
     }
   }
 
-  // Handle unlink variable message
-  if (msg.type === 'unlink-variable') {
+  // Handle unbind node variable message (convert binding to raw value)
+  if (msg.type === 'unbind-node-variable') {
     try {
       const { nodeId, property, currentValue } = msg;
-      await unlinkVariable(nodeId, property, currentValue);
+      await unbindNodeVariable(nodeId, property, currentValue);
       figma.notify('Variable unlinked successfully');
       
       // Trigger a rescan to update the UI
@@ -1356,11 +1356,11 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
     }
   }
 
-  // Handle unlink group variables message
-  if (msg.type === 'unlink-group-variables') {
+  // Handle unbind group variables message
+  if (msg.type === 'unbind-node-variable-group') {
     try {
       const { refs } = msg;
-      await unlinkGroupVariables(refs);
+      await unbindNodeVariableGroup(refs);
       figma.notify(`Unlinked ${refs.length} variables successfully`);
       
       // Trigger a rescan to update the UI

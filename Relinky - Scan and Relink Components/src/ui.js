@@ -2190,13 +2190,13 @@ function initializeApp() {
         // Default to string representation
         return String(value);
       },
-      async unlinkVariable(ref) {
+      async unbindNodeVariable(ref) {
         if (!ref || !ref.nodeId) return;
         
         try {
           parent.postMessage({
             pluginMessage: {
-              type: 'unlink-variable',
+              type: 'unbind-node-variable',
               nodeId: ref.nodeId,
               property: ref.property,
               currentValue: ref.currentValue
@@ -2208,13 +2208,13 @@ function initializeApp() {
         }
       },
       
-      async unlinkGroupVariables(refs) {
+      async unbindNodeVariableGroup(refs) {
         if (!refs || !refs.length) return;
         
         try {
           parent.postMessage({
             pluginMessage: {
-              type: 'unlink-group-variables',
+              type: 'unbind-node-variable-group',
               refs: refs.map(ref => ({
                 nodeId: ref.nodeId,
                 property: ref.property,
