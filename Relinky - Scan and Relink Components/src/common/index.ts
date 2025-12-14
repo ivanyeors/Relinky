@@ -647,63 +647,75 @@ export async function isNodeValid(nodeId: string): Promise<boolean> {
 }
 
 // Progress tracking helpers
-export function updateProgress(progress: number) {
-  // Normalize progress to 0-99.5 range during scanning
-  const normalizedProgress = Math.min(99.5, Math.max(0, progress * 99.5));
-  
+/**
+ * Normalize progress values from scanners into a 0-100 percentage.
+ *
+ * Historical note: some scanners report progress as a fraction (0-1),
+ * others report a percentage (0-100). We accept both to keep behavior
+ * consistent and avoid "stuck" progress bars.
+ */
+export function normalizeProgressToPercent(progress: number): number {
+  if (!Number.isFinite(progress)) return 0;
+  if (progress <= 1) return progress * 100; // fraction
+  return progress; // percentage
+}
+
+function postScanProgress(percent: number, isScanning: boolean) {
   figma.ui.postMessage({
     type: 'scan-progress',
-    progress: normalizedProgress,
-    isScanning: true
+    progress: percent,
+    isScanning,
   });
+}
+
+export function updateProgress(progress: number) {
+  const percent = normalizeProgressToPercent(progress);
+  // Keep scanning progress under 100 until completion is explicitly posted
+  const normalizedPercent = Math.min(99.5, Math.max(0, percent));
+
+  postScanProgress(normalizedPercent, true);
 }
 
 export function resetProgress() {
-  figma.ui.postMessage({
-    type: 'scan-progress',
-    progress: 0,
-    isScanning: false
-  });
+  postScanProgress(0, false);
 }
 
 export function completeProgress() {
-  figma.ui.postMessage({
-    type: 'scan-progress',
-    progress: 100,
-    isScanning: false
-  });
+  postScanProgress(100, false);
 }
 
 // Helper to create a throttled progress updater with adaptive sensitivity
 export function createThrottledProgress(minChangePercent = 0.5) {
-  let lastProgress = 0;
+  let lastProgressPercent = 0;
   let lastUpdateTime = Date.now();
   
   return (progress: number) => {
     const currentTime = Date.now();
     const timeSinceLastUpdate = currentTime - lastUpdateTime;
     
-    // Calculate target normalized progress (0-1 range)
-    const normalizedProgress = Math.min(Math.max(0, progress), 1);
+    // Normalize to 0-100 percent (supports both 0-1 and 0-100 inputs)
+    const normalizedPercent = Math.min(100, Math.max(0, normalizeProgressToPercent(progress)));
     
     // Determine if we should update based on either:
     // 1. Significant progress change OR
     // 2. Time-based interval for slow-changing scans (minimum 250ms between updates)
-    const significantChange = Math.abs(normalizedProgress - lastProgress) >= minChangePercent / 100;
+    const significantChange = Math.abs(normalizedPercent - lastProgressPercent) >= minChangePercent;
     const timeIntervalMet = timeSinceLastUpdate >= 250;
     
     // Always update when we reach specific milestone percentages (10%, 25%, 50%, 75%, 90%, 99%)
     const isProgressMilestone = 
-      [0.1, 0.25, 0.5, 0.75, 0.9, 0.99].some(milestone => 
-        Math.abs(normalizedProgress - milestone) < 0.01 && 
-        Math.abs(lastProgress - milestone) >= 0.01
+      [10, 25, 50, 75, 90, 99].some(milestone => 
+        Math.abs(normalizedPercent - milestone) < 1 && 
+        Math.abs(lastProgressPercent - milestone) >= 1
       );
     
     // Update progress under any of these conditions
-    if (significantChange || timeIntervalMet || isProgressMilestone || normalizedProgress >= 0.995) {
-      lastProgress = normalizedProgress;
+    if (significantChange || timeIntervalMet || isProgressMilestone || normalizedPercent >= 99.5) {
+      lastProgressPercent = normalizedPercent;
       lastUpdateTime = currentTime;
-      updateProgress(normalizedProgress);
+      // createThrottledProgress always operates in percent already.
+      // Clamp under 100 while scanning to let completion be explicit.
+      postScanProgress(Math.min(99.5, normalizedPercent), true);
     }
   };
 }

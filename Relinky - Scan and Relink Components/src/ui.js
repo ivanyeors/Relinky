@@ -1316,8 +1316,10 @@ function initializeApp() {
       },
       handleScanProgress(msg) {
         if (msg && typeof msg.progress === 'number') {
+          // Accept both 0-1 (fraction) and 0-100 (percent) progress values.
+          const normalizedProgress = msg.progress <= 1 ? msg.progress * 100 : msg.progress;
           // Ensure progress is between 0 and 100
-          this.actualProgress = Math.min(100, Math.max(0, msg.progress));
+          this.actualProgress = Math.min(100, Math.max(0, normalizedProgress));
           this.isScanning = msg.isScanning !== false;
           
           // Log progress updates for debugging
