@@ -3,8 +3,8 @@
 
 import * as scanners from './scanners';
 import { ScanType, MissingReference, updateProgress, resetProgress, completeProgress, createThrottledProgress } from './common';
-import { unlinkVariable, unlinkGroupVariables } from './relink/unlink-variables';
-import { scanForDeletedVariables } from './scanners/deleted-variables';
+import { unlinkVariable, unlinkGroupVariables } from './actions/unbind-node-variables';
+import { scanForDeletedVariables } from './scanners/broken-variable-references';
 
 // Clear previous logs
 console.clear();

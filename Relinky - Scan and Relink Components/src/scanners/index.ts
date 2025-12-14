@@ -6,7 +6,7 @@ import { ScanType, MissingReference } from '../common';
 
 // Import scanner modules
 import { scanForRawValues, groupRawValueResults } from './raw-values';
-import { scanForDeletedVariables, groupDeletedVariableResults } from './deleted-variables';
+import { scanForDeletedVariables, groupDeletedVariableResults } from './broken-variable-references';
 import { scanForGap, groupGapResults } from './gap';
 import { scanForPadding, groupPaddingResults } from './padding';
 import { scanForCornerRadius, groupCornerRadiusResults } from './radius';
@@ -39,7 +39,7 @@ export {
   // Re-export the VariableTypeMetadata interface and VARIABLE_TYPE_CATEGORIES 
   VariableTypeMetadata,
   VARIABLE_TYPE_CATEGORIES
-} from './deleted-variables';
+} from './broken-variable-references';
 
 // Cancellation flag for stopping scans
 let scanCancelled = false;
