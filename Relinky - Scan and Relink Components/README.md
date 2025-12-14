@@ -1,4 +1,4 @@
-# Relinky - Scan and Replace Missing Token
+# Relinky - Identify Linked Library Tokens
 
 A powerful Figma plugin to help you find and manage unlinked design tokens and styles across your files.
 
@@ -14,7 +14,7 @@ A powerful Figma plugin to help you find and manage unlinked design tokens and s
 - **Colors**: 
   - Find layers with unlinked fill colors
   - Detect layers with unlinked stroke colors
-- **Library Variables**: Scan for inactive or missing library variables
+- **Linked Library Tokens**: Identify variables and styles linked from external libraries
 
 ### 🎯 Smart Selection
 - Scan entire page or selected frames/components/sections
@@ -54,11 +54,11 @@ A powerful Figma plugin to help you find and manage unlinked design tokens and s
 - Ignore hidden layers for scan
 - Watch for changes to work
 
-### �� Planned
+### 🧭 Planned
 - Feedback CTA
 - Pro version vs free version features
-- Scan for linked tokens from non-active libraries
-- Scan selected similar variable tokens
+- Scan for linked tokens from non-active/unavailable libraries
+- Mass relink selected linked tokens to another library token
 - Work on similar typography groupings
   - Ignore different content but group same font settings
 - Horizontal padding improvements

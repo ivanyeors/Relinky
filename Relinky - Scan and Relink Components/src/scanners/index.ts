@@ -6,7 +6,7 @@ import { ScanType, MissingReference } from '../common';
 
 // Import scanner modules
 import { scanForRawValues, groupRawValueResults } from './raw-values';
-import { scanForDeletedVariables, groupDeletedVariableResults } from './deleted-variables';
+import { scanForBrokenVariableReferences, groupBrokenVariableReferenceResults } from './broken-variable-references';
 import { scanForGap, groupGapResults } from './gap';
 import { scanForPadding, groupPaddingResults } from './padding';
 import { scanForCornerRadius, groupCornerRadiusResults } from './radius';
@@ -15,6 +15,7 @@ import { scanForTypography, groupTypographyResults } from './typography';
 import { scanForLayoutDimensions, groupLayoutResults } from './layout';
 import { scanForAppearance, groupAppearanceResults } from './appearance';
 import { scanForEffects, groupEffectsResults } from './effects';
+import { scanForLinkedLibraryTokens, groupLinkedLibraryResults } from './linked-library';
 
 // Export all scanner functions - use explicit exports for modules with overlapping types
 export * from './raw-values';
@@ -26,18 +27,19 @@ export * from './typography';
 export * from './layout';
 export * from './appearance';
 export * from './effects';
+export * from './linked-library';
 
 // Explicitly export from deleted-variables (formerly missing-library)
 export { 
-  scanForDeletedVariables as scanForMissingLibraryVariables, 
-  groupDeletedVariableResults as groupMissingLibraryResults,
-  // Also export with original names for backward compatibility
-  scanForDeletedVariables,
-  groupDeletedVariableResults,
+  scanForBrokenVariableReferences as scanForMissingLibraryVariables, 
+  groupBrokenVariableReferenceResults as groupMissingLibraryResults,
+  // Also export legacy names for backwards compatibility
+  scanForBrokenVariableReferences,
+  groupBrokenVariableReferenceResults,
   // Re-export the VariableTypeMetadata interface and VARIABLE_TYPE_CATEGORIES 
   VariableTypeMetadata,
   VARIABLE_TYPE_CATEGORIES
-} from './deleted-variables';
+} from './broken-variable-references';
 
 // Cancellation flag for stopping scans
 let scanCancelled = false;
@@ -222,11 +224,13 @@ export async function runScanner(
           return scanForRawValues(scanType, selectedFrameIds, progressHandler, ignoreHiddenLayers, skipInstances);
       }
     case 'missing-library':
-      return scanForDeletedVariables(progressHandler, selectedFrameIds, ignoreHiddenLayers, variableTypes, skipInstances)
+      return scanForBrokenVariableReferences(progressHandler, selectedFrameIds, ignoreHiddenLayers, variableTypes, skipInstances)
         .then(result => result.results);
     case 'deleted-variables':
-      return scanForDeletedVariables(progressHandler, selectedFrameIds, ignoreHiddenLayers, variableTypes, skipInstances)
+      return scanForBrokenVariableReferences(progressHandler, selectedFrameIds, ignoreHiddenLayers, variableTypes, skipInstances)
         .then(result => result.results);
+    case 'linked-library':
+      return scanForLinkedLibraryTokens(progressHandler, selectedFrameIds, ignoreHiddenLayers, skipInstances);
     default:
       console.error(`Unknown scanner source type: ${sourceType}`);
       return [];
@@ -271,9 +275,11 @@ export function groupScanResults(
         return groupRawValueResults(results);
       }
     case 'missing-library':
-      return groupDeletedVariableResults(results as any);
+      return groupBrokenVariableReferenceResults(results as any);
     case 'deleted-variables':
-      return groupDeletedVariableResults(results as any);
+      return groupBrokenVariableReferenceResults(results as any);
+    case 'linked-library':
+      return groupLinkedLibraryResults(results);
     default:
       console.error(`Unknown group source type: ${sourceType}`);
       return {};
