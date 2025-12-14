@@ -136,6 +136,11 @@ function initializeApp() {
         successMessage: '',
         showErrorToast: false,
         errorMessage: '',
+        actualProgress: 0,
+        progressAnimationId: null,
+        lastAnimationTimestamp: null,
+        animationDuration: 300,
+        scanStartTime: null,
         // Basic plugin state
         selectedScanType: null, // Currently selected token scan type
         selectedSourceType: 'raw-values', // Source type for scanning (raw, team-library, local-library)
@@ -778,6 +783,7 @@ function initializeApp() {
         this.isScanning = true;
         this.scanProgress = 0;
         this.actualProgress = 0;
+        this.lastAnimationTimestamp = null;
         
         // Track scan start time for minimum animation duration
         this.scanStartTime = Date.now();
@@ -1167,7 +1173,11 @@ function initializeApp() {
             console.log('Scan started:', data);
             this.isScanning = true;
             this.scanProgress = 0;
+            this.actualProgress = 0;
+            this.lastAnimationTimestamp = null;
+            this.scanStartTime = Date.now();
             this.scanType = data.scanType || this.scanType; // Preserve the scan type
+            this.startProgressAnimation();
             break;
           case 'clear-results':
             // Clear results upon plugin request
@@ -1306,18 +1316,41 @@ function initializeApp() {
         setTimeout(() => { this.showSuccessToast = false; }, 3000);
       },
       handleScanProgress(msg) {
-        if (msg && typeof msg.progress === 'number') {
-          // Ensure progress is between 0 and 100
-          this.actualProgress = Math.min(100, Math.max(0, msg.progress));
-          this.isScanning = msg.isScanning !== false;
-          
-          // Log progress updates for debugging
-          console.log(`Progress update: ${this.actualProgress}%`);
-          
-          // If we're near completion, ensure visual progress reflects this
-          if (this.actualProgress >= 99.5) {
-            this.scanProgress = this.actualProgress;
-          }
+        if (!msg || typeof msg.progress !== 'number') {
+          return;
+        }
+
+        // Clamp and store the latest reported progress
+        const normalizedProgress = Math.min(100, Math.max(0, msg.progress));
+        this.actualProgress = normalizedProgress;
+
+        // Update scanning state based on message metadata
+        const messageIndicatesScanning = msg.isScanning !== false;
+        if (messageIndicatesScanning) {
+          this.isScanning = true;
+        } else {
+          this.isScanning = false;
+        }
+
+        // Ensure the animation loop is running whenever we're scanning
+        if (this.isScanning && !this.progressAnimationId) {
+          this.lastAnimationTimestamp = null;
+          this.startProgressAnimation();
+        }
+
+        // When scanning has stopped, snap to the reported progress and halt animation
+        if (!this.isScanning) {
+          this.scanProgress = normalizedProgress;
+          this.stopProgressAnimation();
+          return;
+        }
+
+        // Log progress updates for debugging visibility
+        console.log(`Progress update: ${normalizedProgress}%`);
+
+        // Avoid lingering below completion once we're effectively done
+        if (normalizedProgress >= 99.5) {
+          this.scanProgress = normalizedProgress;
         }
       },
       
@@ -1329,61 +1362,54 @@ function initializeApp() {
         }
         
         // Initialize timing variables for better animation control
-        this.lastAnimationTimestamp = Date.now();
+        this.progressAnimationId = null;
+        this.lastAnimationTimestamp = null;
         this.animationDuration = 300; // Base animation duration in ms
         
         // Start the animation loop
         this.animateProgress();
       },
       
-      // Smooth progress animation loop with variable easing
+      // Smooth progress animation loop with predictable easing
       animateProgress() {
         if (!this.isScanning) {
+          this.scanProgress = typeof this.actualProgress === 'number'
+            ? this.actualProgress
+            : this.scanProgress;
+          this.stopProgressAnimation();
           return;
         }
 
         // Calculate elapsed time since last frame
         const now = Date.now();
-        const elapsed = now - (this.lastAnimationTimestamp || now);
+        const elapsed = this.lastAnimationTimestamp === null
+          ? this.animationDuration
+          : Math.max(0, now - this.lastAnimationTimestamp);
         this.lastAnimationTimestamp = now;
         
         // Calculate target progress based on actual progress
-        const targetProgress = this.actualProgress;
+        const targetProgress = typeof this.actualProgress === 'number'
+          ? this.actualProgress
+          : 0;
         
         // Calculate progress difference
         const progressDiff = targetProgress - this.scanProgress;
         
-        // Adapt easing based on difference size
-        if (Math.abs(progressDiff) > 0.1) {
-          // Calculate dynamic easing speed based on size of the change
-          // Larger jumps move faster (up to 30% per second), smaller changes move slower
-          const easingSpeed = Math.min(0.3, Math.max(0.05, Math.abs(progressDiff) / 50));
-          
-          // Apply proportional change based on elapsed time (for frame-rate independence)
-          const changeThisFrame = progressDiff * easingSpeed * (elapsed / 1000);
-          
-          // Apply change with direction awareness
-          this.scanProgress += changeThisFrame;
-          
-          // Prevent overshooting
-          if ((progressDiff > 0 && this.scanProgress > targetProgress) || 
-              (progressDiff < 0 && this.scanProgress < targetProgress)) {
-            this.scanProgress = targetProgress;
-          }
+        // Determine the proportion of progress we should apply this frame
+        const duration = this.animationDuration || 300;
+        const easedRatio = duration === 0 ? 1 : Math.min(1, elapsed / duration);
+
+        if (Math.abs(progressDiff) < 0.2) {
+          this.scanProgress = targetProgress;
         } else {
-          // For very small differences, converge more quickly
-          this.scanProgress = this.scanProgress * 0.8 + targetProgress * 0.2;
-          
-          // If we're very close, just snap to target
-          if (Math.abs(this.scanProgress - targetProgress) < 0.05) {
-            this.scanProgress = targetProgress;
-          }
+          this.scanProgress += progressDiff * easedRatio;
         }
+
+        // Ensure the visual progress stays within bounds
+        this.scanProgress = Math.min(100, Math.max(0, this.scanProgress));
         
         // Continue animation if still scanning
-        if (this.isScanning) {
-          this.progressAnimationId = requestAnimationFrame(() => this.animateProgress());
-        }
+        this.progressAnimationId = requestAnimationFrame(() => this.animateProgress());
       },
       
       // Stop progress animation
@@ -1392,6 +1418,7 @@ function initializeApp() {
           cancelAnimationFrame(this.progressAnimationId);
           this.progressAnimationId = null;
         }
+        this.lastAnimationTimestamp = null;
       },
       
       selectScanType(value) {
