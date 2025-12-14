@@ -15,6 +15,7 @@ import { scanForTypography, groupTypographyResults } from './typography';
 import { scanForLayoutDimensions, groupLayoutResults } from './layout';
 import { scanForAppearance, groupAppearanceResults } from './appearance';
 import { scanForEffects, groupEffectsResults } from './effects';
+import { scanForLinkedLibraryTokens, groupLinkedLibraryResults } from './linked-library';
 
 // Export all scanner functions - use explicit exports for modules with overlapping types
 export * from './raw-values';
@@ -26,6 +27,7 @@ export * from './typography';
 export * from './layout';
 export * from './appearance';
 export * from './effects';
+export * from './linked-library';
 
 // Explicitly export from deleted-variables (formerly missing-library)
 export { 
@@ -227,6 +229,8 @@ export async function runScanner(
     case 'deleted-variables':
       return scanForDeletedVariables(progressHandler, selectedFrameIds, ignoreHiddenLayers, variableTypes, skipInstances)
         .then(result => result.results);
+    case 'linked-library':
+      return scanForLinkedLibraryTokens(progressHandler, selectedFrameIds, ignoreHiddenLayers, skipInstances);
     default:
       console.error(`Unknown scanner source type: ${sourceType}`);
       return [];
@@ -274,6 +278,8 @@ export function groupScanResults(
       return groupDeletedVariableResults(results as any);
     case 'deleted-variables':
       return groupDeletedVariableResults(results as any);
+    case 'linked-library':
+      return groupLinkedLibraryResults(results);
     default:
       console.error(`Unknown group source type: ${sourceType}`);
       return {};

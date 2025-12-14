@@ -302,7 +302,7 @@ interface ScanForTokensMessage {
   skipInstances: boolean;
   isLibraryVariableScan: boolean;
   isRescan?: boolean;
-  sourceType?: 'raw-values' | 'missing-library' | 'deleted-variables';
+  sourceType?: 'raw-values' | 'missing-library' | 'deleted-variables' | 'linked-library';
   variableTypes?: string[];
 }
 
@@ -619,7 +619,8 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
           references: grouped,
           count: scanResults.length,
           sourceType,
-          scanType
+          scanType,
+          isLibraryVariableScan: sourceType !== 'raw-values'
         });
       }
     } catch (error: any) {
@@ -1325,7 +1326,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
         
         // Group using the appropriate grouping function
         const groupedReferences = scanners.groupScanResults(
-          sourceType as 'raw-values' | 'missing-library' | 'deleted-variables', 
+          sourceType as 'raw-values' | 'missing-library' | 'deleted-variables' | 'linked-library',
           msg.results
         );
         

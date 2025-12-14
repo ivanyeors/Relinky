@@ -246,20 +246,18 @@ function initializeApp() {
       canStartScan() {
         const hasSourceType = !!this.selectedSourceType;
         const hasScanType = !!this.selectedScanType;
-        const isDeletedVariables = this.selectedSourceType === 'deleted-variables';
+        const isLinkedLibrary = this.selectedSourceType === 'linked-library';
         
         console.log('Can start scan?', {
           hasSourceType,
           hasScanType,
-          isDeletedVariables,
+          isLinkedLibrary,
           isScanning: this.isScanning
         });
         
-        // Special case for deleted-variables: allow scanning without selecting a scan type
-        if (isDeletedVariables) {
-          // Require the user to pick at least one variable type to reduce scan size
-          const hasTypeSelection = Array.isArray(this.selectedVariableTypes) && this.selectedVariableTypes.length > 0;
-          return hasSourceType && hasTypeSelection && !this.isScanning;
+        // Special case for linked-library: allow scanning without selecting a token type
+        if (isLinkedLibrary) {
+          return hasSourceType && !this.isScanning;
         }
         
         // For other scan types, require both source type and scan type
@@ -595,10 +593,10 @@ function initializeApp() {
             icon: 'raw-value'
           },
           {
-            value: 'deleted-variables',
-            label: 'Deleted Variables', 
-            description: 'Find elements with deleted variables or variables from missing libraries',
-            icon: 'missing-var'
+            value: 'linked-library',
+            label: 'Linked Library Tokens',
+            description: 'Identify tokens currently linked from external libraries (variables + styles)',
+            icon: 'team-lib'
           }
         ];
       },
@@ -624,7 +622,7 @@ function initializeApp() {
 
         
         // For deleted-variables source, no additional token type selection needed
-        if (this.selectedSourceType === 'deleted-variables') {
+        if (this.selectedSourceType === 'linked-library') {
           return [];
         }
         
@@ -640,9 +638,7 @@ function initializeApp() {
       showVariableTypeInstruction() {
         // Show if user has selected a source type that requires variable type selection
         // but hasn't selected a variable type yet
-        return this.selectedSourceType && 
-               this.selectedSourceType !== 'deleted-variables' && 
-               !this.selectedScanType;
+        return this.selectedSourceType === 'raw-values' && !this.selectedScanType;
       },
     },
     methods: {
@@ -708,11 +704,22 @@ function initializeApp() {
         if (!ref) return 'unknown-reference';
         
         if (ref.isMissingLibrary) return 'missing-library-reference';
-        return 'unlinked-reference';
+        if (ref.isInactiveLibrary) return 'inactive-library-reference';
+        if (ref.isTeamLibrary) return 'team-library-reference';
+        if (ref.isLocalLibrary) return 'local-library-reference';
+        if (ref.isUnlinked) return 'unlinked-reference';
+        return 'unknown-reference';
       },
       getReferenceDisplayType(ref) {
         if (!ref) return 'Unknown';
         
+        if (ref.type === 'linked-library') {
+          const kind = ref?.currentValue?.tokenKind;
+          if (kind === 'variable') return 'Linked Library Variable';
+          if (kind === 'style') return 'Linked Library Style';
+          return 'Linked Library Token';
+        }
+
         if (ref.isMissingLibrary) {
           // For missing variables, show the token type label
           const variableType = ref.variableCategory || 
@@ -798,10 +805,6 @@ function initializeApp() {
           // For raw values, use the specific token type
           effectiveScanType = this.selectedScanType;
           console.log('Starting raw values scan for:', effectiveScanType);
-        } else if (this.selectedScanType) {
-          // If a specific token type is selected for a library source, use the combined value
-          effectiveScanType = this.selectedScanType;
-          console.log('Starting library scan with specific token type:', effectiveScanType);
         } else {
           // If only source is selected, use that to scan for all token types of that source
           effectiveScanType = this.selectedSourceType;
@@ -820,15 +823,7 @@ function initializeApp() {
             scanDescription = tokenOption.label.toLowerCase();
           }
         } else {
-          scanDescription = this.getSourceTypeLabel(this.selectedSourceType) + ' variables';
-          
-          // If a specific token type is also selected, make it more specific
-          if (this.selectedScanType) {
-            const tokenOption = this.filteredTokenOptions.find(option => option.value === this.selectedScanType);
-            if (tokenOption) {
-              scanDescription = tokenOption.label.toLowerCase() + ' ' + scanDescription;
-            }
-          }
+          scanDescription = this.getSourceTypeLabel(this.selectedSourceType);
         }
         
         // Show a toast with scanning message
@@ -850,11 +845,7 @@ function initializeApp() {
           isLibraryVariableScan: this.selectedSourceType !== 'raw-values',
           // Include the source type for backend processing
           sourceType: this.selectedSourceType,
-          // If we have a specific token type with a library source, include the token type separately
-          tokenType: this.selectedSourceType !== 'raw-values' && this.selectedScanType ? 
-                     this.selectedScanType.split('-').slice(2).join('-') : null,
-          // Include selected variable types for filtering if we're scanning for deleted variables
-          variableTypes: (this.selectedSourceType === 'deleted-variables') ? this.selectedVariableTypes : []
+          variableTypes: []
         };
         
         // Make sure all message data is serializable
@@ -1116,7 +1107,7 @@ function initializeApp() {
         if (!this.selectedSourceType) {
           return 'Select a source type';
         }
-        if (!this.selectedScanType) {
+        if (this.selectedSourceType === 'raw-values' && !this.selectedScanType) {
           return 'Select a token type';
         }
         return 'Start scanning';
@@ -1998,7 +1989,7 @@ function initializeApp() {
       // Get readable label for source type
       getSourceTypeLabel(sourceType) {
         switch (sourceType) {
-          case 'deleted-variables': return 'deleted variables';
+          case 'linked-library': return 'linked library tokens';
           case 'raw-values': return 'unlinked';
           default: return sourceType;
         }
