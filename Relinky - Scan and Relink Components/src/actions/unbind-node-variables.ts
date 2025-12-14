@@ -1,5 +1,5 @@
-// Unlink Variables Module
-// Handles unlinking variables from nodes by setting raw values
+// Unbind Node Variable Module
+// Handles unbinding variables from node properties by setting raw values
 
 import { MissingReference } from '../common';
 
@@ -59,7 +59,7 @@ function fromSerializable(serialized: SerializableValue): any {
 /**
  * Sets the raw value for a node property, effectively removing variable binding
  */
-export async function unlinkVariable(nodeId: string, property: string, currentValue: SerializableValue): Promise<void> {
+export async function unbindNodeVariable(nodeId: string, property: string, currentValue: SerializableValue): Promise<void> {
   try {
     const node = await figma.getNodeByIdAsync(nodeId);
     if (!node) {
@@ -174,7 +174,7 @@ export async function unlinkVariable(nodeId: string, property: string, currentVa
         if (property in node) {
           (node as any)[property] = value;
         } else {
-          console.warn(`Unsupported property for unlinking: ${property}`);
+          console.warn(`Unsupported property for unbinding: ${property}`);
         }
     }
 
@@ -187,9 +187,9 @@ export async function unlinkVariable(nodeId: string, property: string, currentVa
 }
 
 /**
- * Reset variables to raw values for multiple nodes
+ * Reset variable bindings to raw values for multiple nodes
  */
-export async function unlinkGroupVariables(refs: MissingReference[]): Promise<{ success: boolean; message: string }> {
+export async function unbindNodeVariableGroup(refs: MissingReference[]): Promise<{ success: boolean; message: string }> {
   const results = {
     successful: 0,
     failed: 0,
@@ -199,7 +199,7 @@ export async function unlinkGroupVariables(refs: MissingReference[]): Promise<{ 
   try {
     for (const ref of refs) {
       try {
-        await unlinkVariable(
+        await unbindNodeVariable(
           ref.nodeId,
           ref.property,
           toSerializable(ref.currentValue)
@@ -224,7 +224,21 @@ export async function unlinkGroupVariables(refs: MissingReference[]): Promise<{ 
     const message = error instanceof Error ? error.message : 'Unknown error';
     return {
       success: false,
-      message: `Failed to reset variables: ${message}`
+      message: `Failed to reset variable bindings: ${message}`
     };
   }
-} 
+}
+
+/**
+ * @deprecated Use `unbindNodeVariable` instead.
+ */
+export async function unlinkVariable(...args: Parameters<typeof unbindNodeVariable>) {
+  return unbindNodeVariable(...args);
+}
+
+/**
+ * @deprecated Use `unbindNodeVariableGroup` instead.
+ */
+export async function unlinkGroupVariables(...args: Parameters<typeof unbindNodeVariableGroup>) {
+  return unbindNodeVariableGroup(...args);
+}

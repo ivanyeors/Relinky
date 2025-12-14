@@ -569,7 +569,7 @@
                         <button 
                           v-if="false && group.refs?.[0]?.isMissingLibrary"
                           class="button warning-button small"
-                          @click.stop="unlinkGroupVariables(group.refs)"
+                          @click.stop="unbindNodeVariableGroup(group.refs)"
                           :disabled="!(group.refs?.length > 0)"
                         >
                           Unlink All
@@ -604,7 +604,7 @@
                           <button 
                             v-if="ref.isMissingLibrary"
                             class="button warning-button small"
-                            @click.stop="unlinkVariable(ref)"
+                            @click.stop="unbindNodeVariable(ref)"
                           >
                             Unlink
                           </button>

@@ -350,14 +350,14 @@ function shouldIncludeNode(node: SceneNode, ignoreHiddenLayers: boolean, skipIns
 }
 
 /**
- * Scan for deleted variables and variables from missing/inaccessible libraries
+ * Scan for broken variable references (deleted variables and missing/inaccessible libraries)
  * Returns variables that are:
  * 1. Actually deleted (no longer exist)
  * 2. From external libraries that are no longer accessible
  * Excludes active/working variables from results
  * Returns both the results and available variable types for filtering
  */
-export async function scanForDeletedVariables(
+export async function scanForBrokenVariableReferences(
   progressCallback: (progress: number) => void = () => {},
   selectedFrameIds: string[] | undefined = undefined,
   ignoreHiddenLayers: boolean = false,
@@ -367,7 +367,7 @@ export async function scanForDeletedVariables(
   results: MissingReference[],
   availableTypes: Set<string>
 }> {
-  console.log('Starting deleted variables scan');
+  console.log('Starting broken variable references scan');
   
   // Overall timeout to prevent infinite scans
   const overallTimeout = 120000; // 2 minutes max
@@ -402,7 +402,7 @@ export async function scanForDeletedVariables(
     if (normalizedProgress - lastProgressUpdate >= 0.5) {
       progressCallback(normalizedProgress);
       lastProgressUpdate = normalizedProgress;
-      console.log(`Deleted variables scan progress: ${normalizedProgress.toFixed(1)}%`);
+      console.log(`Broken variable references scan progress: ${normalizedProgress.toFixed(1)}%`);
     }
   };
   
@@ -754,9 +754,9 @@ export async function scanForDeletedVariables(
 }
 
 /**
- * Group deleted variable scan results with type filtering support
+ * Group broken variable reference scan results with type filtering support
  */
-export function groupDeletedVariableResults(
+export function groupBrokenVariableReferenceResults(
   results: MissingReference[],
   selectedTypes?: string[]
 ): Record<string, MissingReference[]> {
@@ -771,7 +771,7 @@ export function groupDeletedVariableResults(
     const groupKey = result.groupKey || (() => {
       const libraryName = result.currentValue?.libraryName || 'Unknown Library';
       const variableName = result.currentValue?.variableName || 'Unknown Variable';
-      return `deleted-variable-${libraryName}-${variableName}`;
+      return `broken-variable-reference:${libraryName}:${variableName}`;
     })();
     
     if (!groups[groupKey]) {
@@ -781,7 +781,23 @@ export function groupDeletedVariableResults(
     groups[groupKey].push(result);
   });
   
-  console.log(`Grouped ${filteredResults.length} deleted variable results into ${Object.keys(groups).length} groups`);
+  console.log(`Grouped ${filteredResults.length} broken variable reference results into ${Object.keys(groups).length} groups`);
   
   return groups;
-} 
+}
+
+/**
+ * @deprecated Use `scanForBrokenVariableReferences` instead.
+ * Kept temporarily for backwards compatibility.
+ */
+export async function scanForDeletedVariables(...args: Parameters<typeof scanForBrokenVariableReferences>) {
+  return scanForBrokenVariableReferences(...args);
+}
+
+/**
+ * @deprecated Use `groupBrokenVariableReferenceResults` instead.
+ * Kept temporarily for backwards compatibility.
+ */
+export function groupDeletedVariableResults(...args: Parameters<typeof groupBrokenVariableReferenceResults>) {
+  return groupBrokenVariableReferenceResults(...args);
+}

@@ -695,7 +695,7 @@ export function applyRawValueToProperty(
  * Converts variable references to their raw values
  * Optimized version using utility functions
  */
-export async function unlinkVariable(variableId: string): Promise<number> {
+export async function unlinkVariableUsages(variableId: string): Promise<number> {
   let unlinkedCount = 0;
   
   try {
@@ -745,7 +745,7 @@ export async function unlinkVariable(variableId: string): Promise<number> {
       }
     }
     
-    console.log(`Successfully unlinked variable ${variable.name} from ${unlinkedCount} instances`);
+    console.log(`Successfully unlinked variable ${variable.name} from ${unlinkedCount} usages`);
     
   } catch (err) {
     console.error('Error unlinking variable:', err);
@@ -753,6 +753,13 @@ export async function unlinkVariable(variableId: string): Promise<number> {
   }
   
   return unlinkedCount;
+}
+
+/**
+ * @deprecated Use `unlinkVariableUsages` instead.
+ */
+export async function unlinkVariable(variableId: string): Promise<number> {
+  return unlinkVariableUsages(variableId);
 }
 
 // Control functions for scan operations
@@ -1172,7 +1179,7 @@ export async function batchUnlinkVariables(
       const variableId = variableIds[i];
       
       try {
-        const unlinkedCount = await unlinkVariable(variableId);
+        const unlinkedCount = await unlinkVariableUsages(variableId);
         if (unlinkedCount > 0) {
           result.success++;
         } else {
