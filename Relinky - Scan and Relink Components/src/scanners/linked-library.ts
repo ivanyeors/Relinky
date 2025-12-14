@@ -14,6 +14,8 @@ import {
   getNodePath,
   shouldIncludeNode,
   isScannableNodeType,
+  isNodeFromLibraryInstance,
+  prepareLibraryInstanceFiltering,
 } from '../common';
 import { isScancelled } from './index';
 
@@ -63,8 +65,8 @@ async function getNodesToScan(
     return figma.currentPage
       .findAll(node => {
         const isVisible = !ignoreHiddenLayers || ('visible' in node && node.visible);
-        const isNotInstance = !skipInstances || node.type !== 'INSTANCE';
-        return isVisible && isNotInstance;
+        const isNotLibraryInstance = !skipInstances || !isNodeFromLibraryInstance(node);
+        return isVisible && isNotLibraryInstance;
       })
       .filter(isScannableNodeType);
   }
@@ -74,7 +76,7 @@ async function getNodesToScan(
 
   const nodes: SceneNode[] = [];
   for (const root of roots) {
-    if (skipInstances && root.type === 'INSTANCE') continue;
+    if (skipInstances && isNodeFromLibraryInstance(root)) continue;
     if (!shouldIncludeNode(root, ignoreHiddenLayers)) continue;
 
     nodes.push(root);
@@ -82,7 +84,7 @@ async function getNodesToScan(
     if (!('children' in root)) continue;
     const descendants = root.findAll(n => {
       if (!isScannableNodeType(n)) return false;
-      if (skipInstances && n.type === 'INSTANCE') return false;
+      if (skipInstances && isNodeFromLibraryInstance(n)) return false;
       return shouldIncludeNode(n, ignoreHiddenLayers);
     });
     nodes.push(...descendants);
@@ -218,6 +220,8 @@ export async function scanForLinkedLibraryTokens(
   skipInstances: boolean = false
 ): Promise<MissingReference[]> {
   const results: MissingReference[] = [];
+
+  await prepareLibraryInstanceFiltering(skipInstances);
 
   // Preload library metadata to resolve library names.
   const [styleKeyMap, variableCollectionKeyMap] = await Promise.all([

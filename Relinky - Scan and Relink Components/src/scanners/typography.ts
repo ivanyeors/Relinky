@@ -1,7 +1,7 @@
 // Typography Scanner Module
 // Handles scanning for typography styles in the document
 
-import { MissingReference, ScanType } from '../common';
+import { MissingReference, ScanType, isNodeFromLibraryInstance, prepareLibraryInstanceFiltering } from '../common';
 import { isScancelled, getFontFamilyFromNode, getFontWeightFromNode } from './index';
 
 /**
@@ -30,6 +30,8 @@ export async function scanForTypography(
     console.log(`${scanType} scan cancelled before starting`);
     return [];
   }
+  
+  await prepareLibraryInstanceFiltering(skipInstances);
   
   // Get nodes to scan
   let nodesToScan: SceneNode[] = [];
@@ -71,8 +73,8 @@ export async function scanForTypography(
     
     // Collect ALL nodes to scan (including all descendants)
     for (const selectedNode of selectedNodes) {
-      // Add the selected node itself if it's a text node
-      if (selectedNode.type === 'TEXT') {
+      // Add the selected node itself if it's a text node and not within a library instance
+      if (selectedNode.type === 'TEXT' && (!skipInstances || !isNodeFromLibraryInstance(selectedNode))) {
         nodesToScan.push(selectedNode);
       }
       
@@ -85,12 +87,19 @@ export async function scanForTypography(
             if (ignoreHiddenLayers && 'visible' in node && !node.visible) {
               return false;
             }
+            if (skipInstances && isNodeFromLibraryInstance(node)) {
+              return false;
+            }
             // Only include TEXT nodes
             return node.type === 'TEXT';
           });
           
-          console.log(`Adding ${textDescendants.length} text descendants from ${selectedNode.name}`);
-          nodesToScan.push(...textDescendants);
+          const filteredDescendants = skipInstances
+            ? textDescendants.filter(descendant => !isNodeFromLibraryInstance(descendant))
+            : textDescendants;
+
+          console.log(`Adding ${filteredDescendants.length} text descendants from ${selectedNode.name}`);
+          nodesToScan.push(...filteredDescendants);
         } catch (error) {
           console.warn(`Error collecting text descendants from ${selectedNode.name}:`, error);
         }
@@ -105,10 +114,23 @@ export async function scanForTypography(
       if (ignoreHiddenLayers && 'visible' in node && !node.visible) {
         return false;
       }
+      if (skipInstances && isNodeFromLibraryInstance(node)) {
+        return false;
+      }
       // Only include TEXT nodes
       return node.type === 'TEXT';
     });
     console.log('Scanning entire page:', nodesToScan.length, 'text nodes');
+  }
+
+  if (skipInstances) {
+    nodesToScan = nodesToScan.filter(node => !isNodeFromLibraryInstance(node));
+  }
+  
+  if (nodesToScan.length === 0) {
+    console.log('No eligible typography nodes to scan after applying skipInstances filter.');
+    progressCallback(1);
+    return [];
   }
   
   // Check if scan was cancelled after getting nodes
@@ -150,8 +172,8 @@ export async function scanForTypography(
     // Skip if node is hidden and we're ignoring hidden layers
     if (ignoreHiddenLayers && 'visible' in node && !node.visible) return false;
     
-    // Skip instances if skipInstances is true
-    if (skipInstances && node.type === 'INSTANCE') return false;
+    // Skip library-backed instances when configured
+    if (skipInstances && isNodeFromLibraryInstance(node)) return false;
     
     // Only include text nodes
     return node.type === 'TEXT';

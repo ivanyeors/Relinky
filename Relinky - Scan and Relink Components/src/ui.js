@@ -659,7 +659,7 @@ function initializeApp() {
           },
           {
             value: 'linked-library',
-            label: 'Linked Library Tokens',
+            label: 'Linked Tokens',
             description: 'Identify tokens currently linked from external libraries (variables + styles)',
             icon: 'team-lib'
           }

@@ -1,7 +1,7 @@
 // Layout Scanner Module
 // Handles scanning for width and height dimensions in layouts
 
-import { MissingReference, ScanType } from '../common';
+import { MissingReference, ScanType, isNodeFromLibraryInstance, prepareLibraryInstanceFiltering } from '../common';
 import { isScancelled } from './index';
 
 // Extend MissingReference for layout-specific properties
@@ -28,24 +28,28 @@ export async function scanForLayoutDimensions(
   const results: LayoutReference[] = [];
   
   try {
+    await prepareLibraryInstanceFiltering(skipInstances);
+
     // Filter nodes that have width and height properties
     const nodes = (nodesToScan || figma.currentPage.findAll())
       .filter(node => {
         // Skip removed nodes
         if (!node || node.removed) return false;
         
-        // Skip instance children
-        if (node.parent?.type === 'INSTANCE') return false;
+        if (skipInstances && isNodeFromLibraryInstance(node)) return false;
 
         // Skip invisible nodes if ignoreHiddenLayers is true
         if (ignoreHiddenLayers && 'visible' in node && !node.visible) return false;
         
-        // Skip instances if skipInstances is true
-        if (skipInstances && node.type === 'INSTANCE') return false;
-        
         // Only include nodes with width and height
         return 'width' in node && 'height' in node;
       });
+
+    if (nodes.length === 0) {
+      console.log('No eligible nodes to scan for layout dimensions after applying filters.');
+      progressCallback(100);
+      return results;
+    }
     
     console.log(`Found ${nodes.length} nodes to scan for layout dimensions`);
     

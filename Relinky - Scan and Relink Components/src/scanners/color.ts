@@ -1,7 +1,7 @@
 // Color Scanner Module
 // Handles scanning for fill and stroke colors in the document
 
-import { MissingReference, ScanType } from '../common';
+import { MissingReference, ScanType, isNodeFromLibraryInstance, prepareLibraryInstanceFiltering } from '../common';
 import { isScancelled } from './index';
 
 /**
@@ -30,6 +30,8 @@ export async function scanForColors(
     console.log(`${scanType} scan cancelled before starting`);
     return [];
   }
+  
+  await prepareLibraryInstanceFiltering(skipInstances);
   
   // Get nodes to scan
   let nodesToScan: SceneNode[] = [];
@@ -71,8 +73,8 @@ export async function scanForColors(
     
     // Collect ALL nodes to scan (including all descendants)
     for (const selectedNode of selectedNodes) {
-      // Add the selected node itself if it can have colors
-      if ('fills' in selectedNode || 'strokes' in selectedNode) {
+      // Add the selected node itself if it can have colors and is not within a library instance
+      if (('fills' in selectedNode || 'strokes' in selectedNode) && (!skipInstances || !isNodeFromLibraryInstance(selectedNode))) {
         nodesToScan.push(selectedNode);
       }
       
@@ -85,12 +87,19 @@ export async function scanForColors(
             if (ignoreHiddenLayers && 'visible' in node && !node.visible) {
               return false;
             }
+            if (skipInstances && isNodeFromLibraryInstance(node)) {
+              return false;
+            }
             // Include all nodes that can have fills or strokes
             return 'fills' in node || 'strokes' in node;
           });
           
-          console.log(`Adding ${colorDescendants.length} color-capable descendants from ${selectedNode.name}`);
-          nodesToScan.push(...colorDescendants);
+          const filteredDescendants = skipInstances
+            ? colorDescendants.filter(descendant => !isNodeFromLibraryInstance(descendant))
+            : colorDescendants;
+
+          console.log(`Adding ${filteredDescendants.length} color-capable descendants from ${selectedNode.name}`);
+          nodesToScan.push(...filteredDescendants);
         } catch (error) {
           console.warn(`Error collecting color descendants from ${selectedNode.name}:`, error);
         }
@@ -105,10 +114,23 @@ export async function scanForColors(
       if (ignoreHiddenLayers && 'visible' in node && !node.visible) {
         return false;
       }
+      if (skipInstances && isNodeFromLibraryInstance(node)) {
+        return false;
+      }
       // Include all nodes that can have fills or strokes
       return 'fills' in node || 'strokes' in node;
     });
     console.log('Scanning entire page:', nodesToScan.length, 'color-capable nodes');
+  }
+
+  if (skipInstances) {
+    nodesToScan = nodesToScan.filter(node => !isNodeFromLibraryInstance(node));
+  }
+
+  if (nodesToScan.length === 0) {
+    console.log('No eligible color-capable nodes to scan after applying skipInstances filter.');
+    progressCallback(1);
+    return [];
   }
   
   // Check if scan was cancelled after getting nodes
@@ -150,8 +172,8 @@ export async function scanForColors(
     // Skip if node is hidden and we're ignoring hidden layers
     if (ignoreHiddenLayers && 'visible' in node && !node.visible) return false;
     
-    // Skip instances if skipInstances is true
-    if (skipInstances && node.type === 'INSTANCE') return false;
+    // Skip library-backed instances when configured
+    if (skipInstances && isNodeFromLibraryInstance(node)) return false;
     
     return true;
   }

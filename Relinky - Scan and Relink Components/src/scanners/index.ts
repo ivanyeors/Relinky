@@ -2,7 +2,7 @@
 // Exports all scanner modules for easy importing
 
 // Import common types
-import { ScanType, MissingReference } from '../common';
+import { ScanType, MissingReference, isNodeFromLibraryInstance, prepareLibraryInstanceFiltering } from '../common';
 
 // Import scanner modules
 import { scanForRawValues, groupRawValueResults } from './raw-values';
@@ -122,6 +122,8 @@ export async function runScanner(
   // Reset cancellation flag
   resetCancellation();
 
+  await prepareLibraryInstanceFiltering(skipInstances, { force: true });
+
   // Default progress callback if none provided
   const progressHandler = progressCallback || ((progress: number) => {
     // No-op if no callback provided
@@ -194,6 +196,10 @@ export async function runScanner(
       const isNotInstance = !skipInstances || node.type !== 'INSTANCE';
       return isVisible && isNotInstance;
     });
+  }
+
+  if (skipInstances) {
+    nodesToScan = nodesToScan.filter(node => !isNodeFromLibraryInstance(node));
   }
 
   console.log(`Using scanner: ${sourceType} - ${scanType} on ${nodesToScan.length} nodes`);
