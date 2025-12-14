@@ -11,10 +11,10 @@
     "noImplicitAny": true,
     "baseUrl": ".",
     "paths": {
-      "@relink": ["src/relink"],
-      "@relink/*": ["src/relink/*"],
-      "@unlink": ["src/unlink"],
-      "@unlink/*": ["src/unlink/*"]
+      "@actions": ["src/actions"],
+      "@actions/*": ["src/actions/*"],
+      "@variableUnlinker": ["src/variable-unlinker"],
+      "@variableUnlinker/*": ["src/variable-unlinker/*"]
     }
   },
   "include": ["src/**/*"],

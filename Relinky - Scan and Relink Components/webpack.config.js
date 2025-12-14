@@ -45,8 +45,8 @@ module.exports = (env, argv) => ({
   resolve: {
     extensions: ['.tsx', '.ts', '.jsx', '.js'],
     alias: {
-      '@relink': path.resolve(__dirname, 'src/relink'),
-      '@unlink': path.resolve(__dirname, 'src/unlink')
+      '@actions': path.resolve(__dirname, 'src/actions'),
+      '@variableUnlinker': path.resolve(__dirname, 'src/variable-unlinker')
     }
   },
 
