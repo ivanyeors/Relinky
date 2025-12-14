@@ -280,6 +280,13 @@
                     <span class="results-badge">{{ getTotalResultsCount() }}</span>
                   </div>
                   <div class="action-buttons">
+                    <button 
+                      v-if="isLibraryVariableScan"
+                      class="button secondary-button small"
+                      @click="selectAllResults($event)"
+                    >
+                      Select All
+                    </button>
                     <!-- Add Hidden filter toggle -->
                     <button 
                       class="button secondary-button"
@@ -498,14 +505,10 @@
                           <span class="library-badge">
                             <span class="variable-name">{{ group.refs[0].currentValue?.tokenName || group.refs[0].variableName || 'Unknown Token' }}</span>
                           </span>
-                          <span v-if="group.refs[0].libraryName" class="label library-type">{{ group.refs[0].libraryName }}</span>
-                          <span v-if="group.refs[0].currentValue?.tokenKind" class="label">
-                            {{ group.refs[0].currentValue.tokenKind === 'variable' ? 'Variable' : 'Style' }}
-                          </span>
+                          <span class="label instance-count">{{ group.refs?.length || 0 }}×</span>
+                          <span v-if="getLibraryDisplayName(group.refs[0])" class="library-name">{{ getLibraryDisplayName(group.refs[0]) }}</span>
                         </template>
-                        
-                        <!-- Add typography-specific template -->
-                        <template v-if="group.refs?.[0]?.type === 'typography' && group.refs[0]?.currentValue">
+                        <template v-else-if="group.refs?.[0]?.type === 'typography' && group.refs[0]?.currentValue">
                           <div class="typography-labels">
                             <!-- Show labels from the new structure if available -->
                             <template v-if="group.refs[0].currentValue.labels">
@@ -537,14 +540,11 @@
                             <!-- For library variable scans, the badge is already shown above, so don't duplicate it -->
                           </div>
                         </template>
-                        
-                        <!-- Keep existing templates for other types - with optional chaining -->
                         <template v-else-if="group.refs?.[0]?.type === 'fill' || group.refs?.[0]?.type === 'stroke'">
                           <color-preview v-if="group.refs[0].currentValue" :color="group.refs[0].currentValue" />
                           <!-- Library type badge removed for library scans to avoid duplication -->
                         </template>
-                        
-                        <template v-else-if="group.refs?.[0]">
+                        <template v-else>
                           <div class="typography-labels">
                             <span class="label value font-medium" v-if="group.refs[0].currentValue !== undefined">{{ formatValue(group.refs[0].currentValue) }}</span>
                             <span v-if="group.refs[0].type === 'gap' && group.refs[0].currentValue !== undefined" class="label gap">
@@ -557,7 +557,7 @@
                         </template>
                       </div>
                       <div class="group-actions">
-                        <span class="label instance-count">{{ group.refs?.length || 0 }}×</span>
+                        <span v-if="!(isLibraryVariableScan && scanType === 'linked-library')" class="label instance-count">{{ group.refs?.length || 0 }}×</span>
                         <button 
                           class="button secondary-button small"
                           @click.stop="selectGroup(group.refs, $event)"
@@ -591,7 +591,7 @@
                           <div class="reference-name">{{ ref.nodeName || ref.name || 'Unnamed Node' }}</div>
                           <div class="reference-location">{{ ref.location || 'Unknown Location' }}</div>
                           <div v-if="ref.variableName" class="reference-variable text-brand font-medium mt-xs">{{ ref.variableName }}</div>
-                          <div v-if="ref.libraryName" class="reference-library">{{ ref.libraryName }}</div>
+                          <div v-if="getLibraryDisplayName(ref)" class="reference-library">{{ getLibraryDisplayName(ref) }}</div>
                         </div>
                         <div class="reference-actions">
                           <button 
