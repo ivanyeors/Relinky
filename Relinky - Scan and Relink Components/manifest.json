@@ -1,5 +1,5 @@
 {
-  "name": "Relinky - Scan and Replace Missing Tokens",
+  "name": "Relinky - Identify Linked Library Tokens",
   "id": "1472180567792940214",
   "api": "1.0.0",
   "main": "./dist/code.js",

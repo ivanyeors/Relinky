@@ -142,7 +142,7 @@
                   
                   <div class="scan-card-content">
                     <div class="scan-card-text">
-                      <div class="scan-card-title">{{ option.label }}<span v-if="option.value === 'deleted-variables'" class="beta-badge">BETA</span></div>
+                      <div class="scan-card-title">{{ option.label }}</div>
                       <div v-if="!showScanResults" class="scan-card-description">{{ option.description }}</div>
                     </div>
                   </div>
@@ -150,7 +150,7 @@
               </div>
 
               <!-- Token Type Selection - Only show after source type is selected with a smooth transition -->
-              <div v-if="selectedSourceType && selectedSourceType !== 'deleted-variables'" class="scan-cards token-type-section">
+              <div v-if="selectedSourceType === 'raw-values'" class="scan-cards token-type-section">
                 <div class="scan-card-section-divider">Variable Type</div>
                 
                 <!-- Instruction State: Select Variable Type -->
@@ -193,9 +193,9 @@
                 </div>
               </div>
 
-              <!-- Deleted Variables: Pre-scan type selection -->
-              <div v-if="selectedSourceType === 'deleted-variables'" class="scan-cards token-type-section deleted-variable-types-section">
-                <div class="scan-card-section-divider">Variable Types to scan</div>
+              <!-- Linked Library Tokens: No extra selection needed -->
+              <div v-if="selectedSourceType === 'linked-library'" class="scan-cards token-type-section">
+                <div class="scan-card-section-divider">What you’ll get</div>
                 <div class="instruction-state">
                   <div class="instruction-icon">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -204,30 +204,8 @@
                     </svg>
                   </div>
                   <div class="instruction-content">
-                    <h4 class="instruction-title">Select variable types</h4>
-                    <p class="instruction-description">Choose one or more types to narrow the scan and speed it up</p>
-                  </div>
-                </div>
-                <div class="scan-cards">
-                  <div 
-                    v-for="type in ['typography','color','spacing','radius','effect','layout','opacity']"
-                    :key="type"
-                    class="scan-card"
-                    :class="{ 'selected': selectedVariableTypes.includes(type), 'interactive': true }"
-                    role="option"
-                    :aria-selected="selectedVariableTypes.includes(type)"
-                    tabindex="0"
-                     @click="toggleVariableType(type)"
-                  >
-                    <div class="scan-card-icon svg-icon">
-                      <div class="icon" v-html="getVariableTypeIcon(type)"></div>
-                    </div>
-                    <div class="scan-card-content">
-                      <div class="scan-card-text">
-                        <div class="scan-card-title">{{ type.charAt(0).toUpperCase() + type.slice(1) }}</div>
-                        <div class="scan-card-description">Include {{ type }} tokens</div>
-                      </div>
-                    </div>
+                    <h4 class="instruction-title">Linked tokens (from libraries)</h4>
+                    <p class="instruction-description">We’ll list variables and styles that are currently linked from external libraries, grouped by token name + library for quick “Select All”.</p>
                   </div>
                 </div>
               </div>
@@ -329,8 +307,8 @@
 
                 <!-- Add scan results description -->
                 <div class="scan-results-description p-2 rounded m-2 mb-3 bg-secondary">
-                  <p v-if="selectedScanType === 'deleted-variables' || selectedSourceType === 'deleted-variables'" class="text-secondary">
-                    These are elements that were previously linked to variables that have been deleted or are from libraries that are no longer accessible. You may need to reconnect them to new variables or convert them to raw values.
+                  <p v-if="scanType === 'linked-library' || selectedSourceType === 'linked-library'" class="text-secondary">
+                    These are tokens currently linked from external libraries. Use “Select All” to grab every layer using the same token, then relink or migrate as needed.
                   </p>
                   <p v-else-if="selectedScanType === 'fill'" class="text-secondary">
                     Fill colors found in your design. Grouped by similar values.
@@ -504,22 +482,25 @@
                     <!-- Group Header -->
                     <div class="value-group-header" 
                          @click="toggleGroup(groupKey)"
-                         :class="{
-                           'expanded': isGroupExpanded(groupKey),
-                           'library-scan': isLibraryVariableScan,
-                           'unlinked-reference': group.refs?.[0] && !group.refs[0].isMissingLibrary,
-                           'missing-library-reference': group.refs?.[0] && group.refs[0].isMissingLibrary
-                         }"
+                         :class="[
+                           isGroupExpanded(groupKey) ? 'expanded' : '',
+                           isLibraryVariableScan ? 'library-scan' : '',
+                           group.refs?.[0] ? getReferenceClass(group.refs[0]) : ''
+                         ]"
                     >
                       <div class="group-info">
                         <span class="expand-icon">
                           {{ isGroupExpanded(groupKey) ? '▼' : '▶' }}
                         </span>
                         
-                        <!-- Simplified badge for deleted-variables: show token name and count only -->
-                        <template v-if="isLibraryVariableScan && scanType === 'deleted-variables' && group.refs?.[0]">
+                        <!-- Linked Library Tokens: show token name + library -->
+                        <template v-if="isLibraryVariableScan && scanType === 'linked-library' && group.refs?.[0]">
                           <span class="library-badge">
-                            <span class="variable-name">{{ group.refs[0].currentValue?.variableName || 'Unknown Token' }}</span>
+                            <span class="variable-name">{{ group.refs[0].currentValue?.tokenName || group.refs[0].variableName || 'Unknown Token' }}</span>
+                          </span>
+                          <span v-if="group.refs[0].libraryName" class="label library-type">{{ group.refs[0].libraryName }}</span>
+                          <span v-if="group.refs[0].currentValue?.tokenKind" class="label">
+                            {{ group.refs[0].currentValue.tokenKind === 'variable' ? 'Variable' : 'Style' }}
                           </span>
                         </template>
                         
@@ -588,7 +569,7 @@
                         <button 
                           v-if="false && group.refs?.[0]?.isMissingLibrary"
                           class="button warning-button small"
-                          @click.stop="unlinkGroupVariables(group.refs)"
+                          @click.stop="unbindNodeVariableGroup(group.refs)"
                           :disabled="!(group.refs?.length > 0)"
                         >
                           Unlink All
@@ -604,17 +585,13 @@
                       <div v-for="ref in (group.refs || [])" 
                            :key="ref.nodeId" 
                            class="reference-item"
-                           :class="{
-                             'unlinked-reference': ref && !ref.isMissingLibrary,
-                             'missing-library-reference': ref && ref.isMissingLibrary
-                           }"
+                           :class="[ref ? getReferenceClass(ref) : 'unknown-reference']"
                       >
                         <div class="reference-info">
                           <div class="reference-name">{{ ref.nodeName || ref.name || 'Unnamed Node' }}</div>
                           <div class="reference-location">{{ ref.location || 'Unknown Location' }}</div>
                           <div v-if="ref.variableName" class="reference-variable text-brand font-medium mt-xs">{{ ref.variableName }}</div>
-                          <!-- Don't display library name for missing library variables to simplify the UI -->
-                          <div v-if="ref.libraryName && !ref.isMissingLibrary" class="reference-library">{{ ref.libraryName }}</div>
+                          <div v-if="ref.libraryName" class="reference-library">{{ ref.libraryName }}</div>
                         </div>
                         <div class="reference-actions">
                           <button 
@@ -627,7 +604,7 @@
                           <button 
                             v-if="ref.isMissingLibrary"
                             class="button warning-button small"
-                            @click.stop="unlinkVariable(ref)"
+                            @click.stop="unbindNodeVariable(ref)"
                           >
                             Unlink
                           </button>
