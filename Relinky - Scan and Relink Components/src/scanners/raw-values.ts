@@ -166,68 +166,179 @@ export async function scanForRawValues(
     
     return true;
   }
+
+  function getPathTokens(propertyPath: string): string[] {
+    return propertyPath
+      .replace(/\[(\d+)\]/g, '/$1')
+      .replace(/\./g, '/')
+      .split('/')
+      .map(token => token.trim())
+      .filter(token => token.length > 0);
+  }
+
+  function pathsSharePrefix(propertyTokens: string[], bindingTokens: string[]): boolean {
+    if (propertyTokens.length === 0 || bindingTokens.length === 0) {
+      return false;
+    }
+
+    const compareLength = Math.min(propertyTokens.length, bindingTokens.length);
+    for (let index = 0; index < compareLength; index++) {
+      if (propertyTokens[index] !== bindingTokens[index]) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  function resolveBindingForProperty(
+    bindingKey: string,
+    bindingValue: unknown,
+    propertyTokens: string[]
+  ): unknown {
+    const bindingTokens = getPathTokens(bindingKey);
+
+    if (!pathsSharePrefix(propertyTokens, bindingTokens)) {
+      return undefined;
+    }
+
+    const tokenDifference = propertyTokens.length - bindingTokens.length;
+
+    if (tokenDifference <= 0) {
+      return bindingValue;
+    }
+
+    let resolvedBinding = bindingValue;
+    const remainingTokens = propertyTokens.slice(bindingTokens.length);
+
+    for (const token of remainingTokens) {
+      if (resolvedBinding === null || resolvedBinding === undefined) {
+        return resolvedBinding;
+      }
+
+      if (Array.isArray(resolvedBinding)) {
+        const index = Number(token);
+        if (Number.isNaN(index) || index < 0 || index >= resolvedBinding.length) {
+          return undefined;
+        }
+        resolvedBinding = resolvedBinding[index];
+        continue;
+      }
+
+      if (typeof resolvedBinding === 'object') {
+        const resolvedObject = resolvedBinding as Record<string, unknown>;
+        if (token in resolvedObject) {
+          resolvedBinding = resolvedObject[token];
+          continue;
+        }
+
+        const numericKey = Number(token);
+        const numericKeyString = Number.isNaN(numericKey) ? undefined : `${numericKey}`;
+
+        if (numericKeyString && numericKeyString in resolvedObject) {
+          resolvedBinding = resolvedObject[numericKeyString];
+          continue;
+        }
+
+        return undefined;
+      }
+
+      return undefined;
+    }
+
+    return resolvedBinding;
+  }
+
+  function bindingContainsVariable(binding: unknown, seen: WeakSet<object> = new WeakSet()): boolean {
+    if (!binding) {
+      return false;
+    }
+
+    if (Array.isArray(binding)) {
+      if (seen.has(binding)) {
+        return false;
+      }
+      seen.add(binding);
+      return binding.some(item => bindingContainsVariable(item, seen));
+    }
+
+    if (typeof binding !== 'object') {
+      return false;
+    }
+
+    const bindingObject = binding as Record<string, unknown>;
+    if (seen.has(bindingObject)) {
+      return false;
+    }
+    seen.add(bindingObject);
+
+    const bindingType = typeof bindingObject.type === 'string' ? bindingObject.type : undefined;
+    const hasId = typeof bindingObject.id === 'string' && bindingObject.id.length > 0;
+    const hasVariableId = typeof bindingObject.variableId === 'string' && bindingObject.variableId.length > 0;
+
+    if (
+      (bindingType === 'VARIABLE' || bindingType === 'VARIABLE_ALIAS') &&
+      (hasId || hasVariableId)
+    ) {
+      return true;
+    }
+
+    if (hasId || hasVariableId) {
+      return true;
+    }
+
+    for (const value of Object.values(bindingObject)) {
+      if (bindingContainsVariable(value, seen)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
   
   /**
    * Checks if a property on a node is a raw value (not bound to a variable)
    */
   function isRawValue(node: SceneNode, propertyName: string): boolean {
     try {
-      // Make sure the node has boundVariables property
-      if ('boundVariables' in node) {
-        // If there are no bound variables at all, it's definitely a raw value
-        if (!node.boundVariables) {
-          console.log(`Node ${node.name} has no boundVariables at all, property ${propertyName} is raw`);
-          return true;
-        }
-        
-        // Type-safe check if the property is not in boundVariables
-        const boundVariables = node.boundVariables as Record<string, any> | undefined;
-        if (!boundVariables || !(propertyName in boundVariables)) {
-          console.log(`Property ${propertyName} is not bound on node ${node.name}, considering it raw`);
-          return true;
-        }
-        
-        // Check if the property has a valid binding
-        const binding = boundVariables[propertyName];
-        if (!binding) {
-          console.log(`Property ${propertyName} has no binding on node ${node.name}, considering it raw`);
-          return true;
-        }
-        
-        // Handle array binding cases (like fills[0])
-        if (Array.isArray(binding)) {
-          // If the binding array is empty, the property is effectively raw
-          if (binding.length === 0) {
-            console.log(`Property ${propertyName} has empty binding array on node ${node.name}, considering it raw`);
-            return true;
-          }
-          
-          // If any array element has a valid binding ID, the property is bound
-          const hasValidBinding = binding.some(item => item && typeof item === 'object' && 'id' in item && item.id);
-          if (!hasValidBinding) {
-            console.log(`Property ${propertyName} has no valid binding in array on node ${node.name}, considering it raw`);
-            return true;
-          }
-          
-          // The property has at least one valid binding
-          console.log(`Property ${propertyName} has valid binding in array on node ${node.name}, not a raw value`);
-          return false;
-        }
-        
-        // For non-array bindings, check if there's a valid ID
-        if (typeof binding === 'object' && binding && 'id' in binding && binding.id) {
-          console.log(`Property ${propertyName} is bound on node ${node.name}, not a raw value`);
-          return false;
-        }
-        
-        // Default to raw if binding doesn't have an ID
-        console.log(`Property ${propertyName} has invalid binding on node ${node.name}, considering it raw`);
+      if (!('boundVariables' in node)) {
         return true;
       }
-      
-      // If the node doesn't have boundVariables property at all, 
-      // it's using raw values by definition
-      console.log(`Node ${node.name} cannot have bound variables (doesn't support boundVariables property), property ${propertyName} is raw`);
+
+      const boundVariables = node.boundVariables as Record<string, unknown> | null | undefined;
+      if (!boundVariables || Object.keys(boundVariables).length === 0) {
+        return true;
+      }
+
+      const propertyTokens = getPathTokens(propertyName);
+      const directCandidates = new Set<string>();
+      directCandidates.add(propertyName);
+      if (propertyTokens.length > 0) {
+        directCandidates.add(propertyTokens[0]);
+      }
+
+      for (const [bindingKey, bindingValue] of Object.entries(boundVariables)) {
+        if (!bindingValue) {
+          continue;
+        }
+
+        if (directCandidates.has(bindingKey) || directCandidates.has(bindingKey.split('/')[0])) {
+          if (bindingContainsVariable(bindingValue)) {
+            return false;
+          }
+          continue;
+        }
+
+        const bindingTokens = getPathTokens(bindingKey);
+        if (!pathsSharePrefix(propertyTokens, bindingTokens)) {
+          continue;
+        }
+
+        if (bindingContainsVariable(bindingValue)) {
+          return false;
+        }
+      }
+
       return true;
     } catch (error) {
       console.warn(`Error checking if ${propertyName} is raw on node ${node.name}:`, error);
@@ -519,28 +630,28 @@ export async function scanForRawValues(
                   } 
                   // Process array of fills - even empty ones
                   else if (Array.isArray(fills)) {
-                    // Check if the fill array is a raw value that should be reported
-                    if (fills.length > 0 && isRawValue(node, 'fills')) {
-                      console.log(`Found raw fill value(s) in node: ${node.name} (${String(node.type)})`);
+                    for (let i = 0; i < fills.length; i++) {
+                      const fill = fills[i];
                       
-                      // Process each fill individually to avoid array length issues
-                      for (let i = 0; i < fills.length; i++) {
-                        const fill = fills[i];
-                        
-                        // Skip invisible fills
-                        if (fill.visible === false) continue;
-                        
-                        // Add each fill as a separate result to avoid complex binding checks
-                        results.push({
-                          nodeId: node.id,
-                          nodeName: node.name,
-                          location: getNodePath(node),
-                          property: `fills[${i}]`,
-                          type: 'raw-value',
-                          currentValue: fill,
-                          isVisible: isVisible
-                        });
+                      if (!fill || fill.visible === false) {
+                        continue;
                       }
+
+                      if (!isRawValue(node, `fills[${i}]`)) {
+                        continue;
+                      }
+
+                      console.log(`Found raw fill value in node: ${node.name} (${String(node.type)}) at index ${i}`);
+
+                      results.push({
+                        nodeId: node.id,
+                        nodeName: node.name,
+                        location: getNodePath(node),
+                        property: `fills[${i}]`,
+                        type: 'raw-value',
+                        currentValue: fill,
+                        isVisible: isVisible
+                      });
                     }
                   } else if (fills === undefined || fills === null) {
                     console.log(`Node ${node.name} has no fills, skipping fill check`);
@@ -563,37 +674,38 @@ export async function scanForRawValues(
                   }
                   // Process array of strokes
                   else if (Array.isArray(strokes)) {
-                    // Check if there are valid strokes and if they're raw values
-                    if (strokes.length > 0 && isRawValue(node, 'strokes')) {
-                      console.log(`Found raw stroke value in node: ${node.name} (${String(node.type)})`);
+                    for (let i = 0; i < strokes.length; i++) {
+                      const stroke = strokes[i];
                       
-                      // Process each stroke individually
-                      for (let i = 0; i < strokes.length; i++) {
-                        const stroke = strokes[i];
-                        
-                        // Skip invisible strokes
-                        if (stroke.visible === false) continue;
-                        
-                        // Check if the stroke weight is greater than 0
-                        let hasWeight = false;
-                        if ('strokeWeight' in node) {
-                          const weight = node.strokeWeight;
-                          hasWeight = weight !== figma.mixed && typeof weight === 'number' && weight > 0;
-                        }
-                        
-                        // Only add strokes that are visible and have weight
-                        if (hasWeight) {
-                          results.push({
-                            nodeId: node.id,
-                            nodeName: node.name,
-                            location: getNodePath(node),
-                            property: `strokes[${i}]`,
-                            type: 'raw-value',
-                            currentValue: stroke,
-                            isVisible: isVisible
-                          });
-                        }
+                      if (!stroke || stroke.visible === false) {
+                        continue;
                       }
+                      
+                      let hasWeight = false;
+                      if ('strokeWeight' in node) {
+                        const weight = node.strokeWeight;
+                        hasWeight = weight !== figma.mixed && typeof weight === 'number' && weight > 0;
+                      }
+
+                      if (!hasWeight) {
+                        continue;
+                      }
+
+                      if (!isRawValue(node, `strokes[${i}]`)) {
+                        continue;
+                      }
+
+                      console.log(`Found raw stroke value in node: ${node.name} (${String(node.type)}) at index ${i}`);
+
+                      results.push({
+                        nodeId: node.id,
+                        nodeName: node.name,
+                        location: getNodePath(node),
+                        property: `strokes[${i}]`,
+                        type: 'raw-value',
+                        currentValue: stroke,
+                        isVisible: isVisible
+                      });
                     }
                   }
                 } catch (error) {
@@ -612,27 +724,28 @@ export async function scanForRawValues(
                   }
                   // Process array of effects
                   else if (Array.isArray(effects)) {
-                    // Check if there are valid effects and if they're raw values
-                    if (effects.length > 0 && isRawValue(node, 'effects')) {
-                      console.log(`Found raw effects in node: ${node.name}`);
+                    for (let i = 0; i < effects.length; i++) {
+                      const effect = effects[i];
                       
-                      // Process each effect individually
-                      for (let i = 0; i < effects.length; i++) {
-                        const effect = effects[i];
-                        
-                        // Skip invisible effects
-                        if (effect.visible === false) continue;
-                        
-                        results.push({
-                          nodeId: node.id,
-                          nodeName: node.name,
-                          location: getNodePath(node),
-                          property: `effects[${i}]`,
-                          type: 'raw-value',
-                          currentValue: effect,
-                          isVisible: isVisible
-                        });
+                      if (!effect || effect.visible === false) {
+                        continue;
                       }
+
+                      if (!isRawValue(node, `effects[${i}]`)) {
+                        continue;
+                      }
+
+                      console.log(`Found raw effect in node: ${node.name} at index ${i}`);
+
+                      results.push({
+                        nodeId: node.id,
+                        nodeName: node.name,
+                        location: getNodePath(node),
+                        property: `effects[${i}]`,
+                        type: 'raw-value',
+                        currentValue: effect,
+                        isVisible: isVisible
+                      });
                     }
                   }
                 } catch (error) {
@@ -810,15 +923,19 @@ export async function scanForRawValues(
                 if ('fills' in node && node.fills !== figma.mixed) {
                   const textFills = node.fills as Paint[] | readonly Paint[] | undefined;
                   
-                  if (Array.isArray(textFills) && textFills.length > 0 && isRawValue(node, 'fills')) {
-                    console.log(`Found raw text color in node: ${node.name}`);
-                    
-                    // Add each fill as a separate result
+                  if (Array.isArray(textFills) && textFills.length > 0) {
                     for (let i = 0; i < textFills.length; i++) {
                       const fill = textFills[i];
                       
-                      // Skip invisible fills
-                      if (fill.visible === false) continue;
+                      if (!fill || fill.visible === false) {
+                        continue;
+                      }
+
+                      if (!isRawValue(node, `fills[${i}]`)) {
+                        continue;
+                      }
+
+                      console.log(`Found raw text color in node: ${node.name} at fill index ${i}`);
                       
                       results.push({
                         nodeId: node.id,
