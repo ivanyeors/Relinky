@@ -1372,7 +1372,40 @@ margin: var(--spacing-md) 0;
    Navigation
    ========================================================================== */
 
-/* Remove tab-related styles */
+/* Tab navigation */
+.tab-navigation{
+  display: flex;
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-md);
+}
+
+.tab-button{
+  flex: 1;
+  border-radius: 6px;
+  height: 32px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid var(--figma-color-border);
+  background: var(--figma-color-bg-secondary);
+  color: var(--figma-color-text);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tab-button:hover{
+  background: var(--figma-color-bg-secondary-hover);
+}
+
+.tab-button:focus{
+  outline: 2px solid var(--figma-color-border-brand-strong);
+  outline-offset: 2px;
+}
+
+.tab-button.active{
+  background: var(--figma-color-bg-brand);
+  color: var(--figma-color-text-onbrand);
+  border-color: var(--figma-color-border-brand);
+}
 
 /* ==========================================================================
    Utility Classes
