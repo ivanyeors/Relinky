@@ -21,42 +21,95 @@
   <div id="app">
     <div v-cloak class="plugin-container">
       <div class="content-section">
-        <!-- Tab Navigation -->
-        <div class="tab-navigation">
-          <button
-            class="tab-button"
-            :class="{ active: activeTab === 'unlinked-values' }"
-            @click="switchTab('unlinked-values')"
-            tabindex="0"
-            aria-label="Unlinked values"
-          >
-            <span>Unlinked values</span>
-          </button>
-          <button
-            class="tab-button"
-            :class="{ active: activeTab === 'unlinked-tokens' }"
-            @click="switchTab('unlinked-tokens')"
-            tabindex="0"
-            aria-label="Unlinked tokens"
-          >
-            <span>Unlinked tokens</span>
-          </button>
-          <button
-            class="tab-button"
-            :class="{ active: activeTab === 'select-components' }"
-            @click="switchTab('select-components')"
-            tabindex="0"
-            aria-label="Select components"
-          >
-            <span>Select components</span>
-          </button>
-        </div>
-
-        <!-- Section content -->
-        <div v-if="activeTab === 'select-components'" class="results-section">
+        <!-- Start screen -->
+        <div v-if="activeView === 'start'" class="results-section">
           <div class="step-container">
             <div class="step-content">
-              <h3 class="step-title">Scan similar component by selection</h3>
+              <h3 class="step-title">What do you want to do?</h3>
+
+              <div class="scan-cards">
+                <div
+                  class="scan-card"
+                  :class="{ 'interactive': true }"
+                  role="option"
+                  aria-label="Unlinked values"
+                  tabindex="0"
+                  @click="openView('unlinked-values')"
+                  @keydown.enter.prevent="openView('unlinked-values')"
+                  @keydown.space.prevent="openView('unlinked-values')"
+                >
+                  <div class="scan-card-icon svg-icon">
+                    <div class="icon" v-html="icons['raw-value']"></div>
+                  </div>
+                  <div class="scan-card-content">
+                    <div class="scan-card-text">
+                      <div class="scan-card-title">Unlinked values</div>
+                      <div class="scan-card-description">Scan for raw values that should be tokens</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  class="scan-card"
+                  :class="{ 'interactive': true }"
+                  role="option"
+                  aria-label="Unlinked tokens"
+                  tabindex="0"
+                  @click="openView('unlinked-tokens')"
+                  @keydown.enter.prevent="openView('unlinked-tokens')"
+                  @keydown.space.prevent="openView('unlinked-tokens')"
+                >
+                  <div class="scan-card-icon svg-icon">
+                    <div class="icon" v-html="icons['missing-var']"></div>
+                  </div>
+                  <div class="scan-card-content">
+                    <div class="scan-card-text">
+                      <div class="scan-card-title">Unlinked tokens</div>
+                      <div class="scan-card-description">Scan for broken/missing token links</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  class="scan-card"
+                  :class="{ 'interactive': true }"
+                  role="option"
+                  aria-label="Select components"
+                  tabindex="0"
+                  @click="openView('select-components')"
+                  @keydown.enter.prevent="openView('select-components')"
+                  @keydown.space.prevent="openView('select-components')"
+                >
+                  <div class="scan-card-icon svg-icon">
+                    <div class="icon" v-html="icons['team-lib']"></div>
+                  </div>
+                  <div class="scan-card-content">
+                    <div class="scan-card-text">
+                      <div class="scan-card-title">Select components</div>
+                      <div class="scan-card-description">Scan similar components by selection</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Select components flow -->
+        <div v-else-if="activeView === 'select-components'" class="results-section">
+          <div class="step-container">
+            <div class="step-content">
+              <div class="step-title-row">
+                <h3 class="step-title">Scan similar component by selection</h3>
+                <button
+                  class="secondary-button"
+                  @click="goHome"
+                  aria-label="Back"
+                  title="Back"
+                >
+                  back
+                </button>
+              </div>
 
               <div class="scan-results-description p-2 rounded m-2 mb-3 bg-secondary">
                 <p class="text-secondary">
@@ -264,22 +317,231 @@
           </div>
         </div>
 
-        <div v-else class="results-section">
+        <!-- Unlinked tokens flow -->
+        <div v-else-if="activeView === 'unlinked-tokens'" class="results-section">
+          <div class="step-container">
+            <div class="step-content">
+              <div class="step-title-row">
+                <h3 class="step-title">Unlinked tokens</h3>
+                <div class="action-buttons">
+                  <button
+                    class="button secondary-button"
+                    @click="goHome"
+                    aria-label="Back"
+                    title="Back"
+                  >
+                    Back
+                  </button>
+                  <button
+                    class="button secondary-button"
+                    @click="refreshPlugin"
+                    aria-label="Refresh UI"
+                    title="Refresh UI"
+                  >
+                    Refresh
+                  </button>
+                </div>
+              </div>
+
+              <div class="scan-settings">
+                <div class="settings-header">
+                  <h4 class="settings-title">Scan Settings</h4>
+                  <button
+                    class="settings-toggle"
+                    @click="showSettings = !showSettings"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <path
+                        :d="showSettings
+                          ? 'M4 10L8 6L12 10'
+                          : 'M4 6L8 10L12 6'"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      />
+                    </svg>
+                  </button>
+                </div>
+
+                <div class="settings-content" v-show="showSettings">
+                  <div class="setting-item">
+                    <label class="toggle-label">
+                      <div class="toggle-label-content">
+                        <span>Scan Entire Page</span>
+                        <span v-if="scanEntirePage" class="slow-badge">slow</span>
+                        <span class="info-badge" title="Scan the entire page instead of selected frames">ⓘ</span>
+                      </div>
+                      <div class="toggle-wrapper">
+                        <input
+                          type="checkbox"
+                          v-model="scanEntirePage"
+                          class="toggle-input"
+                          @change="handleScanScopeChange"
+                        >
+                        <div class="toggle-slider"></div>
+                      </div>
+                    </label>
+                  </div>
+                  <div class="setting-item">
+                    <label class="toggle-label">
+                      <div class="toggle-label-content">
+                        <span>Skip Component Instances</span>
+                        <span class="info-badge" title="Exclude component instances from scan results">ⓘ</span>
+                      </div>
+                      <div class="toggle-wrapper">
+                        <input
+                          type="checkbox"
+                          v-model="skipInstances"
+                          class="toggle-input"
+                        >
+                        <div class="toggle-slider"></div>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div class="divider"></div>
+
+              <div class="step-container">
+                <div class="step-content">
+                  <h3 class="step-title">Start scanning</h3>
+
+                  <div class="progress-container">
+                    <div class="progress-bar"
+                      :class="{
+                        'scanning': isScanning,
+                        'completed-no-issues': !isScanning && scanProgress === 100 && !hasResults
+                      }"
+                    >
+                      <div class="progress-fill"
+                        :style="{
+                          width: `${scanProgress}%`,
+                          background: getProgressBarColor('default')
+                        }"
+                      ></div>
+                      <span class="progress-text" v-if="true">{{ getProgressStatus() }}</span>
+                    </div>
+                  </div>
+
+                  <div class="scan-buttons">
+                    <button
+                      v-if="!isScanning"
+                      @click="startUnlinkedTokensScan"
+                      class="button primary-button"
+                      :disabled="isScanning"
+                      :title="!hasSelection && !scanEntirePage ? 'Select frames/components/sections or enable Scan Entire Page' : 'Start scan'"
+                    >
+                      Start Scan
+                    </button>
+                    <button
+                      v-if="showStopButton"
+                      @click="stopScan()"
+                      class="button warning-button"
+                    >
+                      Stop
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Reuse the same results rendering -->
+              <template v-if="showScanResults">
+                <div class="divider"></div>
+                <!-- Results block is already designed to render groupedReferences -->
+                <!-- Keep it identical to the existing results template below by showing it here -->
+                <div class="step-container">
+                  <div class="step-content">
+                    <div class="results-header">
+                      <div class="step-title-with-badge">
+                        <h3 class="step-title">Scan results</h3>
+                        <span class="results-badge">{{ getTotalResultsCount() }}</span>
+                      </div>
+                      <div class="action-buttons">
+                        <button class="button secondary-button" @click="clearResults">Clear</button>
+                      </div>
+                    </div>
+                    <div class="results-container">
+                      <div v-for="(group, groupKey) in filteredResults"
+                        :key="groupKey"
+                        class="value-group"
+                      >
+                        <div class="value-group-header"
+                          @click="toggleGroup(groupKey)"
+                          :class="[
+                            isGroupExpanded(groupKey) ? 'expanded' : ''
+                          ]"
+                        >
+                          <div class="group-info">
+                            <span class="expand-icon">
+                              {{ isGroupExpanded(groupKey) ? '▼' : '▶' }}
+                            </span>
+                            <span class="label instance-count">{{ group.refs?.length || 0 }}×</span>
+                            <span class="scan-card-title">{{ groupKey }}</span>
+                          </div>
+                          <div class="group-actions">
+                            <button
+                              class="button secondary-button small"
+                              @click.stop="selectGroup(group.refs, $event)"
+                              :disabled="!(group.refs?.length > 0)"
+                            >
+                              Select All
+                            </button>
+                          </div>
+                        </div>
+                        <div v-if="isGroupExpanded(groupKey)" class="value-group-details" @click.stop>
+                          <div v-for="ref in (group.refs || [])"
+                            :key="ref.nodeId"
+                            class="reference-item"
+                          >
+                            <div class="reference-info">
+                              <div class="reference-name">{{ ref.nodeName || ref.name || 'Unnamed Node' }}</div>
+                              <div class="reference-location">{{ ref.location || 'Unknown Location' }}</div>
+                              <div v-if="ref.variableName" class="reference-variable text-brand font-medium mt-xs">{{ ref.variableName }}</div>
+                            </div>
+                            <div class="reference-actions">
+                              <button class="button secondary-button small" @click="selectNode(ref.nodeId, $event)">
+                                Select
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+
+        <!-- Unlinked values flow (existing UI) -->
+        <div v-else-if="activeView === 'unlinked-values'" class="results-section">
           <!-- Remove tab-based content wrapper and show content directly -->
           <!-- Scan Type Selection -->
           <div class="step-container">
             <div class="step-content">
-              <!-- 1. Title -->
               <div class="step-title-row">
                 <h3 class="step-title">Choose what to scan for</h3>
-                <button 
-                  class="secondary-button"
-                  @click="refreshPlugin"
-                  aria-label="Refresh UI"
-                  title="Refresh UI"
-                >
-                  refresh
-                </button>
+                <div class="action-buttons">
+                  <button
+                    class="button secondary-button"
+                    @click="goHome"
+                    aria-label="Back"
+                    title="Back"
+                  >
+                    Back
+                  </button>
+                  <button
+                    class="button secondary-button"
+                    @click="refreshPlugin"
+                    aria-label="Refresh UI"
+                    title="Refresh UI"
+                  >
+                    Refresh
+                  </button>
+                </div>
               </div>
 
               <!-- 2. Scan Settings dropdown -->
