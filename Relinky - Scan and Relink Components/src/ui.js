@@ -126,8 +126,8 @@ function initializeApp() {
     },
     data() {
       return {
-        // Tabs
-        activeTab: 'unlinked-values',
+        // Start screen navigation
+        activeView: 'start', // 'start' | 'unlinked-values' | 'unlinked-tokens' | 'select-components'
 
         // Make icons available to all templates
         icons,
@@ -152,6 +152,7 @@ function initializeApp() {
         showSettings: false,
         scanEntirePage: false,
         skipInstances: false,
+        ignoreHiddenLayers: false,
         // Initialize groupedReferences as an empty object
         groupedReferences: {},
         // Initialize expandedGroups as a new Set
@@ -372,7 +373,7 @@ function initializeApp() {
           hasFilteredResults,
           forceShow,
           filteredResultsCount: Object.keys(this.filteredResults || {}).length,
-          activeTab: this.activeTab,
+          activeView: this.activeView,
           scanType: this.scanType
         });
         
@@ -717,6 +718,30 @@ function initializeApp() {
       },
     },
     methods: {
+      openView(view) {
+        // Reset UI state between entry points
+        this.clearResults();
+        this.clearComponentResults();
+
+        if (view === 'unlinked-values') {
+          this.selectedSourceType = 'raw-values';
+          this.selectedScanType = null;
+        }
+
+        if (view === 'unlinked-tokens') {
+          // Uses the broken-variable-references scan
+          this.selectedSourceType = 'missing-library';
+          this.selectedScanType = null;
+        }
+
+        this.activeView = view;
+      },
+
+      goHome() {
+        this.clearResults();
+        this.clearComponentResults();
+        this.activeView = 'start';
+      },
       refreshPlugin() {
         // Soft reset without reloading the iframe to avoid sandbox warnings
         // Reset core state
@@ -1298,21 +1323,9 @@ function initializeApp() {
         // You can implement a toast notification here
       },
 
-      switchTab(tab) {
-        // Stop any in-flight scans and clear tab-specific UI state
-        this.isScanning = false;
-        this.scanProgress = 0;
-        this.scanError = false;
-        this.scanComplete = false;
-        this.groupedReferences = {};
-        this.expandedGroups = new Set();
-        this.selectedLibraryFilterTypes = [];
-
-        this.isComponentScanning = false;
-        this.componentScanProgress = 0;
-        this.componentScanResult = null;
-
-        this.activeTab = tab;
+      // Backwards compatibility (if any old code still calls switchTab)
+      switchTab(view) {
+        this.openView(view);
       },
 
       startUnlinkedTokensScan() {
