@@ -126,6 +126,9 @@ function initializeApp() {
     },
     data() {
       return {
+        // Tabs
+        activeTab: 'unlinked-values',
+
         // Make icons available to all templates
         icons,
         // UI state
@@ -180,6 +183,13 @@ function initializeApp() {
         selectedVariableTypeFilter: 'all',
         showVariableTypeFilters: false,
         availableVariableTypes: [],
+
+        // Select components tab state
+        componentScanMatch: 'default', // 'default' | 'modified'
+        componentScanScope: 'page', // 'page' | 'file'
+        isComponentScanning: false,
+        componentScanProgress: 0,
+        componentScanResult: null,
 
         // Add tokenScanOptions array
         tokenScanOptions: [
@@ -1289,14 +1299,144 @@ function initializeApp() {
       },
 
       switchTab(tab) {
-        // Clean up previous tab state
+        // Stop any in-flight scans and clear tab-specific UI state
         this.isScanning = false;
         this.scanProgress = 0;
         this.scanError = false;
         this.scanComplete = false;
         this.groupedReferences = {};
-        
+        this.expandedGroups = new Set();
+        this.selectedLibraryFilterTypes = [];
+
+        this.isComponentScanning = false;
+        this.componentScanProgress = 0;
+        this.componentScanResult = null;
+
         this.activeTab = tab;
+      },
+
+      startUnlinkedTokensScan() {
+        // Uses the existing broken-variable-references backend.
+        // This scan respects selection vs scanEntirePage, using selectedFrameIds already tracked.
+        this.isScanning = true;
+        this.scanProgress = 0;
+        this.actualProgress = 0;
+        this.scanStartTime = Date.now();
+        this.startProgressAnimation();
+
+        // Clear previous results
+        this.groupedReferences = {};
+        this.expandedGroups = new Set();
+        this.scanComplete = false;
+        this.selectedLibraryFilterTypes = [];
+
+        try {
+          parent.postMessage({
+            pluginMessage: this.makeSerializable({
+              type: 'scan-for-tokens',
+              scanType: 'fill',
+              scanEntirePage: this.scanEntirePage,
+              selectedFrameIds: this.scanEntirePage ? [] : (this.selectedFrameIds || []),
+              ignoreHiddenLayers: this.ignoreHiddenLayers,
+              skipInstances: this.skipInstances,
+              isRescan: false,
+              isLibraryVariableScan: true,
+              sourceType: 'missing-library',
+              variableTypes: []
+            })
+          }, '*');
+        } catch (error) {
+          console.error('Failed to start unlinked token scan:', error);
+          this.isScanning = false;
+          this.showError('Failed to start scan');
+        }
+      },
+
+      startComponentScan() {
+        this.isComponentScanning = true;
+        this.componentScanProgress = 0;
+        this.componentScanResult = null;
+
+        try {
+          parent.postMessage({
+            pluginMessage: this.makeSerializable({
+              type: 'scan-similar-components',
+              match: this.componentScanMatch,
+              scope: this.componentScanScope
+            })
+          }, '*');
+        } catch (error) {
+          console.error('Failed to start component scan:', error);
+          this.isComponentScanning = false;
+          this.showError('Failed to start component scan');
+        }
+      },
+
+      stopComponentScan() {
+        this.isComponentScanning = false;
+        try {
+          parent.postMessage({
+            pluginMessage: { type: 'stop-similar-components-scan' }
+          }, '*');
+        } catch (error) {
+          console.warn('Failed to send stop component scan message:', error);
+        }
+      },
+
+      clearComponentResults() {
+        this.componentScanResult = null;
+        this.componentScanProgress = 0;
+        this.isComponentScanning = false;
+      },
+
+      selectComponentScanPage(pageId) {
+        if (!this.componentScanResult || !Array.isArray(this.componentScanResult.pages)) {
+          return;
+        }
+
+        const page = this.componentScanResult.pages.find(p => p.pageId === pageId);
+        if (!page || !Array.isArray(page.nodeIds) || page.nodeIds.length === 0) {
+          return;
+        }
+
+        parent.postMessage({
+          pluginMessage: {
+            type: 'select-similar-components',
+            pageId,
+            nodeIds: page.nodeIds
+          }
+        }, '*');
+      },
+
+      selectComponentScanAll() {
+        if (!this.componentScanResult || !Array.isArray(this.componentScanResult.nodeIds) || this.componentScanResult.nodeIds.length === 0) {
+          return;
+        }
+
+        parent.postMessage({
+          pluginMessage: {
+            type: 'select-similar-components',
+            pageId: this.componentScanResult.pageId,
+            nodeIds: this.componentScanResult.nodeIds
+          }
+        }, '*');
+      },
+
+      selectComponentScanNode(nodeId, event) {
+        if (event) {
+          event.stopPropagation();
+        }
+
+        if (!nodeId) {
+          return;
+        }
+
+        parent.postMessage({
+          pluginMessage: {
+            type: 'select-node',
+            nodeId
+          }
+        }, '*');
       },
 
       getProgressStatus() {
@@ -1459,6 +1599,27 @@ function initializeApp() {
             setTimeout(() => { this.showSuccessToast = false; }, 3000);
             break;
 
+          case 'similar-components-scan-started':
+            this.isComponentScanning = true;
+            this.componentScanProgress = 0;
+            this.componentScanResult = null;
+            break;
+          case 'similar-components-scan-progress':
+            if (typeof data.progress === 'number') {
+              this.componentScanProgress = Math.min(100, Math.max(0, data.progress));
+            }
+            break;
+          case 'similar-components-scan-complete':
+            this.isComponentScanning = false;
+            this.componentScanProgress = 100;
+            this.componentScanResult = data.result || null;
+            break;
+          case 'similar-components-scan-error':
+            this.isComponentScanning = false;
+            this.componentScanProgress = 0;
+            this.showError(data.message || 'Component scan failed');
+            break;
+
           case 'resize':
             if (data.width && data.height) {
               const width = Number(data.width);
@@ -1484,8 +1645,8 @@ function initializeApp() {
         // The references are already grouped by the scanner, just use them directly
         this.groupedReferences = msg.references;
         
-        // Ensure we know it's a deleted variables scan
-        this.scanType = 'deleted-variables';
+        // Ensure we know which scan type produced these
+        this.scanType = msg.sourceType || 'deleted-variables';
         this.isLibraryVariableScan = true;
         
         // Update scan completion state

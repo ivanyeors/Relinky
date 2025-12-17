@@ -18,6 +18,9 @@ let currentWindowSize = {
   height: 600
 };
 
+// Cancellation flag for "scan similar component by selection"
+let similarComponentsScanCancelled = false;
+
 // Document state type definition
 interface DocumentState {
   isWatching: boolean;
@@ -444,6 +447,25 @@ interface StopVariableScanMessage {
   type: 'stop-variable-scan';
 }
 
+type SimilarComponentsMatch = 'modified' | 'default';
+type SimilarComponentsScope = 'page' | 'file';
+
+interface ScanSimilarComponentsMessage {
+  type: 'scan-similar-components';
+  match: SimilarComponentsMatch;
+  scope: SimilarComponentsScope;
+}
+
+interface StopSimilarComponentsScanMessage {
+  type: 'stop-similar-components-scan';
+}
+
+interface SelectSimilarComponentsMessage {
+  type: 'select-similar-components';
+  pageId?: string;
+  nodeIds: string[];
+}
+
 type PluginMessage = 
   | ScanForTokensMessage
   | UnbindNodeVariableMessage
@@ -472,7 +494,224 @@ type PluginMessage =
   | GroupResultsMessage
   | SelectVariableNodesMessage
   | SelectVariableGroupNodesMessage
-  | StopVariableScanMessage;
+  | StopVariableScanMessage
+  | ScanSimilarComponentsMessage
+  | StopSimilarComponentsScanMessage
+  | SelectSimilarComponentsMessage;
+
+function isInstanceModified(instance: InstanceNode): boolean {
+  const overrides = (instance as unknown as { overrides?: unknown }).overrides;
+  if (Array.isArray(overrides) && overrides.length > 0) {
+    return true;
+  }
+  return false;
+}
+
+async function getTargetComponentFromSelection(): Promise<{ componentId: string; componentName: string }> {
+  const selection = figma.currentPage.selection;
+
+  if (selection.length !== 1) {
+    throw new Error('Select exactly 1 component or instance');
+  }
+
+  const node = selection[0];
+
+  if (node.type === 'COMPONENT') {
+    return { componentId: node.id, componentName: node.name };
+  }
+
+  if (node.type === 'INSTANCE') {
+    const main = await node.getMainComponentAsync();
+    if (!main) {
+      throw new Error('Could not resolve the main component for this instance');
+    }
+    return { componentId: main.id, componentName: main.name };
+  }
+
+  if (node.type === 'COMPONENT_SET') {
+    throw new Error('Select a component variant (or an instance), not a component set');
+  }
+
+  throw new Error('Select a component or an instance');
+}
+
+async function scanSimilarComponents(params: { match: SimilarComponentsMatch; scope: SimilarComponentsScope }) {
+  similarComponentsScanCancelled = false;
+
+  figma.ui.postMessage({ type: 'similar-components-scan-started' });
+
+  const { componentId: targetComponentId, componentName } = await getTargetComponentFromSelection();
+
+  const shouldInclude = (instance: InstanceNode): boolean => {
+    const modified = isInstanceModified(instance);
+    return params.match === 'modified' ? modified : !modified;
+  };
+
+  if (params.scope === 'file') {
+    await figma.loadAllPagesAsync();
+    const pages = figma.root.children.filter((p): p is PageNode => p.type === 'PAGE');
+    const pageResults: Array<{ pageId: string; pageName: string; count: number; nodeIds: string[] }> = [];
+
+    let processed = 0;
+    const totalPages = pages.length || 1;
+
+    for (const page of pages) {
+      if (similarComponentsScanCancelled) {
+        figma.ui.postMessage({ type: 'similar-components-scan-cancelled' });
+        return;
+      }
+
+      const instances = page.findAll(n => n.type === 'INSTANCE') as InstanceNode[];
+      const matchedNodeIds: string[] = [];
+
+      for (const instance of instances) {
+        if (similarComponentsScanCancelled) {
+          figma.ui.postMessage({ type: 'similar-components-scan-cancelled' });
+          return;
+        }
+
+        let mainComponentId = instance.mainComponent?.id;
+        if (!mainComponentId) {
+          try {
+            const main = await instance.getMainComponentAsync();
+            mainComponentId = main?.id;
+          } catch {
+            // ignore
+          }
+        }
+
+        if (mainComponentId !== targetComponentId) {
+          continue;
+        }
+
+        if (!shouldInclude(instance)) {
+          continue;
+        }
+
+        matchedNodeIds.push(instance.id);
+      }
+
+      if (matchedNodeIds.length > 0) {
+        pageResults.push({
+          pageId: page.id,
+          pageName: page.name,
+          count: matchedNodeIds.length,
+          nodeIds: matchedNodeIds
+        });
+      }
+
+      processed += 1;
+      const progress = Math.round((processed / totalPages) * 100);
+      figma.ui.postMessage({ type: 'similar-components-scan-progress', progress });
+    }
+
+    const totalCount = pageResults.reduce((sum, p) => sum + p.count, 0);
+
+    figma.ui.postMessage({
+      type: 'similar-components-scan-complete',
+      result: {
+        scope: 'file',
+        match: params.match,
+        targetComponentId,
+        targetComponentName: componentName,
+        totalCount,
+        pages: pageResults
+      }
+    });
+    return;
+  }
+
+  // scope === 'page'
+  const page = figma.currentPage;
+  const instances = page.findAll(n => n.type === 'INSTANCE') as InstanceNode[];
+  const nodes: Array<{ nodeId: string; nodeName: string; location: string }> = [];
+  const nodeIds: string[] = [];
+
+  const total = instances.length || 1;
+  let index = 0;
+
+  for (const instance of instances) {
+    if (similarComponentsScanCancelled) {
+      figma.ui.postMessage({ type: 'similar-components-scan-cancelled' });
+      return;
+    }
+
+    index += 1;
+
+    let mainComponentId = instance.mainComponent?.id;
+    if (!mainComponentId) {
+      try {
+        const main = await instance.getMainComponentAsync();
+        mainComponentId = main?.id;
+      } catch {
+        // ignore
+      }
+    }
+
+    if (mainComponentId !== targetComponentId) {
+      continue;
+    }
+
+    if (!shouldInclude(instance)) {
+      continue;
+    }
+
+    nodeIds.push(instance.id);
+    nodes.push({
+      nodeId: instance.id,
+      nodeName: instance.name,
+      location: getNodeLocation(instance)
+    });
+
+    if (index % 50 === 0) {
+      const progress = Math.round((index / total) * 100);
+      figma.ui.postMessage({ type: 'similar-components-scan-progress', progress });
+    }
+  }
+
+  figma.ui.postMessage({ type: 'similar-components-scan-progress', progress: 100 });
+  figma.ui.postMessage({
+    type: 'similar-components-scan-complete',
+    result: {
+      scope: 'page',
+      match: params.match,
+      targetComponentId,
+      targetComponentName: componentName,
+      pageId: page.id,
+      pageName: page.name,
+      totalCount: nodeIds.length,
+      nodeIds,
+      nodes
+    }
+  });
+}
+
+async function selectSimilarComponentsOnPage(pageId: string | undefined, nodeIds: string[]) {
+  if (!Array.isArray(nodeIds) || nodeIds.length === 0) {
+    throw new Error('No nodes to select');
+  }
+
+  if (pageId) {
+    await figma.loadAllPagesAsync();
+    const targetPage = figma.root.children.find((p): p is PageNode => p.type === 'PAGE' && p.id === pageId);
+    if (targetPage) {
+      figma.currentPage = targetPage;
+    }
+  }
+
+  const nodes = await Promise.all(nodeIds.map(id => figma.getNodeByIdAsync(id)));
+  const validNodes = nodes.filter((node: BaseNode | null): node is SceneNode =>
+    node !== null && 'type' in node && node.type !== 'DOCUMENT'
+  );
+
+  if (validNodes.length === 0) {
+    throw new Error('No valid nodes found to select');
+  }
+
+  figma.currentPage.selection = validNodes;
+  figma.viewport.scrollAndZoomIntoView(validNodes);
+  figma.ui.postMessage({ type: 'nodes-selected', success: true, count: validNodes.length });
+}
 
 // Function to handle scanning
 async function handleScan(params: ScanForTokensMessage): Promise<void> {
@@ -546,6 +785,12 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
     figma.ui.postMessage({ 
       type: 'scan-cancelled'
     });
+    return;
+  }
+
+  // Stop "scan similar component by selection"
+  if (msg.type === 'stop-similar-components-scan') {
+    similarComponentsScanCancelled = true;
     return;
   }
 
@@ -637,6 +882,33 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
     // if (!isRescan && !scanners.isScancelled()) {
     //   startWatchingDocument(msg.scanType as common.ScanType, msg.scanEntirePage);
     // }
+  }
+
+  // Scan similar component by selection
+  if (msg.type === 'scan-similar-components') {
+    try {
+      await scanSimilarComponents({ match: msg.match, scope: msg.scope });
+    } catch (error: any) {
+      console.error('Error scanning similar components:', error);
+      figma.ui.postMessage({
+        type: 'similar-components-scan-error',
+        message: error?.message || 'Failed to scan similar components'
+      });
+    }
+  }
+
+  // Select similar components (optionally across pages)
+  if (msg.type === 'select-similar-components') {
+    try {
+      await selectSimilarComponentsOnPage(msg.pageId, msg.nodeIds);
+    } catch (error: any) {
+      console.error('Error selecting similar components:', error);
+      figma.ui.postMessage({
+        type: 'nodes-selected',
+        success: false,
+        error: error?.message || 'Failed to select nodes'
+      });
+    }
   }
 
   // Handle watch document requests

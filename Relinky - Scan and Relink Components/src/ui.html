@@ -23,11 +23,248 @@
       <div class="content-section">
         <!-- Tab Navigation -->
         <div class="tab-navigation">
-          <!-- Removed relink tab button -->
+          <button
+            class="tab-button"
+            :class="{ active: activeTab === 'unlinked-values' }"
+            @click="switchTab('unlinked-values')"
+            tabindex="0"
+            aria-label="Unlinked values"
+          >
+            <span>Unlinked values</span>
+          </button>
+          <button
+            class="tab-button"
+            :class="{ active: activeTab === 'unlinked-tokens' }"
+            @click="switchTab('unlinked-tokens')"
+            tabindex="0"
+            aria-label="Unlinked tokens"
+          >
+            <span>Unlinked tokens</span>
+          </button>
+          <button
+            class="tab-button"
+            :class="{ active: activeTab === 'select-components' }"
+            @click="switchTab('select-components')"
+            tabindex="0"
+            aria-label="Select components"
+          >
+            <span>Select components</span>
+          </button>
         </div>
 
         <!-- Section content -->
-        <div class="results-section">
+        <div v-if="activeTab === 'select-components'" class="results-section">
+          <div class="step-container">
+            <div class="step-content">
+              <h3 class="step-title">Scan similar component by selection</h3>
+
+              <div class="scan-results-description p-2 rounded m-2 mb-3 bg-secondary">
+                <p class="text-secondary">
+                  Select a component (or an instance) in Figma, then choose what to match and where to scan.
+                </p>
+              </div>
+
+              <div class="scan-cards">
+                <div class="scan-card-section-divider">Match</div>
+                <div
+                  class="scan-card"
+                  :class="{ 'selected': componentScanMatch === 'default', 'interactive': true }"
+                  role="option"
+                  :aria-selected="componentScanMatch === 'default'"
+                  tabindex="0"
+                  @click="componentScanMatch = 'default'"
+                  @keydown.enter.prevent="componentScanMatch = 'default'"
+                  @keydown.space.prevent="componentScanMatch = 'default'"
+                >
+                  <div class="scan-card-content">
+                    <div class="scan-card-text">
+                      <div class="scan-card-title">Default</div>
+                      <div class="scan-card-description">Only instances with no overrides</div>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  class="scan-card"
+                  :class="{ 'selected': componentScanMatch === 'modified', 'interactive': true }"
+                  role="option"
+                  :aria-selected="componentScanMatch === 'modified'"
+                  tabindex="0"
+                  @click="componentScanMatch = 'modified'"
+                  @keydown.enter.prevent="componentScanMatch = 'modified'"
+                  @keydown.space.prevent="componentScanMatch = 'modified'"
+                >
+                  <div class="scan-card-content">
+                    <div class="scan-card-text">
+                      <div class="scan-card-title">Modified</div>
+                      <div class="scan-card-description">Only instances with overrides</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="scan-cards">
+                <div class="scan-card-section-divider">Scope</div>
+                <div
+                  class="scan-card"
+                  :class="{ 'selected': componentScanScope === 'page', 'interactive': true }"
+                  role="option"
+                  :aria-selected="componentScanScope === 'page'"
+                  tabindex="0"
+                  @click="componentScanScope = 'page'"
+                  @keydown.enter.prevent="componentScanScope = 'page'"
+                  @keydown.space.prevent="componentScanScope = 'page'"
+                >
+                  <div class="scan-card-content">
+                    <div class="scan-card-text">
+                      <div class="scan-card-title">Entire page</div>
+                      <div class="scan-card-description">Scan current page only</div>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  class="scan-card"
+                  :class="{ 'selected': componentScanScope === 'file', 'interactive': true }"
+                  role="option"
+                  :aria-selected="componentScanScope === 'file'"
+                  tabindex="0"
+                  @click="componentScanScope = 'file'"
+                  @keydown.enter.prevent="componentScanScope = 'file'"
+                  @keydown.space.prevent="componentScanScope = 'file'"
+                >
+                  <div class="scan-card-content">
+                    <div class="scan-card-text">
+                      <div class="scan-card-title">Entire file</div>
+                      <div class="scan-card-description">Scan all pages (slower)</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="divider"></div>
+
+              <div class="step-container">
+                <div class="step-content">
+                  <h3 class="step-title">Start scanning</h3>
+
+                  <div class="progress-container">
+                    <div class="progress-bar" :class="{ 'scanning': isComponentScanning }">
+                      <div
+                        class="progress-fill"
+                        :style="{
+                          width: `${componentScanProgress}%`,
+                          background: isComponentScanning ? 'var(--figma-color-bg-brand)' : 'var(--figma-color-bg-disabled)'
+                        }"
+                      ></div>
+                      <span class="progress-text">
+                        {{ isComponentScanning ? `Scanning... ${Math.round(componentScanProgress)}%` : 'Ready to scan' }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div class="scan-buttons">
+                    <button
+                      v-if="!isComponentScanning"
+                      class="button primary-button"
+                      @click="startComponentScan"
+                      :disabled="isComponentScanning"
+                      title="Select a component in Figma, then scan"
+                    >
+                      Scan
+                    </button>
+                    <button
+                      v-if="isComponentScanning"
+                      class="button warning-button"
+                      @click="stopComponentScan"
+                    >
+                      Stop
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <template v-if="componentScanResult">
+                <div class="divider"></div>
+
+                <div class="step-container">
+                  <div class="step-content">
+                    <div class="results-header">
+                      <div class="step-title-with-badge">
+                        <h3 class="step-title">Results</h3>
+                        <span class="results-badge">{{ (componentScanResult.totalCount || 0).toLocaleString() }}</span>
+                      </div>
+                      <div class="action-buttons">
+                        <button class="button secondary-button" @click="clearComponentResults">Clear</button>
+                      </div>
+                    </div>
+
+                    <!-- Entire file: list pages -->
+                    <div v-if="componentScanResult.scope === 'file'" class="results-container">
+                      <div
+                        v-for="page in componentScanResult.pages"
+                        :key="page.pageId"
+                        class="reference-item"
+                      >
+                        <div class="reference-info">
+                          <div class="reference-name">{{ page.pageName }}</div>
+                          <div class="reference-location">{{ page.count }} instance{{ page.count === 1 ? '' : 's' }}</div>
+                        </div>
+                        <div class="reference-actions">
+                          <button
+                            class="button secondary-button small"
+                            @click="selectComponentScanPage(page.pageId)"
+                            :disabled="!page.nodeIds || page.nodeIds.length === 0"
+                          >
+                            Select
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Entire page: list nodes -->
+                    <div v-else class="results-container">
+                      <div class="value-group">
+                        <div class="value-group-header">
+                          <div class="group-info">
+                            <span class="label instance-count">{{ componentScanResult.totalCount }}×</span>
+                            <span class="scan-card-title">{{ componentScanResult.targetComponentName }}</span>
+                          </div>
+                          <div class="group-actions">
+                            <button
+                              class="button secondary-button small"
+                              @click="selectComponentScanAll"
+                              :disabled="!componentScanResult.nodeIds || componentScanResult.nodeIds.length === 0"
+                            >
+                              Select all
+                            </button>
+                          </div>
+                        </div>
+                        <div class="value-group-details">
+                          <div
+                            v-for="node in componentScanResult.nodes"
+                            :key="node.nodeId"
+                            class="reference-item"
+                          >
+                            <div class="reference-info">
+                              <div class="reference-name">{{ node.nodeName }}</div>
+                              <div class="reference-location">{{ node.location }}</div>
+                            </div>
+                            <div class="reference-actions">
+                              <button class="button secondary-button small" @click="selectComponentScanNode(node.nodeId, $event)">
+                                Select
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+
+        <div v-else class="results-section">
           <!-- Remove tab-based content wrapper and show content directly -->
           <!-- Scan Type Selection -->
           <div class="step-container">
