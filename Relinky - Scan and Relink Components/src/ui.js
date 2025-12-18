@@ -126,6 +126,9 @@ function initializeApp() {
     },
     data() {
       return {
+        // Start screen navigation
+        activeView: 'start', // 'start' | 'unlinked-values' | 'unlinked-tokens' | 'select-components'
+
         // Make icons available to all templates
         icons,
         // UI state
@@ -149,6 +152,7 @@ function initializeApp() {
         showSettings: false,
         scanEntirePage: false,
         skipInstances: false,
+        ignoreHiddenLayers: false,
         // Initialize groupedReferences as an empty object
         groupedReferences: {},
         // Initialize expandedGroups as a new Set
@@ -180,6 +184,17 @@ function initializeApp() {
         selectedVariableTypeFilter: 'all',
         showVariableTypeFilters: false,
         availableVariableTypes: [],
+
+        // Select components tab state
+        componentScanMatch: 'default', // 'default' | 'modified'
+        componentScanScope: 'page', // 'page' | 'file'
+        isComponentScanning: false,
+        componentScanProgress: 0,
+        componentScanResult: null,
+        componentScanSelection: {
+          isValid: false,
+          label: 'No selection'
+        },
 
         // Add tokenScanOptions array
         tokenScanOptions: [
@@ -362,7 +377,7 @@ function initializeApp() {
           hasFilteredResults,
           forceShow,
           filteredResultsCount: Object.keys(this.filteredResults || {}).length,
-          activeTab: this.activeTab,
+          activeView: this.activeView,
           scanType: this.scanType
         });
         
@@ -707,6 +722,37 @@ function initializeApp() {
       },
     },
     methods: {
+      openView(view) {
+        // Reset UI state between entry points
+        this.clearResults();
+        this.clearComponentResults();
+
+        if (view === 'unlinked-values') {
+          this.selectedSourceType = 'raw-values';
+          this.selectedScanType = null;
+        }
+
+        if (view === 'unlinked-tokens') {
+          // Uses the broken-variable-references scan
+          this.selectedSourceType = 'missing-library';
+          this.selectedScanType = null;
+        }
+
+        this.activeView = view;
+
+        // Refresh selection state so the "Selected:" label updates immediately
+        try {
+          parent.postMessage({ pluginMessage: { type: 'get-selected-frame-ids' } }, '*');
+        } catch (error) {
+          console.warn('Failed to request selection state:', error);
+        }
+      },
+
+      goHome() {
+        this.clearResults();
+        this.clearComponentResults();
+        this.activeView = 'start';
+      },
       refreshPlugin() {
         // Soft reset without reloading the iframe to avoid sandbox warnings
         // Reset core state
@@ -1288,15 +1334,139 @@ function initializeApp() {
         // You can implement a toast notification here
       },
 
-      switchTab(tab) {
-        // Clean up previous tab state
-        this.isScanning = false;
+      // Backwards compatibility (if any old code still calls switchTab)
+      switchTab(view) {
+        this.openView(view);
+      },
+
+      startUnlinkedTokensScan() {
+        // Uses the existing broken-variable-references backend.
+        // This scan respects selection vs scanEntirePage, using selectedFrameIds already tracked.
+        this.isScanning = true;
         this.scanProgress = 0;
-        this.scanError = false;
-        this.scanComplete = false;
+        this.actualProgress = 0;
+        this.scanStartTime = Date.now();
+        this.startProgressAnimation();
+
+        // Clear previous results
         this.groupedReferences = {};
-        
-        this.activeTab = tab;
+        this.expandedGroups = new Set();
+        this.scanComplete = false;
+        this.selectedLibraryFilterTypes = [];
+
+        try {
+          parent.postMessage({
+            pluginMessage: this.makeSerializable({
+              type: 'scan-for-tokens',
+              scanType: 'fill',
+              scanEntirePage: this.scanEntirePage,
+              selectedFrameIds: this.scanEntirePage ? [] : (this.selectedFrameIds || []),
+              ignoreHiddenLayers: this.ignoreHiddenLayers,
+              skipInstances: this.skipInstances,
+              isRescan: false,
+              isLibraryVariableScan: true,
+              sourceType: 'missing-library',
+              variableTypes: []
+            })
+          }, '*');
+        } catch (error) {
+          console.error('Failed to start unlinked token scan:', error);
+          this.isScanning = false;
+          this.showError('Failed to start scan');
+        }
+      },
+
+      startComponentScan() {
+        this.isComponentScanning = true;
+        this.componentScanProgress = 0;
+        this.componentScanResult = null;
+
+        if (!this.componentScanSelection?.isValid) {
+          this.isComponentScanning = false;
+          this.showError('Select a component or instance first');
+          return;
+        }
+
+        try {
+          parent.postMessage({
+            pluginMessage: this.makeSerializable({
+              type: 'scan-similar-components',
+              match: this.componentScanMatch,
+              scope: this.componentScanScope
+            })
+          }, '*');
+        } catch (error) {
+          console.error('Failed to start component scan:', error);
+          this.isComponentScanning = false;
+          this.showError('Failed to start component scan');
+        }
+      },
+
+      stopComponentScan() {
+        this.isComponentScanning = false;
+        try {
+          parent.postMessage({
+            pluginMessage: { type: 'stop-similar-components-scan' }
+          }, '*');
+        } catch (error) {
+          console.warn('Failed to send stop component scan message:', error);
+        }
+      },
+
+      clearComponentResults() {
+        this.componentScanResult = null;
+        this.componentScanProgress = 0;
+        this.isComponentScanning = false;
+      },
+
+      selectComponentScanPage(pageId) {
+        if (!this.componentScanResult || !Array.isArray(this.componentScanResult.pages)) {
+          return;
+        }
+
+        const page = this.componentScanResult.pages.find(p => p.pageId === pageId);
+        if (!page || !Array.isArray(page.nodeIds) || page.nodeIds.length === 0) {
+          return;
+        }
+
+        parent.postMessage({
+          pluginMessage: {
+            type: 'select-similar-components',
+            pageId,
+            nodeIds: page.nodeIds
+          }
+        }, '*');
+      },
+
+      selectComponentScanAll() {
+        if (!this.componentScanResult || !Array.isArray(this.componentScanResult.nodeIds) || this.componentScanResult.nodeIds.length === 0) {
+          return;
+        }
+
+        parent.postMessage({
+          pluginMessage: {
+            type: 'select-similar-components',
+            pageId: this.componentScanResult.pageId,
+            nodeIds: this.componentScanResult.nodeIds
+          }
+        }, '*');
+      },
+
+      selectComponentScanNode(nodeId, event) {
+        if (event) {
+          event.stopPropagation();
+        }
+
+        if (!nodeId) {
+          return;
+        }
+
+        parent.postMessage({
+          pluginMessage: {
+            type: 'select-node',
+            nodeId
+          }
+        }, '*');
       },
 
       getProgressStatus() {
@@ -1387,6 +1557,29 @@ function initializeApp() {
             } else if (Array.isArray(data.ids)) {
               this.selectedFrameIds = data.ids;
             }
+
+            if (data.similarComponentSelection && typeof data.similarComponentSelection === 'object') {
+              this.componentScanSelection = data.similarComponentSelection;
+            } else {
+              this.componentScanSelection = { isValid: false, label: 'No selection' };
+            }
+            break;
+          case 'selected-frame-ids':
+            this.hasSelection = data.hasSelection === true;
+            this.selectedCount = data.count || 0;
+            this.hasInstances = data.hasInstances === true;
+
+            if (Array.isArray(data.selectedFrameIds)) {
+              this.selectedFrameIds = data.selectedFrameIds;
+            } else if (Array.isArray(data.ids)) {
+              this.selectedFrameIds = data.ids;
+            }
+
+            if (data.similarComponentSelection && typeof data.similarComponentSelection === 'object') {
+              this.componentScanSelection = data.similarComponentSelection;
+            } else {
+              this.componentScanSelection = { isValid: false, label: 'No selection' };
+            }
             break;
           case 'scan-started':
             console.log('Scan started:', data);
@@ -1459,6 +1652,27 @@ function initializeApp() {
             setTimeout(() => { this.showSuccessToast = false; }, 3000);
             break;
 
+          case 'similar-components-scan-started':
+            this.isComponentScanning = true;
+            this.componentScanProgress = 0;
+            this.componentScanResult = null;
+            break;
+          case 'similar-components-scan-progress':
+            if (typeof data.progress === 'number') {
+              this.componentScanProgress = Math.min(100, Math.max(0, data.progress));
+            }
+            break;
+          case 'similar-components-scan-complete':
+            this.isComponentScanning = false;
+            this.componentScanProgress = 100;
+            this.componentScanResult = data.result || null;
+            break;
+          case 'similar-components-scan-error':
+            this.isComponentScanning = false;
+            this.componentScanProgress = 0;
+            this.showError(data.message || 'Component scan failed');
+            break;
+
           case 'resize':
             if (data.width && data.height) {
               const width = Number(data.width);
@@ -1484,8 +1698,8 @@ function initializeApp() {
         // The references are already grouped by the scanner, just use them directly
         this.groupedReferences = msg.references;
         
-        // Ensure we know it's a deleted variables scan
-        this.scanType = 'deleted-variables';
+        // Ensure we know which scan type produced these
+        this.scanType = msg.sourceType || 'deleted-variables';
         this.isLibraryVariableScan = true;
         
         // Update scan completion state
