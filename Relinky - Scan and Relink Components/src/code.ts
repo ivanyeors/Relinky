@@ -66,14 +66,19 @@ async function getSimilarComponentSelectionInfo(): Promise<{
   }
 
   if (node.type === 'INSTANCE') {
-    const main = await node.getMainComponentAsync();
-    if (!main) {
-      return { isValid: false, label: 'Instance has no main component' };
-    }
     const instanceName = node.name?.trim() || 'Unnamed instance';
-    const mainName = main.name?.trim() || 'Unnamed component';
-    const label = instanceName === mainName ? mainName : `${instanceName} → ${mainName}`;
-    return { isValid: true, label, targetComponentId: main.id, targetComponentName: main.name };
+    try {
+      const main = await node.getMainComponentAsync();
+      if (!main) {
+        return { isValid: false, label: `${instanceName} (no main component)` };
+      }
+      const mainName = main.name?.trim() || 'Unnamed component';
+      const label = instanceName === mainName ? mainName : `${instanceName} → ${mainName}`;
+      return { isValid: true, label, targetComponentId: main.id, targetComponentName: main.name };
+    } catch (error) {
+      console.warn('Failed to resolve main component for selection', error);
+      return { isValid: false, label: `${instanceName} (can't resolve main component)` };
+    }
   }
 
   return { isValid: false, label: 'Select a component or instance' };
