@@ -5,7 +5,7 @@
   "main": "./dist/code.js",
   "capabilities": [],
   "enableProposedApi": false,
-  "documentAccess": "full",
+  "documentAccess": "dynamic-page",
   "editorType": [
     "figma"
   ],
