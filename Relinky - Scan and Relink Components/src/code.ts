@@ -18,6 +18,9 @@ let currentWindowSize = {
   height: 600
 };
 
+// Cancellation flag for "scan similar component by selection"
+let similarComponentsScanCancelled = false;
+
 // Document state type definition
 interface DocumentState {
   isWatching: boolean;
@@ -44,10 +47,47 @@ figma.showUI(__html__, {
 });
 
 // Initialize selection state
-(() => {
+async function getSimilarComponentSelectionInfo(): Promise<{
+  isValid: boolean;
+  label: string;
+  targetComponentId?: string;
+  targetComponentName?: string;
+}> {
+  const selection = figma.currentPage.selection;
+
+  if (selection.length !== 1) {
+    return { isValid: false, label: selection.length === 0 ? 'No selection' : 'Select exactly 1 component/instance' };
+  }
+
+  const node = selection[0];
+
+  if (node.type === 'COMPONENT') {
+    return { isValid: true, label: node.name, targetComponentId: node.id, targetComponentName: node.name };
+  }
+
+  if (node.type === 'INSTANCE') {
+    const instanceName = node.name?.trim() || 'Unnamed instance';
+    try {
+      const main = await node.getMainComponentAsync();
+      if (!main) {
+        return { isValid: false, label: `${instanceName} (no main component)` };
+      }
+      const mainName = main.name?.trim() || 'Unnamed component';
+      const label = instanceName === mainName ? mainName : `${instanceName} → ${mainName}`;
+      return { isValid: true, label, targetComponentId: main.id, targetComponentName: main.name };
+    } catch (error) {
+      console.warn('Failed to resolve main component for selection', error);
+      return { isValid: false, label: `${instanceName} (can't resolve main component)` };
+    }
+  }
+
+  return { isValid: false, label: 'Select a component or instance' };
+}
+
+(async () => {
   const selection = figma.currentPage.selection;
   const hasInstances = selection.some(node => node.type === 'INSTANCE');
-  const validSelection = selection.filter(node => 
+  const validSelection = selection.filter(node =>
     // Support ALL SceneNode types that can be meaningfully scanned
     node.type === 'FRAME' || 
     node.type === 'COMPONENT' || 
@@ -78,14 +118,22 @@ figma.showUI(__html__, {
   if (validSelection.length > 0) {
     lastSelectedFrameIds = validSelection.map(node => node.id);
   }
-  
+
+  let similarSelection = { isValid: false, label: 'No selection' } as Awaited<ReturnType<typeof getSimilarComponentSelectionInfo>>;
+  try {
+    similarSelection = await getSimilarComponentSelectionInfo();
+  } catch (error) {
+    console.warn('Failed to resolve similar component selection info (init)', error);
+  }
+
   // Send initial selection info to UI
-  figma.ui.postMessage({ 
+  figma.ui.postMessage({
     type: 'selection-update',
     hasSelection: validSelection.length > 0,
     count: validSelection.length,
     selectedFrameIds: validSelection.map(node => node.id),
-    hasInstances
+    hasInstances,
+    similarComponentSelection: similarSelection
   });
 })();
 
@@ -139,14 +187,22 @@ figma.on('selectionchange', async () => {
   if (validSelection.length > 0) {
     lastSelectedFrameIds = validSelection.map(node => node.id);
   }
-  
+
+  let similarSelection = { isValid: false, label: 'No selection' } as Awaited<ReturnType<typeof getSimilarComponentSelectionInfo>>;
+  try {
+    similarSelection = await getSimilarComponentSelectionInfo();
+  } catch (error) {
+    console.warn('Failed to resolve similar component selection info', error);
+  }
+
   // Send more detailed selection info to UI
-  figma.ui.postMessage({ 
+  figma.ui.postMessage({
     type: 'selection-update',
     hasSelection: validSelection.length > 0,
     count: validSelection.length,
     selectedFrameIds: validSelection.map(node => node.id),
-    hasInstances // Add this flag
+    hasInstances, // Add this flag
+    similarComponentSelection: similarSelection
   });
 });
 
@@ -444,6 +500,25 @@ interface StopVariableScanMessage {
   type: 'stop-variable-scan';
 }
 
+type SimilarComponentsMatch = 'modified' | 'default';
+type SimilarComponentsScope = 'page' | 'file';
+
+interface ScanSimilarComponentsMessage {
+  type: 'scan-similar-components';
+  match: SimilarComponentsMatch;
+  scope: SimilarComponentsScope;
+}
+
+interface StopSimilarComponentsScanMessage {
+  type: 'stop-similar-components-scan';
+}
+
+interface SelectSimilarComponentsMessage {
+  type: 'select-similar-components';
+  pageId?: string;
+  nodeIds: string[];
+}
+
 type PluginMessage = 
   | ScanForTokensMessage
   | UnbindNodeVariableMessage
@@ -472,7 +547,297 @@ type PluginMessage =
   | GroupResultsMessage
   | SelectVariableNodesMessage
   | SelectVariableGroupNodesMessage
-  | StopVariableScanMessage;
+  | StopVariableScanMessage
+  | ScanSimilarComponentsMessage
+  | StopSimilarComponentsScanMessage
+  | SelectSimilarComponentsMessage;
+
+function isComponentPropertyValueEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
+}
+
+function getComponentPropertyDefinitionsSafe(
+  mainComponent: ComponentNode
+): ComponentPropertyDefinitions {
+  const definitionOwner: BaseNode =
+    mainComponent.parent?.type === 'COMPONENT_SET' ? mainComponent.parent : mainComponent;
+
+  try {
+    // Figma API limitation: componentPropertyDefinitions can only be read from
+    // a COMPONENT_SET or a non-variant COMPONENT.
+    const defs = (definitionOwner as unknown as ComponentPropertiesMixin).componentPropertyDefinitions;
+    return defs || {};
+  } catch (error) {
+    console.warn('Failed to read componentPropertyDefinitions', {
+      mainComponentId: mainComponent.id,
+      mainComponentName: mainComponent.name,
+      definitionOwnerType: (definitionOwner as any)?.type,
+    }, error);
+    return {};
+  }
+}
+
+function isInstanceModifiedByComponentProperties(instance: InstanceNode, mainComponent: ComponentNode): boolean {
+  const definitions = getComponentPropertyDefinitionsSafe(mainComponent);
+  const instanceProps = instance.componentProperties;
+
+  // If there are no component properties defined, treat as default.
+  if (!definitions || Object.keys(definitions).length === 0) {
+    return false;
+  }
+
+  for (const [propertyName, definition] of Object.entries(definitions)) {
+    const instanceProp = instanceProps[propertyName];
+    if (!instanceProp) {
+      continue;
+    }
+
+    if (!isComponentPropertyValueEqual(instanceProp.value, definition.defaultValue)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+async function getTargetComponentFromSelection(): Promise<{ componentId: string; componentName: string }> {
+  const selection = figma.currentPage.selection;
+
+  if (selection.length !== 1) {
+    throw new Error('Select exactly 1 component or instance');
+  }
+
+  const node = selection[0];
+
+  if (node.type === 'COMPONENT') {
+    return { componentId: node.id, componentName: node.name };
+  }
+
+  if (node.type === 'INSTANCE') {
+    const main = await node.getMainComponentAsync();
+    if (!main) {
+      throw new Error('Could not resolve the main component for this instance');
+    }
+    return { componentId: main.id, componentName: main.name };
+  }
+
+  if (node.type === 'COMPONENT_SET') {
+    throw new Error('Select a component variant (or an instance), not a component set');
+  }
+
+  throw new Error('Select a component or an instance');
+}
+
+async function scanSimilarComponents(params: { match: SimilarComponentsMatch; scope: SimilarComponentsScope }) {
+  similarComponentsScanCancelled = false;
+
+  figma.ui.postMessage({ type: 'similar-components-scan-started' });
+
+  const { componentId: targetComponentId, componentName } = await getTargetComponentFromSelection();
+
+  const shouldInclude = (instance: InstanceNode): boolean => {
+    // This is set after we resolve main component + compare componentProperties.
+    // Default to include, then filter once we compute.
+    return true;
+  };
+
+  if (params.scope === 'file') {
+    await figma.loadAllPagesAsync();
+    const pages = figma.root.children.filter((p): p is PageNode => p.type === 'PAGE');
+    const pageResults: Array<{ pageId: string; pageName: string; count: number; nodeIds: string[] }> = [];
+
+    let processed = 0;
+    const totalPages = pages.length || 1;
+
+    for (const page of pages) {
+      if (similarComponentsScanCancelled) {
+        figma.ui.postMessage({ type: 'similar-components-scan-cancelled' });
+        return;
+      }
+
+      const instances = page.findAll(n => n.type === 'INSTANCE') as InstanceNode[];
+      const matchedNodeIds: string[] = [];
+
+      for (const instance of instances) {
+        if (similarComponentsScanCancelled) {
+          figma.ui.postMessage({ type: 'similar-components-scan-cancelled' });
+          return;
+        }
+
+        let mainComponent: ComponentNode | null = null;
+        try {
+          mainComponent = await instance.getMainComponentAsync();
+        } catch {
+          mainComponent = null;
+        }
+
+        if (!mainComponent || mainComponent.id !== targetComponentId) {
+          continue;
+        }
+
+        if (!shouldInclude(instance)) {
+          continue;
+        }
+
+        const isModified = isInstanceModifiedByComponentProperties(instance, mainComponent);
+        const includeByMatch = params.match === 'modified' ? isModified : !isModified;
+        if (!includeByMatch) {
+          continue;
+        }
+
+        matchedNodeIds.push(instance.id);
+      }
+
+      if (matchedNodeIds.length > 0) {
+        pageResults.push({
+          pageId: page.id,
+          pageName: page.name,
+          count: matchedNodeIds.length,
+          nodeIds: matchedNodeIds
+        });
+      }
+
+      processed += 1;
+      const progress = Math.round((processed / totalPages) * 100);
+      figma.ui.postMessage({ type: 'similar-components-scan-progress', progress });
+    }
+
+    const totalCount = pageResults.reduce((sum, p) => sum + p.count, 0);
+
+    figma.ui.postMessage({
+      type: 'similar-components-scan-complete',
+      result: {
+        scope: 'file',
+        match: params.match,
+        targetComponentId,
+        targetComponentName: componentName,
+        totalCount,
+        pages: pageResults
+      }
+    });
+    return;
+  }
+
+  // scope === 'page'
+  const page = figma.currentPage;
+  const instances = page.findAll(n => n.type === 'INSTANCE') as InstanceNode[];
+  const nodes: Array<{ nodeId: string; nodeName: string; location: string }> = [];
+  const nodeIds: string[] = [];
+
+  const total = instances.length || 1;
+  let index = 0;
+
+  for (const instance of instances) {
+    if (similarComponentsScanCancelled) {
+      figma.ui.postMessage({ type: 'similar-components-scan-cancelled' });
+      return;
+    }
+
+    index += 1;
+
+    let mainComponent: ComponentNode | null = null;
+    try {
+      mainComponent = await instance.getMainComponentAsync();
+    } catch {
+      mainComponent = null;
+    }
+
+    if (!mainComponent || mainComponent.id !== targetComponentId) {
+      continue;
+    }
+
+    const isModified = isInstanceModifiedByComponentProperties(instance, mainComponent);
+    const includeByMatch = params.match === 'modified' ? isModified : !isModified;
+    if (!includeByMatch) {
+      continue;
+    }
+
+    nodeIds.push(instance.id);
+    nodes.push({
+      nodeId: instance.id,
+      nodeName: instance.name,
+      location: getNodeLocation(instance)
+    });
+
+    if (index % 50 === 0) {
+      const progress = Math.round((index / total) * 100);
+      figma.ui.postMessage({ type: 'similar-components-scan-progress', progress });
+    }
+  }
+
+  figma.ui.postMessage({ type: 'similar-components-scan-progress', progress: 100 });
+  figma.ui.postMessage({
+    type: 'similar-components-scan-complete',
+    result: {
+      scope: 'page',
+      match: params.match,
+      targetComponentId,
+      targetComponentName: componentName,
+      pageId: page.id,
+      pageName: page.name,
+      totalCount: nodeIds.length,
+      nodeIds,
+      nodes
+    }
+  });
+}
+
+async function selectSimilarComponentsOnPage(pageId: string | undefined, nodeIds: string[]) {
+  if (!Array.isArray(nodeIds) || nodeIds.length === 0) {
+    throw new Error('No nodes to select');
+  }
+
+  if (pageId) {
+    await figma.loadAllPagesAsync();
+    const targetPage = figma.root.children.find((p): p is PageNode => p.type === 'PAGE' && p.id === pageId);
+    if (targetPage) {
+      figma.currentPage = targetPage;
+    }
+  }
+
+  const getNodePageId = (node: BaseNode): string | null => {
+    let current: BaseNode | null = node;
+    while (current) {
+      if (current.type === 'PAGE') {
+        return current.id;
+      }
+      current = current.parent;
+    }
+    return null;
+  };
+
+  const nodes = await Promise.all(nodeIds.map(id => figma.getNodeByIdAsync(id)));
+  const validNodes = nodes
+    .filter((node: BaseNode | null): node is SceneNode =>
+      node !== null && 'type' in node && node.type !== 'DOCUMENT'
+    )
+    // Ensure we only select nodes that belong to the current page
+    .filter(node => getNodePageId(node) === figma.currentPage.id);
+
+  if (validNodes.length === 0) {
+    throw new Error('No valid nodes found to select');
+  }
+
+  // Selecting extremely large sets can fail or be slow in Figma.
+  const MAX_SELECTION = 1000;
+  const selectedNodes = validNodes.slice(0, MAX_SELECTION);
+
+  figma.currentPage.selection = selectedNodes;
+  figma.viewport.scrollAndZoomIntoView(selectedNodes);
+
+  if (validNodes.length > MAX_SELECTION) {
+    figma.notify(`Selected ${MAX_SELECTION} of ${validNodes.length} instances (selection limit)`);
+  } else {
+    figma.notify(`Selected ${validNodes.length} instances`);
+  }
+
+  figma.ui.postMessage({ type: 'nodes-selected', success: true, count: selectedNodes.length });
+}
 
 // Function to handle scanning
 async function handleScan(params: ScanForTokensMessage): Promise<void> {
@@ -546,6 +911,12 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
     figma.ui.postMessage({ 
       type: 'scan-cancelled'
     });
+    return;
+  }
+
+  // Stop "scan similar component by selection"
+  if (msg.type === 'stop-similar-components-scan') {
+    similarComponentsScanCancelled = true;
     return;
   }
 
@@ -637,6 +1008,33 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
     // if (!isRescan && !scanners.isScancelled()) {
     //   startWatchingDocument(msg.scanType as common.ScanType, msg.scanEntirePage);
     // }
+  }
+
+  // Scan similar component by selection
+  if (msg.type === 'scan-similar-components') {
+    try {
+      await scanSimilarComponents({ match: msg.match, scope: msg.scope });
+    } catch (error: any) {
+      console.error('Error scanning similar components:', error);
+      figma.ui.postMessage({
+        type: 'similar-components-scan-error',
+        message: error?.message || 'Failed to scan similar components'
+      });
+    }
+  }
+
+  // Select similar components (optionally across pages)
+  if (msg.type === 'select-similar-components') {
+    try {
+      await selectSimilarComponentsOnPage(msg.pageId, msg.nodeIds);
+    } catch (error: any) {
+      console.error('Error selecting similar components:', error);
+      figma.ui.postMessage({
+        type: 'nodes-selected',
+        success: false,
+        error: error?.message || 'Failed to select nodes'
+      });
+    }
   }
 
   // Handle watch document requests
@@ -937,6 +1335,13 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
       node.type === 'SHAPE_WITH_TEXT' ||
       node.type === 'CODE_BLOCK'
     );
+
+    let similarSelection = { isValid: false, label: 'No selection' } as Awaited<ReturnType<typeof getSimilarComponentSelectionInfo>>;
+    try {
+      similarSelection = await getSimilarComponentSelectionInfo();
+    } catch (error) {
+      console.warn('Failed to resolve similar component selection info (get-selected-frame-ids)', error);
+    }
     
     // Send both the IDs and the count
     figma.ui.postMessage({
@@ -945,7 +1350,8 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
       count: validSelection.length,
       hasSelection: validSelection.length > 0,
       hasInstances,
-      selectedFrameIds: validSelection.map(node => node.id)
+      selectedFrameIds: validSelection.map(node => node.id),
+      similarComponentSelection: similarSelection
     });
   }
 
