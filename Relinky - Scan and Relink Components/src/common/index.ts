@@ -385,26 +385,12 @@ let libraryInstanceCacheSkipEnabled = false;
 
 async function resolveInstanceLibraryStatus(instance: InstanceNode): Promise<boolean> {
   try {
-    if (typeof instance.getMainComponentAsync === 'function') {
-      const mainComponent = await instance.getMainComponentAsync();
-      if (!mainComponent) {
-        return false;
-      }
-
-      if (mainComponent.remote) {
-        return true;
-      }
-
-      const parent = mainComponent.parent;
-      if (parent && parent.type === 'COMPONENT_SET') {
-        const componentSet = parent as ComponentSetNode & { remote?: boolean };
-        return Boolean(componentSet.remote);
-      }
-
+    if (typeof instance.getMainComponentAsync !== 'function') {
+      // Avoid accessing instance.mainComponent because it can throw in some contexts.
       return false;
     }
 
-    const mainComponent = instance.mainComponent;
+    const mainComponent = await instance.getMainComponentAsync();
     if (!mainComponent) {
       return false;
     }
