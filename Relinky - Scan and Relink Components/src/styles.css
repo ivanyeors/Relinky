@@ -219,6 +219,17 @@ text-transform: uppercase;
 letter-spacing: 0.2px;
 }
 
+.very-slow-badge{
+  font-size: 9px;
+  padding: 1px 4px;
+  background: var(--figma-color-bg-danger-tertiary);
+  color: var(--figma-color-text-danger);
+  border-radius: 3px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.2px;
+}
+
 .toggle-label:hover .slow-badge{
 opacity: 1;
 }
