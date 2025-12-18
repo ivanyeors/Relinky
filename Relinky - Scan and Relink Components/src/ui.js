@@ -1429,11 +1429,13 @@ function initializeApp() {
           return;
         }
 
+        const nodeIds = Array.from(page.nodeIds);
+
         parent.postMessage({
           pluginMessage: {
             type: 'select-similar-components',
             pageId,
-            nodeIds: page.nodeIds
+            nodeIds
           }
         }, '*');
       },
@@ -1443,11 +1445,13 @@ function initializeApp() {
           return;
         }
 
+        const nodeIds = Array.from(this.componentScanResult.nodeIds);
+
         parent.postMessage({
           pluginMessage: {
             type: 'select-similar-components',
             pageId: this.componentScanResult.pageId,
-            nodeIds: this.componentScanResult.nodeIds
+            nodeIds
           }
         }, '*');
       },
