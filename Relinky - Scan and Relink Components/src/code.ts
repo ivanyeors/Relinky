@@ -800,18 +800,43 @@ async function selectSimilarComponentsOnPage(pageId: string | undefined, nodeIds
     }
   }
 
+  const getNodePageId = (node: BaseNode): string | null => {
+    let current: BaseNode | null = node;
+    while (current) {
+      if (current.type === 'PAGE') {
+        return current.id;
+      }
+      current = current.parent;
+    }
+    return null;
+  };
+
   const nodes = await Promise.all(nodeIds.map(id => figma.getNodeByIdAsync(id)));
-  const validNodes = nodes.filter((node: BaseNode | null): node is SceneNode =>
-    node !== null && 'type' in node && node.type !== 'DOCUMENT'
-  );
+  const validNodes = nodes
+    .filter((node: BaseNode | null): node is SceneNode =>
+      node !== null && 'type' in node && node.type !== 'DOCUMENT'
+    )
+    // Ensure we only select nodes that belong to the current page
+    .filter(node => getNodePageId(node) === figma.currentPage.id);
 
   if (validNodes.length === 0) {
     throw new Error('No valid nodes found to select');
   }
 
-  figma.currentPage.selection = validNodes;
-  figma.viewport.scrollAndZoomIntoView(validNodes);
-  figma.ui.postMessage({ type: 'nodes-selected', success: true, count: validNodes.length });
+  // Selecting extremely large sets can fail or be slow in Figma.
+  const MAX_SELECTION = 1000;
+  const selectedNodes = validNodes.slice(0, MAX_SELECTION);
+
+  figma.currentPage.selection = selectedNodes;
+  figma.viewport.scrollAndZoomIntoView(selectedNodes);
+
+  if (validNodes.length > MAX_SELECTION) {
+    figma.notify(`Selected ${MAX_SELECTION} of ${validNodes.length} instances (selection limit)`);
+  } else {
+    figma.notify(`Selected ${validNodes.length} instances`);
+  }
+
+  figma.ui.postMessage({ type: 'nodes-selected', success: true, count: selectedNodes.length });
 }
 
 // Function to handle scanning
