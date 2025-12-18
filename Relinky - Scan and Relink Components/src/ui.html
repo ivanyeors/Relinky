@@ -115,6 +115,11 @@
                 <p class="text-secondary">
                   Select a component (or an instance) in Figma, then choose what to match and where to scan.
                 </p>
+                <p class="text-secondary" style="margin-top: 6px;">
+                  <strong>Selected:</strong>
+                  <span v-if="componentScanSelection?.isValid">{{ componentScanSelection.label }}</span>
+                  <span v-else>{{ componentScanSelection?.label || 'No selection' }}</span>
+                </p>
               </div>
 
               <div class="scan-cards">
@@ -219,7 +224,7 @@
                       v-if="!isComponentScanning"
                       class="button primary-button"
                       @click="startComponentScan"
-                      :disabled="isComponentScanning"
+                      :disabled="isComponentScanning || !(componentScanSelection?.isValid)"
                       title="Select a component in Figma, then scan"
                     >
                       Scan

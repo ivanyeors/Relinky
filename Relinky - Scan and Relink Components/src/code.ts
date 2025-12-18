@@ -47,10 +47,39 @@ figma.showUI(__html__, {
 });
 
 // Initialize selection state
-(() => {
+async function getSimilarComponentSelectionInfo(): Promise<{
+  isValid: boolean;
+  label: string;
+  targetComponentId?: string;
+  targetComponentName?: string;
+}> {
+  const selection = figma.currentPage.selection;
+
+  if (selection.length !== 1) {
+    return { isValid: false, label: selection.length === 0 ? 'No selection' : 'Select exactly 1 component/instance' };
+  }
+
+  const node = selection[0];
+
+  if (node.type === 'COMPONENT') {
+    return { isValid: true, label: node.name, targetComponentId: node.id, targetComponentName: node.name };
+  }
+
+  if (node.type === 'INSTANCE') {
+    const main = await node.getMainComponentAsync();
+    if (!main) {
+      return { isValid: false, label: 'Instance has no main component' };
+    }
+    return { isValid: true, label: main.name, targetComponentId: main.id, targetComponentName: main.name };
+  }
+
+  return { isValid: false, label: 'Select a component or instance' };
+}
+
+(async () => {
   const selection = figma.currentPage.selection;
   const hasInstances = selection.some(node => node.type === 'INSTANCE');
-  const validSelection = selection.filter(node => 
+  const validSelection = selection.filter(node =>
     // Support ALL SceneNode types that can be meaningfully scanned
     node.type === 'FRAME' || 
     node.type === 'COMPONENT' || 
@@ -81,14 +110,17 @@ figma.showUI(__html__, {
   if (validSelection.length > 0) {
     lastSelectedFrameIds = validSelection.map(node => node.id);
   }
-  
+
+  const similarSelection = await getSimilarComponentSelectionInfo();
+
   // Send initial selection info to UI
-  figma.ui.postMessage({ 
+  figma.ui.postMessage({
     type: 'selection-update',
     hasSelection: validSelection.length > 0,
     count: validSelection.length,
     selectedFrameIds: validSelection.map(node => node.id),
-    hasInstances
+    hasInstances,
+    similarComponentSelection: similarSelection
   });
 })();
 
@@ -142,14 +174,17 @@ figma.on('selectionchange', async () => {
   if (validSelection.length > 0) {
     lastSelectedFrameIds = validSelection.map(node => node.id);
   }
-  
+
+  const similarSelection = await getSimilarComponentSelectionInfo();
+
   // Send more detailed selection info to UI
-  figma.ui.postMessage({ 
+  figma.ui.postMessage({
     type: 'selection-update',
     hasSelection: validSelection.length > 0,
     count: validSelection.length,
     selectedFrameIds: validSelection.map(node => node.id),
-    hasInstances // Add this flag
+    hasInstances, // Add this flag
+    similarComponentSelection: similarSelection
   });
 });
 
@@ -570,14 +605,12 @@ async function scanSimilarComponents(params: { match: SimilarComponentsMatch; sc
           return;
         }
 
-        let mainComponentId = instance.mainComponent?.id;
-        if (!mainComponentId) {
-          try {
-            const main = await instance.getMainComponentAsync();
-            mainComponentId = main?.id;
-          } catch {
-            // ignore
-          }
+        let mainComponentId: string | undefined;
+        try {
+          const main = await instance.getMainComponentAsync();
+          mainComponentId = main?.id;
+        } catch {
+          mainComponentId = undefined;
         }
 
         if (mainComponentId !== targetComponentId) {
@@ -638,14 +671,12 @@ async function scanSimilarComponents(params: { match: SimilarComponentsMatch; sc
 
     index += 1;
 
-    let mainComponentId = instance.mainComponent?.id;
-    if (!mainComponentId) {
-      try {
-        const main = await instance.getMainComponentAsync();
-        mainComponentId = main?.id;
-      } catch {
-        // ignore
-      }
+    let mainComponentId: string | undefined;
+    try {
+      const main = await instance.getMainComponentAsync();
+      mainComponentId = main?.id;
+    } catch {
+      mainComponentId = undefined;
     }
 
     if (mainComponentId !== targetComponentId) {

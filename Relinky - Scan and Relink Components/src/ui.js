@@ -191,6 +191,10 @@ function initializeApp() {
         isComponentScanning: false,
         componentScanProgress: 0,
         componentScanResult: null,
+        componentScanSelection: {
+          isValid: false,
+          label: 'No selection'
+        },
 
         // Add tokenScanOptions array
         tokenScanOptions: [
@@ -1370,6 +1374,12 @@ function initializeApp() {
         this.componentScanProgress = 0;
         this.componentScanResult = null;
 
+        if (!this.componentScanSelection?.isValid) {
+          this.isComponentScanning = false;
+          this.showError('Select a component or instance first');
+          return;
+        }
+
         try {
           parent.postMessage({
             pluginMessage: this.makeSerializable({
@@ -1539,6 +1549,12 @@ function initializeApp() {
               this.selectedFrameIds = data.selectedFrameIds;
             } else if (Array.isArray(data.ids)) {
               this.selectedFrameIds = data.ids;
+            }
+
+            if (data.similarComponentSelection && typeof data.similarComponentSelection === 'object') {
+              this.componentScanSelection = data.similarComponentSelection;
+            } else {
+              this.componentScanSelection = { isValid: false, label: 'No selection' };
             }
             break;
           case 'scan-started':
