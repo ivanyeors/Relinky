@@ -739,6 +739,13 @@ function initializeApp() {
         }
 
         this.activeView = view;
+
+        // Refresh selection state so the "Selected:" label updates immediately
+        try {
+          parent.postMessage({ pluginMessage: { type: 'get-selected-frame-ids' } }, '*');
+        } catch (error) {
+          console.warn('Failed to request selection state:', error);
+        }
       },
 
       goHome() {
@@ -1545,6 +1552,23 @@ function initializeApp() {
             this.selectedCount = data.count || 0;
             this.hasInstances = data.hasInstances === true;
             
+            if (Array.isArray(data.selectedFrameIds)) {
+              this.selectedFrameIds = data.selectedFrameIds;
+            } else if (Array.isArray(data.ids)) {
+              this.selectedFrameIds = data.ids;
+            }
+
+            if (data.similarComponentSelection && typeof data.similarComponentSelection === 'object') {
+              this.componentScanSelection = data.similarComponentSelection;
+            } else {
+              this.componentScanSelection = { isValid: false, label: 'No selection' };
+            }
+            break;
+          case 'selected-frame-ids':
+            this.hasSelection = data.hasSelection === true;
+            this.selectedCount = data.count || 0;
+            this.hasInstances = data.hasInstances === true;
+
             if (Array.isArray(data.selectedFrameIds)) {
               this.selectedFrameIds = data.selectedFrameIds;
             } else if (Array.isArray(data.ids)) {

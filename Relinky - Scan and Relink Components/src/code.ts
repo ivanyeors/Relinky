@@ -114,7 +114,12 @@ async function getSimilarComponentSelectionInfo(): Promise<{
     lastSelectedFrameIds = validSelection.map(node => node.id);
   }
 
-  const similarSelection = await getSimilarComponentSelectionInfo();
+  let similarSelection = { isValid: false, label: 'No selection' } as Awaited<ReturnType<typeof getSimilarComponentSelectionInfo>>;
+  try {
+    similarSelection = await getSimilarComponentSelectionInfo();
+  } catch (error) {
+    console.warn('Failed to resolve similar component selection info (init)', error);
+  }
 
   // Send initial selection info to UI
   figma.ui.postMessage({
@@ -178,7 +183,12 @@ figma.on('selectionchange', async () => {
     lastSelectedFrameIds = validSelection.map(node => node.id);
   }
 
-  const similarSelection = await getSimilarComponentSelectionInfo();
+  let similarSelection = { isValid: false, label: 'No selection' } as Awaited<ReturnType<typeof getSimilarComponentSelectionInfo>>;
+  try {
+    similarSelection = await getSimilarComponentSelectionInfo();
+  } catch (error) {
+    console.warn('Failed to resolve similar component selection info', error);
+  }
 
   // Send more detailed selection info to UI
   figma.ui.postMessage({
@@ -537,11 +547,35 @@ type PluginMessage =
   | StopSimilarComponentsScanMessage
   | SelectSimilarComponentsMessage;
 
-function isInstanceModified(instance: InstanceNode): boolean {
-  const overrides = (instance as unknown as { overrides?: unknown }).overrides;
-  if (Array.isArray(overrides) && overrides.length > 0) {
-    return true;
+function isComponentPropertyValueEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
   }
+}
+
+function isInstanceModifiedByComponentProperties(instance: InstanceNode, mainComponent: ComponentNode): boolean {
+  const definitions = mainComponent.componentPropertyDefinitions;
+  const instanceProps = instance.componentProperties;
+
+  // If there are no component properties defined, treat as default.
+  if (!definitions || Object.keys(definitions).length === 0) {
+    return false;
+  }
+
+  for (const [propertyName, definition] of Object.entries(definitions)) {
+    const instanceProp = instanceProps[propertyName];
+    if (!instanceProp) {
+      continue;
+    }
+
+    if (!isComponentPropertyValueEqual(instanceProp.value, definition.defaultValue)) {
+      return true;
+    }
+  }
+
   return false;
 }
 
@@ -581,8 +615,9 @@ async function scanSimilarComponents(params: { match: SimilarComponentsMatch; sc
   const { componentId: targetComponentId, componentName } = await getTargetComponentFromSelection();
 
   const shouldInclude = (instance: InstanceNode): boolean => {
-    const modified = isInstanceModified(instance);
-    return params.match === 'modified' ? modified : !modified;
+    // This is set after we resolve main component + compare componentProperties.
+    // Default to include, then filter once we compute.
+    return true;
   };
 
   if (params.scope === 'file') {
@@ -608,19 +643,24 @@ async function scanSimilarComponents(params: { match: SimilarComponentsMatch; sc
           return;
         }
 
-        let mainComponentId: string | undefined;
+        let mainComponent: ComponentNode | null = null;
         try {
-          const main = await instance.getMainComponentAsync();
-          mainComponentId = main?.id;
+          mainComponent = await instance.getMainComponentAsync();
         } catch {
-          mainComponentId = undefined;
+          mainComponent = null;
         }
 
-        if (mainComponentId !== targetComponentId) {
+        if (!mainComponent || mainComponent.id !== targetComponentId) {
           continue;
         }
 
         if (!shouldInclude(instance)) {
+          continue;
+        }
+
+        const isModified = isInstanceModifiedByComponentProperties(instance, mainComponent);
+        const includeByMatch = params.match === 'modified' ? isModified : !isModified;
+        if (!includeByMatch) {
           continue;
         }
 
@@ -674,19 +714,20 @@ async function scanSimilarComponents(params: { match: SimilarComponentsMatch; sc
 
     index += 1;
 
-    let mainComponentId: string | undefined;
+    let mainComponent: ComponentNode | null = null;
     try {
-      const main = await instance.getMainComponentAsync();
-      mainComponentId = main?.id;
+      mainComponent = await instance.getMainComponentAsync();
     } catch {
-      mainComponentId = undefined;
+      mainComponent = null;
     }
 
-    if (mainComponentId !== targetComponentId) {
+    if (!mainComponent || mainComponent.id !== targetComponentId) {
       continue;
     }
 
-    if (!shouldInclude(instance)) {
+    const isModified = isInstanceModifiedByComponentProperties(instance, mainComponent);
+    const includeByMatch = params.match === 'modified' ? isModified : !isModified;
+    if (!includeByMatch) {
       continue;
     }
 
@@ -1243,6 +1284,13 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
       node.type === 'SHAPE_WITH_TEXT' ||
       node.type === 'CODE_BLOCK'
     );
+
+    let similarSelection = { isValid: false, label: 'No selection' } as Awaited<ReturnType<typeof getSimilarComponentSelectionInfo>>;
+    try {
+      similarSelection = await getSimilarComponentSelectionInfo();
+    } catch (error) {
+      console.warn('Failed to resolve similar component selection info (get-selected-frame-ids)', error);
+    }
     
     // Send both the IDs and the count
     figma.ui.postMessage({
@@ -1251,7 +1299,8 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
       count: validSelection.length,
       hasSelection: validSelection.length > 0,
       hasInstances,
-      selectedFrameIds: validSelection.map(node => node.id)
+      selectedFrameIds: validSelection.map(node => node.id),
+      similarComponentSelection: similarSelection
     });
   }
 
