@@ -561,8 +561,29 @@ function isComponentPropertyValueEqual(a: unknown, b: unknown): boolean {
   }
 }
 
+function getComponentPropertyDefinitionsSafe(
+  mainComponent: ComponentNode
+): ComponentPropertyDefinitions {
+  const definitionOwner: BaseNode =
+    mainComponent.parent?.type === 'COMPONENT_SET' ? mainComponent.parent : mainComponent;
+
+  try {
+    // Figma API limitation: componentPropertyDefinitions can only be read from
+    // a COMPONENT_SET or a non-variant COMPONENT.
+    const defs = (definitionOwner as unknown as ComponentPropertiesMixin).componentPropertyDefinitions;
+    return defs || {};
+  } catch (error) {
+    console.warn('Failed to read componentPropertyDefinitions', {
+      mainComponentId: mainComponent.id,
+      mainComponentName: mainComponent.name,
+      definitionOwnerType: (definitionOwner as any)?.type,
+    }, error);
+    return {};
+  }
+}
+
 function isInstanceModifiedByComponentProperties(instance: InstanceNode, mainComponent: ComponentNode): boolean {
-  const definitions = mainComponent.componentPropertyDefinitions;
+  const definitions = getComponentPropertyDefinitionsSafe(mainComponent);
   const instanceProps = instance.componentProperties;
 
   // If there are no component properties defined, treat as default.
