@@ -733,6 +733,26 @@ gap: var(--spacing-xs);
 margin-bottom: var(--spacing-sm);
 }
 
+/* Start screen: 1 large card per row */
+.start-screen-cards{
+  grid-template-columns: 1fr;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-xs);
+}
+
+.start-screen-cards .scan-card{
+  padding: var(--spacing-md);
+  min-height: 92px;
+}
+
+.start-screen-cards .scan-card-title{
+  font-size: 14px;
+}
+
+.start-screen-cards .scan-card-description{
+  font-size: 12px;
+}
+
 /* Expand deleted variables variable types to use full width */
 .deleted-variable-types-section{
   width: 100%;
