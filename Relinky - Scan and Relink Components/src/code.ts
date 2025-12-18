@@ -70,7 +70,10 @@ async function getSimilarComponentSelectionInfo(): Promise<{
     if (!main) {
       return { isValid: false, label: 'Instance has no main component' };
     }
-    return { isValid: true, label: main.name, targetComponentId: main.id, targetComponentName: main.name };
+    const instanceName = node.name?.trim() || 'Unnamed instance';
+    const mainName = main.name?.trim() || 'Unnamed component';
+    const label = instanceName === mainName ? mainName : `${instanceName} → ${mainName}`;
+    return { isValid: true, label, targetComponentId: main.id, targetComponentName: main.name };
   }
 
   return { isValid: false, label: 'Select a component or instance' };
