@@ -430,6 +430,11 @@ interface DebugDocumentVariablesMessage {
 interface SelectGroupMessage {
   type: 'select-group';
   nodeIds: string[];
+  /**
+   * Optional preferred page ID to select within.
+   * Selection cannot span multiple pages in Figma.
+   */
+  pageId?: string;
 }
 
 interface GetSelectedFrameIdsMessage {
@@ -796,7 +801,7 @@ async function selectSimilarComponentsOnPage(pageId: string | undefined, nodeIds
     await figma.loadAllPagesAsync();
     const targetPage = figma.root.children.find((p): p is PageNode => p.type === 'PAGE' && p.id === pageId);
     if (targetPage) {
-      figma.currentPage = targetPage;
+      await figma.setCurrentPageAsync(targetPage);
     }
   }
 
@@ -1276,26 +1281,8 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
       if (!msg.nodeIds || !Array.isArray(msg.nodeIds)) {
         throw new Error('Invalid node IDs provided');
       }
-
-      // Fetch nodes asynchronously
-      const nodes = await Promise.all(
-        msg.nodeIds.map((id: string) => figma.getNodeByIdAsync(id))
-      );
-      
-      // Filter out null values and ensure nodes are SceneNodes
-      const validNodes = nodes.filter((node: BaseNode | null): node is SceneNode => 
-        node !== null && 'type' in node && node.type !== 'DOCUMENT'
-      );
-
-      if (validNodes.length > 0) {
-        figma.currentPage.selection = validNodes;
-        // Optionally scroll to show the selected nodes
-        figma.viewport.scrollAndZoomIntoView(validNodes);
-        // Notify UI that selection is complete
-        figma.ui.postMessage({ type: 'selection-complete' });
-      } else {
-        throw new Error('No valid nodes found to select');
-      }
+      const result = await selectNodes(msg.nodeIds, { preferredPageId: msg.pageId });
+      figma.ui.postMessage({ type: 'nodes-selected', success: true, count: result.selectedCount });
     } catch (err) {
       console.error('Error in select-group:', err);
       figma.ui.postMessage({ 
@@ -1303,6 +1290,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
         message: err instanceof Error ? err.message : 'Failed to select nodes' 
       });
     }
+    return;
   }
 
   // Get selected frame IDs
@@ -1418,20 +1406,27 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
         throw new Error('No node ID provided');
       }
       await selectNode(msg.nodeId);
+      figma.ui.postMessage({ type: 'nodes-selected', success: true, count: 1 });
     } catch (err) {
       console.error('Error in node selection:', err);
       figma.ui.postMessage({
-        type: 'selection-error',
-        message: err instanceof Error ? err.message : 'Failed to select node'
+        type: 'nodes-selected',
+        success: false,
+        error: err instanceof Error ? err.message : 'Failed to select node'
       });
     }
   } else if (msg.type === 'select-nodes') {
-    if (Array.isArray(msg.nodeIds) && msg.nodeIds.length > 0) {
-      await selectNodes(msg.nodeIds);
-    } else {
+    try {
+      if (!Array.isArray(msg.nodeIds) || msg.nodeIds.length === 0) {
+        throw new Error('Invalid node IDs provided');
+      }
+      const result = await selectNodes(msg.nodeIds);
+      figma.ui.postMessage({ type: 'nodes-selected', success: true, count: result.selectedCount });
+    } catch (err) {
       figma.ui.postMessage({
-        type: 'selection-error',
-        message: 'Invalid node IDs provided'
+        type: 'nodes-selected',
+        success: false,
+        error: err instanceof Error ? err.message : 'Failed to select nodes'
       });
     }
   }
@@ -1608,117 +1603,6 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
     }
   }
 
-  // Handle the select-nodes message to select a group of nodes
-  if (msg.type === 'select-nodes' && Array.isArray(msg.nodeIds)) {
-    const nodeIds = msg.nodeIds;
-    console.log(`Selecting ${nodeIds.length} nodes`);
-    
-    try {
-      // Clear current selection
-      figma.currentPage.selection = [];
-      
-      // Get all nodes asynchronously and add them to selection
-      Promise.all(nodeIds.map(id => figma.getNodeByIdAsync(id)))
-        .then(nodes => {
-          // Filter out null values and ensure they are SceneNode types
-          const validNodes = nodes
-            .filter((node): node is SceneNode => 
-              node !== null && 'type' in node && node.type !== 'PAGE' && node.type !== 'DOCUMENT'
-            );
-          
-          console.log(`Found ${validNodes.length} valid nodes out of ${nodeIds.length} requested`);
-          
-          if (validNodes.length > 0) {
-            // Set the selection to the found nodes
-            figma.currentPage.selection = validNodes;
-            
-            // Scroll to the first node
-            if (validNodes[0]) {
-              figma.viewport.scrollAndZoomIntoView(validNodes);
-            }
-            
-            // Send success message back to UI
-            figma.ui.postMessage({
-              type: 'nodes-selected',
-              success: true,
-              count: validNodes.length
-            });
-          } else {
-            // Send error message if no valid nodes found
-            figma.ui.postMessage({
-              type: 'nodes-selected',
-              success: false,
-              error: 'No valid nodes found with the provided IDs'
-            });
-          }
-        })
-        .catch(error => {
-          console.error('Error selecting nodes:', error);
-          figma.ui.postMessage({
-            type: 'nodes-selected',
-            success: false,
-            error: 'Error selecting nodes: ' + (error instanceof Error ? error.message : String(error))
-          });
-        });
-    } catch (error) {
-      console.error('Error handling select-nodes message:', error);
-      figma.ui.postMessage({
-        type: 'nodes-selected',
-        success: false,
-        error: 'Error handling select-nodes message: ' + (error instanceof Error ? error.message : String(error))
-      });
-    }
-  }
-
-  // Maintain compatibility with old select-group message type
-  if (msg.type === 'select-group' && Array.isArray(msg.nodeIds)) {
-    // Redirect to the new handler, but directly handle it instead of a recursive call
-    const nodeIds = msg.nodeIds;
-    console.log(`Legacy select-group handling for ${nodeIds.length} nodes`);
-    
-    try {
-      // Clear current selection
-      figma.currentPage.selection = [];
-      
-      // Get all nodes asynchronously and add them to selection
-      Promise.all(nodeIds.map(id => figma.getNodeByIdAsync(id)))
-        .then(nodes => {
-          // Filter out null values and ensure they are SceneNode types
-          const validNodes = nodes
-            .filter((node): node is SceneNode => 
-              node !== null && 'type' in node && node.type !== 'PAGE' && node.type !== 'DOCUMENT'
-            );
-          
-          if (validNodes.length > 0) {
-            figma.currentPage.selection = validNodes;
-            figma.viewport.scrollAndZoomIntoView(validNodes);
-            
-            figma.ui.postMessage({
-              type: 'nodes-selected',
-              success: true,
-              count: validNodes.length
-            });
-          } else {
-            figma.ui.postMessage({
-              type: 'nodes-selected',
-              success: false,
-              error: 'No valid nodes found'
-            });
-          }
-        })
-        .catch(error => {
-          console.error('Error in legacy select-group:', error);
-          figma.ui.postMessage({
-            type: 'nodes-selected',
-            success: false,
-            error: 'Error selecting nodes: ' + (error instanceof Error ? error.message : String(error))
-          });
-        });
-    } catch (error) {
-      console.error('Error handling legacy select-group:', error);
-    }
-  }
-
   // Add a simplified handler for the group-results message type
   if (msg.type === 'group-results') {
     console.log('Received request to group scan results');
@@ -1869,23 +1753,146 @@ function getNodeLocation(node: BaseNode): string {
 }
 
 // Helper functions for node selection
+const getPageIdForNode = (node: BaseNode): string | null => {
+  let current: BaseNode | null = node;
+  while (current) {
+    if (current.type === 'PAGE') {
+      return current.id;
+    }
+    current = current.parent;
+  }
+  return null;
+};
+
+const trySwitchToPage = async (pageId: string): Promise<boolean> => {
+  if (!pageId) {
+    return false;
+  }
+  if (figma.currentPage.id === pageId) {
+    return true;
+  }
+
+  await figma.loadAllPagesAsync();
+  const targetPage = figma.root.children.find(
+    (p): p is PageNode => p.type === 'PAGE' && p.id === pageId
+  );
+  if (!targetPage) {
+    return false;
+  }
+
+  await figma.setCurrentPageAsync(targetPage);
+  return true;
+};
+
 async function selectNode(nodeId: string): Promise<void> {
   const node = await figma.getNodeByIdAsync(nodeId);
-  if (node && 'type' in node && node.type !== 'DOCUMENT') {
-    figma.currentPage.selection = [node as SceneNode];
-    figma.viewport.scrollAndZoomIntoView([node as SceneNode]);
+  if (!node || !('type' in node) || node.type === 'DOCUMENT' || node.type === 'PAGE') {
+    throw new Error('Node not found');
   }
+
+  const pageId = getPageIdForNode(node);
+  if (pageId) {
+    await trySwitchToPage(pageId);
+  }
+
+  const nodePageId = getPageIdForNode(node);
+  if (!nodePageId || nodePageId !== figma.currentPage.id) {
+    throw new Error('Node is not on the current page');
+  }
+
+  figma.currentPage.selection = [node as SceneNode];
+  figma.viewport.scrollAndZoomIntoView([node as SceneNode]);
 }
 
-async function selectNodes(nodeIds: string[]): Promise<void> {
-  const nodes = await Promise.all(nodeIds.map(id => figma.getNodeByIdAsync(id)));
-  const validNodes = nodes.filter((node): node is SceneNode => 
-    node !== null && 'type' in node && node.type !== 'DOCUMENT'
-  );
-  if (validNodes.length > 0) {
-    figma.currentPage.selection = validNodes;
-    figma.viewport.scrollAndZoomIntoView(validNodes);
+async function selectNodes(
+  nodeIds: string[],
+  options?: { preferredPageId?: string }
+): Promise<{
+  selectedCount: number;
+  totalValid: number;
+  selectedPageId: string;
+  otherPagesCount: number;
+  otherNodesCount: number;
+}> {
+  if (!Array.isArray(nodeIds) || nodeIds.length === 0) {
+    throw new Error('No nodes to select');
   }
+
+  const nodes = await Promise.all(nodeIds.map(id => figma.getNodeByIdAsync(id)));
+  const validNodes = nodes.filter(
+    (node): node is SceneNode =>
+      node !== null && 'type' in node && node.type !== 'DOCUMENT' && node.type !== 'PAGE'
+  );
+
+  if (validNodes.length === 0) {
+    throw new Error('No valid nodes found to select');
+  }
+
+  const nodesByPage = new Map<string, SceneNode[]>();
+  for (const node of validNodes) {
+    const pageId = getPageIdForNode(node);
+    if (!pageId) {
+      continue;
+    }
+    const existing = nodesByPage.get(pageId) ?? [];
+    existing.push(node);
+    nodesByPage.set(pageId, existing);
+  }
+
+  if (nodesByPage.size === 0) {
+    throw new Error('No valid nodes found to select');
+  }
+
+  const currentPageId = figma.currentPage.id;
+  const preferredPageId = options?.preferredPageId;
+  const preferredNodes = preferredPageId ? nodesByPage.get(preferredPageId) : undefined;
+
+  const pageEntries = Array.from(nodesByPage.entries()).sort((a, b) => b[1].length - a[1].length);
+  const largestPageId = pageEntries[0]?.[0];
+  if (!largestPageId) {
+    throw new Error('No valid nodes found to select');
+  }
+
+  const targetPageId =
+    (preferredNodes && preferredNodes.length > 0 ? preferredPageId : null) ??
+    (nodesByPage.has(currentPageId) ? currentPageId : null) ??
+    largestPageId;
+
+  await trySwitchToPage(targetPageId);
+
+  const nodesOnTargetPage = nodesByPage.get(figma.currentPage.id) ?? [];
+  if (nodesOnTargetPage.length === 0) {
+    throw new Error('No valid nodes found to select on the target page');
+  }
+
+  // Selecting very large sets can fail or be slow in Figma.
+  const MAX_SELECTION = 1000;
+  const selectedNodes = nodesOnTargetPage.slice(0, MAX_SELECTION);
+
+  figma.currentPage.selection = selectedNodes;
+  figma.viewport.scrollAndZoomIntoView(selectedNodes);
+
+  const otherPageIds = Array.from(nodesByPage.keys()).filter(id => id !== figma.currentPage.id);
+  const otherNodesCount = otherPageIds.reduce((sum, id) => sum + (nodesByPage.get(id)?.length ?? 0), 0);
+
+  if (otherPageIds.length > 0) {
+    figma.notify(
+      `Selected ${selectedNodes.length} node(s) on "${figma.currentPage.name}". ` +
+        `${otherNodesCount} more on ${otherPageIds.length} other page(s) (selection can’t span pages).`
+    );
+  } else if (nodesOnTargetPage.length > MAX_SELECTION) {
+    figma.notify(`Selected ${MAX_SELECTION} of ${nodesOnTargetPage.length} node(s) (selection limit)`);
+  } else {
+    figma.notify(`Selected ${selectedNodes.length} node(s)`);
+  }
+
+  return {
+    selectedCount: selectedNodes.length,
+    totalValid: validNodes.length,
+    selectedPageId: figma.currentPage.id,
+    otherPagesCount: otherPageIds.length,
+    otherNodesCount
+  };
 }
 
 // Update scan result handling
