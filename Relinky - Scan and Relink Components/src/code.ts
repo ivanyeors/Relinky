@@ -275,9 +275,14 @@ async function startWatchingDocument(scanType: ScanType, scanEntirePage: boolean
           });
           
           // Use the new scanners module instead of valuesScanner
+          const watchProgress = createThrottledProgress(0.2);
+          updateProgress(0, { phase: 'watch-scan' });
           const scanResults = await scanForBrokenVariableReferences(
-            (progress) => {
-              figma.ui.postMessage({ type: 'scan-progress', progress });
+            (progress, metadata) => {
+              watchProgress(progress, {
+                ...metadata,
+                phase: metadata?.phase ?? 'watch-scan'
+              });
             },
             documentState.selectedFrameIds,
             documentState.ignoreHiddenLayers || false,
@@ -298,6 +303,11 @@ async function startWatchingDocument(scanType: ScanType, scanEntirePage: boolean
               references: scanners.groupScanResults('missing-library', scanResults.results)
             });
           }
+          completeProgress({
+            phase: 'watch-complete',
+            processedCount: scanResults.results.length,
+            totalCount: scanResults.results.length
+          });
         } catch (err) {
           console.error('Error during watch scan:', err);
           figma.ui.postMessage({ 
@@ -848,9 +858,15 @@ async function selectSimilarComponentsOnPage(pageId: string | undefined, nodeIds
 async function handleScan(params: ScanForTokensMessage): Promise<void> {
   const scanType = params.scanType as ScanType;
   try {
+    const scanProgress = createThrottledProgress(0.2);
+    updateProgress(0, { phase: 'scan', label: scanType });
     const scanResults = await scanForBrokenVariableReferences(
-      (progress) => {
-        figma.ui.postMessage({ type: 'scan-progress', progress });
+      (progress, metadata) => {
+        scanProgress(progress, {
+          ...metadata,
+          phase: metadata?.phase ?? 'scan',
+          label: metadata?.label ?? scanType
+        });
       },
       params.selectedFrameIds,
       params.ignoreHiddenLayers,
@@ -872,6 +888,11 @@ async function handleScan(params: ScanForTokensMessage): Promise<void> {
         references: groupedResults
       });
     }
+    completeProgress({
+      phase: 'scan-complete',
+      processedCount: scanResults.results.length,
+      totalCount: scanResults.results.length
+    });
   } catch (err) {
     console.error('Scan error:', err);
     figma.ui.postMessage({
@@ -1355,9 +1376,14 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
   if (msg.type === 'scan-library-tokens') {
     try {
       // Legacy: use broken variable reference scan
+      const libraryScanProgress = createThrottledProgress(0.2);
+      updateProgress(0, { phase: 'library-scan' });
       const scanResults = await scanForBrokenVariableReferences(
-        (progress) => {
-          figma.ui.postMessage({ type: 'scan-progress', progress });
+        (progress, metadata) => {
+          libraryScanProgress(progress, {
+            ...metadata,
+            phase: metadata?.phase ?? 'library-scan'
+          });
         },
         [],  // No specific frame IDs
         msg.ignoreHiddenLayers || false,
@@ -1367,6 +1393,11 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
       figma.ui.postMessage({
         type: 'library-tokens-result',
         results: scanResults.results
+      });
+      completeProgress({
+        phase: 'library-scan-complete',
+        processedCount: scanResults.results.length,
+        totalCount: scanResults.results.length
       });
     } catch (error) {
       console.error('Error scanning library tokens:', error);

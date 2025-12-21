@@ -144,6 +144,10 @@ function initializeApp() {
         lastAnimationTimestamp: null,
         animationDuration: 300,
         scanStartTime: null,
+        progressPhase: null,
+        progressLabel: '',
+        progressProcessedCount: null,
+        progressTotalCount: null,
         // Basic plugin state
         selectedScanType: null, // Currently selected token scan type
         selectedSourceType: 'raw-values', // Source type for scanning (raw, team-library, local-library)
@@ -1048,6 +1052,10 @@ function initializeApp() {
         this.scanProgress = 0;
         this.actualProgress = 0;
         this.lastAnimationTimestamp = null;
+        this.progressPhase = 'scan';
+        this.progressLabel = '';
+        this.progressProcessedCount = null;
+        this.progressTotalCount = null;
         
         // Track scan start time for minimum animation duration
         this.scanStartTime = Date.now();
@@ -1095,6 +1103,7 @@ function initializeApp() {
         } else {
           scanDescription = this.getSourceTypeLabel(this.selectedSourceType);
         }
+        this.progressLabel = scanDescription;
         
         // Show a toast with scanning message
         this.showSuccessToast = true;
@@ -1196,6 +1205,10 @@ function initializeApp() {
         // Ensure progress is exactly 100% at the end
         this.scanProgress = 100;
         this.actualProgress = 100;
+        this.progressPhase = 'complete';
+        if (typeof this.progressTotalCount === 'number') {
+          this.progressProcessedCount = this.progressTotalCount;
+        }
         
         // Update states
         this.isScanning = false;
@@ -1478,10 +1491,34 @@ function initializeApp() {
           return 'Scan error';
         }
         if (!this.isScanning && this.scanProgress === 100) {
-          return this.hasResults ? 'Scan complete' : 'No issues found';
+          if (this.hasResults) {
+            return this.progressLabel
+              ? `${this.progressLabel} scan complete`
+              : 'Scan complete';
+          }
+          return 'No issues found';
         }
         if (this.isScanning) {
-          return `Scanning... ${Math.round(this.scanProgress)}%`;
+          const percent = Math.round(this.scanProgress);
+          const processed = typeof this.progressProcessedCount === 'number'
+            ? this.progressProcessedCount
+            : null;
+          const total = typeof this.progressTotalCount === 'number' && this.progressTotalCount > 0
+            ? this.progressTotalCount
+            : null;
+          const label = this.progressLabel || '';
+          const phaseName = this.progressPhase && !this.progressPhase.startsWith('scan')
+            ? this.progressPhase.replace(/-/g, ' ')
+            : '';
+          const prefix = label
+            ? `Scanning ${label}`
+            : phaseName
+              ? `Scanning ${phaseName}`
+              : 'Scanning';
+          const countText = processed !== null && total !== null
+            ? ` (${processed}/${total})`
+            : '';
+          return `${prefix}... ${percent}%${countText}`;
         }
         return 'Ready to scan';
       },
@@ -1648,6 +1685,18 @@ function initializeApp() {
           case 'watch-status':
             this.isWatching = data.isWatching;
             break;
+          case 'watch-scan-started':
+            this.progressPhase = 'watch-scan';
+            this.progressLabel = 'Document changes';
+            this.progressProcessedCount = null;
+            this.progressTotalCount = null;
+            this.isScanning = true;
+            this.scanError = false;
+            this.scanProgress = 0;
+            this.actualProgress = 0;
+            this.lastAnimationTimestamp = null;
+            this.startProgressAnimation();
+            break;
           case 'scan-cancelled':
             this.isScanning = false;
             this.scanProgress = 0;
@@ -1753,12 +1802,15 @@ function initializeApp() {
         setTimeout(() => { this.showSuccessToast = false; }, 3000);
       },
       handleScanProgress(msg) {
-        if (!msg || typeof msg.progress !== 'number') {
+        const hasPercent = msg && typeof msg.progress === 'number';
+        const hasRatio = msg && typeof msg.progressRatio === 'number';
+        if (!msg || (!hasPercent && !hasRatio)) {
           return;
         }
-
-        // Clamp and store the latest reported progress
-        const normalizedProgress = Math.min(100, Math.max(0, msg.progress));
+        const ratio = hasRatio ? Math.min(Math.max(msg.progressRatio, 0), 1) : null;
+        const normalizedProgress = ratio !== null
+          ? ratio * 100
+          : Math.min(100, Math.max(0, msg.progress));
         this.actualProgress = normalizedProgress;
 
         // Update scanning state based on message metadata
@@ -1780,6 +1832,22 @@ function initializeApp() {
           this.scanProgress = normalizedProgress;
           this.stopProgressAnimation();
           return;
+        }
+
+        if (typeof msg.processedCount === 'number') {
+          this.progressProcessedCount = Math.max(0, Math.round(msg.processedCount));
+        }
+
+        if (typeof msg.totalCount === 'number') {
+          this.progressTotalCount = Math.max(0, Math.round(msg.totalCount));
+        }
+
+        if (typeof msg.phase === 'string') {
+          this.progressPhase = msg.phase;
+        }
+
+        if (typeof msg.label === 'string' && msg.label.trim().length > 0) {
+          this.progressLabel = msg.label;
         }
 
         // Log progress updates for debugging visibility

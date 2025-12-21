@@ -1,7 +1,7 @@
 // Raw Values Scanner Module
 // Handles scanning for raw values in the document
 
-import { MissingReference, ScanType, isNodeFromLibraryInstance, prepareLibraryInstanceFiltering } from '../common';
+import { MissingReference, ScanType, isNodeFromLibraryInstance, prepareLibraryInstanceFiltering, ProgressCallback, ProgressMetadata } from '../common';
 import { isScancelled } from './index';
 
 // Type guards for node properties
@@ -43,7 +43,7 @@ function hasPadding(node: FrameNode): boolean {
 export async function scanForRawValues(
   scanType: ScanType,
   selectedFrameIds: string[] = [],
-  progressCallback: (progress: number) => void = () => {},
+  progressCallback: ProgressCallback = () => {},
   ignoreHiddenLayers: boolean = false,
   skipInstances: boolean = false
 ): Promise<MissingReference[]> {
@@ -86,7 +86,7 @@ export async function scanForRawValues(
 
   if (nodesToScan.length === 0) {
     console.log('No eligible nodes to scan after applying skipInstances filter.');
-    progressCallback(100);
+    progressCallback(1, { processedCount: 0, totalCount: 0, phase: 'idle' });
     return [];
   }
 
@@ -105,7 +105,7 @@ export async function scanForRawValues(
   // Total count for progress tracking
   let totalNodesProcessed = 0;
   let totalNodesToProcess = 0;
-  let lastProgressUpdate = 0;
+  let lastReportedPercent = 0;
   
   // Recursively count nodes for accurate progress reporting
   function countNodes(nodes: readonly SceneNode[]): number {
@@ -121,19 +121,32 @@ export async function scanForRawValues(
   }
   
   // Update progress with smoother reporting
-  function updateProgress() {
-    const currentProgress = Math.min(99, (totalNodesProcessed / totalNodesToProcess) * 100);
-    // Only update if progress has changed by at least 0.5%
-    if (currentProgress - lastProgressUpdate >= 0.5) {
-      progressCallback(currentProgress);
-      lastProgressUpdate = currentProgress;
-      console.log(`Scan progress: ${currentProgress.toFixed(1)}%`);
+  function reportProgress(metadataOverrides: ProgressMetadata = {}) {
+    if (totalNodesToProcess === 0) {
+      return;
+    }
+
+    const ratio = Math.min(totalNodesProcessed / totalNodesToProcess, 1);
+    const percent = ratio * 100;
+
+    if (percent - lastReportedPercent >= 0.5 || ratio >= 0.999) {
+      lastReportedPercent = percent;
+      progressCallback(ratio, {
+        processedCount: totalNodesProcessed,
+        totalCount: totalNodesToProcess,
+        ...metadataOverrides
+      });
+      console.log(`Scan progress: ${percent.toFixed(1)}%`);
     }
   }
   
   // Count total nodes to process
   totalNodesToProcess = countNodes(nodesToScan);
   console.log(`Total nodes to process: ${totalNodesToProcess}`);
+  if (totalNodesToProcess === 0) {
+    progressCallback(1, { processedCount: 0, totalCount: 0, phase: 'complete' });
+    return results;
+  }
   
   // Check if scan was cancelled after counting nodes
   if (isScancelled()) {
@@ -487,7 +500,7 @@ export async function scanForRawValues(
       
       // Update progress
       totalNodesProcessed++;
-      updateProgress();
+      reportProgress();
       console.log(`Processing node: ${node.name} (${String(node.type)}), #${totalNodesProcessed} of ${totalNodesToProcess}`);
 
       if (skipInstances && isNodeFromLibraryInstance(node)) {
@@ -1061,7 +1074,11 @@ export async function scanForRawValues(
   }
   
   // Set progress to 100% when done
-  progressCallback(1);
+  progressCallback(1, {
+    processedCount: totalNodesProcessed,
+    totalCount: totalNodesToProcess,
+    phase: 'complete'
+  });
   
   console.log(`Raw values scan complete. Found ${results.length} raw values.`);
   return results;
