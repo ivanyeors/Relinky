@@ -1,7 +1,7 @@
 // Deleted Variables Scanner Module
 // Handles scanning for deleted variables in the document and selected nodes
 
-import { MissingReference, ScanType, isNodeFromLibraryInstance, prepareLibraryInstanceFiltering } from '../common';
+import { MissingReference, ScanType, isNodeFromLibraryInstance, prepareLibraryInstanceFiltering, ProgressCallback, ProgressMetadata } from '../common';
 import { isScancelled } from './index';
 
 // Define variable type categories for better filtering
@@ -358,7 +358,7 @@ function shouldIncludeNode(node: SceneNode, ignoreHiddenLayers: boolean, skipIns
  * Returns both the results and available variable types for filtering
  */
 export async function scanForBrokenVariableReferences(
-  progressCallback: (progress: number) => void = () => {},
+  progressCallback: ProgressCallback = () => {},
   selectedFrameIds: string[] | undefined = undefined,
   ignoreHiddenLayers: boolean = false,
   variableTypes: string[] = [],
@@ -391,36 +391,33 @@ export async function scanForBrokenVariableReferences(
     console.log(`Filtering deleted variables by types:`, variableTypes);
   }
   
-  // Initialize progress
-  let currentProgress = 0;
-  let lastProgressUpdate = 0;
+  // Initialize progress tracking
+  let lastReportedPercent = 0;
   
   // Update progress with smoother reporting and logging
-  const updateProgress = (progress: number) => {
-    // Ensure progress is between 0 and 100
-    const normalizedProgress = Math.min(99, Math.max(0, progress));
+  const reportProgress = (percent: number, metadata: ProgressMetadata = {}) => {
+    const normalizedPercent = Math.min(99.5, Math.max(0, percent));
     
-    // Only update if progress has changed meaningfully (0.5% change)
-    if (normalizedProgress - lastProgressUpdate >= 0.5) {
-      progressCallback(normalizedProgress);
-      lastProgressUpdate = normalizedProgress;
-      console.log(`Broken variable references scan progress: ${normalizedProgress.toFixed(1)}%`);
+    if (normalizedPercent - lastReportedPercent >= 0.5 || normalizedPercent >= 99.5) {
+      lastReportedPercent = normalizedPercent;
+      progressCallback(normalizedPercent / 100, metadata);
+      console.log(`Broken variable references scan progress: ${normalizedPercent.toFixed(1)}%`);
     }
   };
   
-  // Debounced version of updateProgress to avoid too many updates
-  let updateProgressTimeout: number | null = null;
-  const updateProgressWithDebounce = (progress: number) => {
-    if (updateProgressTimeout) {
-      clearTimeout(updateProgressTimeout);
+  // Debounced version to avoid too many updates
+  let reportProgressTimeout: number | null = null;
+  const reportProgressWithDebounce = (percent: number, metadata: ProgressMetadata = {}) => {
+    if (reportProgressTimeout) {
+      clearTimeout(reportProgressTimeout);
     }
-    updateProgressTimeout = setTimeout(() => {
-      updateProgress(progress);
+    reportProgressTimeout = setTimeout(() => {
+      reportProgress(percent, metadata);
     }, 100) as unknown as number;
   };
   
   // Update to show scan has started
-  updateProgress(1);
+  reportProgress(1, { phase: 'start' });
   
   // Get nodes to scan
   let nodesToScan: SceneNode[] = [];
@@ -444,7 +441,10 @@ export async function scanForBrokenVariableReferences(
   }
   
   // Update progress after determining scan scope
-  updateProgress(5);
+  reportProgress(5, {
+    phase: 'scope-prepared',
+    totalCount: nodesToScan.length
+  });
   
   // Nodes with boundVariables and/or missingVariables
   const nodes: SceneNode[] = [];
@@ -468,7 +468,10 @@ export async function scanForBrokenVariableReferences(
   }
   
   // Update progress after estimation
-  updateProgress(10);
+  reportProgress(10, {
+    phase: 'scope-estimated',
+    totalCount: totalNodesToExamine
+  });
   console.log(`Estimated ${totalNodesToExamine} total nodes to examine`);
   
   // Now collect nodes with variables
@@ -489,10 +492,15 @@ export async function scanForBrokenVariableReferences(
       }
       
       nodesExamined++;
-      if (nodesExamined % 100 === 0) { 
+      if (nodesExamined % 100 === 0 && totalNodesToExamine > 0) { 
         // Update progress during collection phase
-        const collectionProgress = 10 + Math.min(20, Math.round((nodesExamined / totalNodesToExamine) * 20));
-        updateProgress(collectionProgress);
+        const collectionRatio = nodesExamined / totalNodesToExamine;
+        const collectionProgress = 10 + Math.min(20, Math.round(collectionRatio * 20));
+        reportProgress(collectionProgress, {
+          phase: 'collecting-nodes',
+          processedCount: nodesExamined,
+          totalCount: totalNodesToExamine
+        });
       }
 
       if (skipInstances && isNodeFromLibraryInstance(n)) {
@@ -520,7 +528,11 @@ export async function scanForBrokenVariableReferences(
   
   console.log(`Found ${nodes.length} nodes to scan for deleted variables`);
   // Update progress after node collection
-  updateProgress(30);
+  reportProgress(30, {
+    phase: 'collecting-nodes',
+    processedCount: nodes.length,
+    totalCount: nodes.length
+  });
 
   if (nodes.length === 0) {
     console.log('No nodes require scanning after applying skipInstances filter.');
@@ -605,8 +617,13 @@ export async function scanForBrokenVariableReferences(
           propertiesProcessed++;
           // Update progress during property processing
           if (propertiesProcessed % 5 === 0 || propertiesProcessed === totalProperties) {
-            const nodeProgress = 30 + (nodeProcessingWeight * (i + (propertiesProcessed / totalProperties)) / nodes.length);
-            updateProgress(Math.round(nodeProgress));
+            const safeTotalProperties = Math.max(totalProperties, 1);
+            const nodeProgress = 30 + (nodeProcessingWeight * (i + (propertiesProcessed / safeTotalProperties)) / Math.max(nodes.length, 1));
+            reportProgress(Math.round(nodeProgress), {
+              phase: 'processing-nodes',
+              processedCount: processedNodes,
+              totalCount: nodes.length
+            });
           }
         }
       }
@@ -725,8 +742,13 @@ export async function scanForBrokenVariableReferences(
           
           bindingsProcessed += batch.length;
           // Update progress during binding processing
-          const nodeProgress = 30 + (nodeProcessingWeight * (i + (bindingsProcessed / variableIdsToCheck.length)) / nodes.length);
-          updateProgress(Math.round(nodeProgress));
+          const safeBindingCount = Math.max(variableIdsToCheck.length, 1);
+          const nodeProgress = 30 + (nodeProcessingWeight * (i + (bindingsProcessed / safeBindingCount)) / Math.max(nodes.length, 1));
+          reportProgress(Math.round(nodeProgress), {
+            phase: 'processing-nodes',
+            processedCount: processedNodes,
+            totalCount: nodes.length
+          });
           
           // Small delay between batches to prevent UI blocking
           await new Promise(resolve => setTimeout(resolve, 10));
@@ -739,8 +761,12 @@ export async function scanForBrokenVariableReferences(
     
     processedNodes++;
     // Pulse progress update to show activity even when processing large nodes
-    const baseProgress = 30 + (nodeProcessingWeight * processedNodes / nodes.length);
-    updateProgressWithDebounce(Math.round(baseProgress));
+    const baseProgress = 30 + (nodeProcessingWeight * processedNodes / Math.max(nodes.length, 1));
+    reportProgressWithDebounce(Math.round(baseProgress), {
+      phase: 'processing-nodes',
+      processedCount: processedNodes,
+      totalCount: nodes.length
+    });
     
     console.log(`Completed node ${i + 1}/${nodes.length}: ${node.name} - Found ${results.length} deleted variables so far`);
   }
@@ -754,7 +780,11 @@ export async function scanForBrokenVariableReferences(
              `Duration: ${scanDuration}ms`);
   
   // Ensure we show 100% at the end
-  updateProgressWithDebounce(100);
+  reportProgressWithDebounce(100, {
+    phase: 'complete',
+    processedCount: nodes.length,
+    totalCount: nodes.length
+  });
   
   // Log summary for debugging
   console.log(`Scan summary:

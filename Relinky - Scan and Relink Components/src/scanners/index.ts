@@ -2,7 +2,7 @@
 // Exports all scanner modules for easy importing
 
 // Import common types
-import { ScanType, MissingReference, isNodeFromLibraryInstance, prepareLibraryInstanceFiltering } from '../common';
+import { ScanType, MissingReference, isNodeFromLibraryInstance, prepareLibraryInstanceFiltering, ProgressCallback, ProgressMetadata } from '../common';
 
 // Import scanner modules
 import { scanForRawValues, groupRawValueResults } from './raw-values';
@@ -114,7 +114,7 @@ export async function runScanner(
   sourceType: string,
   scanType: ScanType,
   selectedFrameIds: string[] = [],
-  progressCallback?: (progress: number) => void,
+  progressCallback?: ProgressCallback,
   ignoreHiddenLayers: boolean = false,
   variableTypes: string[] = [],
   skipInstances: boolean = false
@@ -125,9 +125,7 @@ export async function runScanner(
   await prepareLibraryInstanceFiltering(skipInstances, { force: true });
 
   // Default progress callback if none provided
-  const progressHandler = progressCallback || ((progress: number) => {
-    // No-op if no callback provided
-  });
+  const progressHandler: ProgressCallback = progressCallback || ((_progress: number, _metadata?: ProgressMetadata) => {});
 
   // Get nodes to scan based on selection
   let nodesToScan: SceneNode[] = [];
@@ -299,7 +297,7 @@ export function groupScanResults(
  * @returns Promise<void>
  */
 export async function debugDocumentVariables(
-  progressCallback: (progress: number) => void = () => {}
+  progressCallback: ProgressCallback = () => {}
 ): Promise<void> {
   console.log('Debugging document variables...');
   

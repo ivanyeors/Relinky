@@ -1,7 +1,7 @@
 // Layout Scanner Module
 // Handles scanning for width and height dimensions in layouts
 
-import { MissingReference, ScanType, isNodeFromLibraryInstance, prepareLibraryInstanceFiltering } from '../common';
+import { MissingReference, ScanType, isNodeFromLibraryInstance, prepareLibraryInstanceFiltering, ProgressCallback } from '../common';
 import { isScancelled } from './index';
 
 // Extend MissingReference for layout-specific properties
@@ -19,7 +19,7 @@ interface LayoutReference extends MissingReference {
  * @returns Array of references to layout dimensions
  */
 export async function scanForLayoutDimensions(
-  progressCallback: (progress: number) => void,
+  progressCallback: ProgressCallback,
   nodesToScan?: SceneNode[],
   ignoreHiddenLayers: boolean = false,
   filterTypes: string[] = [],
@@ -47,7 +47,7 @@ export async function scanForLayoutDimensions(
 
     if (nodes.length === 0) {
       console.log('No eligible nodes to scan for layout dimensions after applying filters.');
-      progressCallback(100);
+      progressCallback(1, { processedCount: 0, totalCount: 0, phase: 'complete' });
       return results;
     }
     
@@ -135,8 +135,12 @@ export async function scanForLayoutDimensions(
 
       // Update progress
       processedNodes++;
-      const progress = Math.round((processedNodes / totalNodes) * 100);
-      progressCallback(progress);
+      const ratio = Math.min(processedNodes / totalNodes, 1);
+      progressCallback(ratio, {
+        processedCount: processedNodes,
+        totalCount: totalNodes,
+        phase: 'dimension-scan'
+      });
 
       // Add a small delay every few nodes to prevent UI freezing
       if (processedNodes % 10 === 0) {
@@ -147,6 +151,11 @@ export async function scanForLayoutDimensions(
     // Log results
     console.log(`Layout scan complete, found ${results.length} layout dimensions`);
     
+    progressCallback(1, {
+      processedCount: processedNodes,
+      totalCount: totalNodes,
+      phase: 'complete'
+    });
     return results;
   } catch (err) {
     console.error('Error scanning for layout dimensions:', err);

@@ -739,44 +739,110 @@ export async function isNodeValid(nodeId: string): Promise<boolean> {
 }
 
 // Progress tracking helpers
-export function updateProgress(progress: number) {
-  // Normalize progress to 0-99.5 range during scanning
-  const normalizedProgress = Math.min(99.5, Math.max(0, progress * 99.5));
-  
-  figma.ui.postMessage({
-    type: 'scan-progress',
-    progress: normalizedProgress,
-    isScanning: true
-  });
+export interface ProgressMetadata {
+  processedCount?: number;
+  totalCount?: number;
+  phase?: string;
+  label?: string;
 }
 
-export function resetProgress() {
-  figma.ui.postMessage({
-    type: 'scan-progress',
-    progress: 0,
-    isScanning: false
-  });
+export type ProgressCallback = (progress: number, metadata?: ProgressMetadata) => void;
+
+interface ProgressPostOptions {
+  isScanning: boolean;
+  forceComplete?: boolean;
 }
 
-export function completeProgress() {
-  figma.ui.postMessage({
+const SCANNING_PROGRESS_CAP = 99.5;
+
+function normalizeProgressValue(progress: number): number {
+  if (!Number.isFinite(progress) || progress <= 0) {
+    return 0;
+  }
+
+  if (progress >= 100) {
+    return 1;
+  }
+
+  if (progress > 1) {
+    return Math.min(progress / 100, 1);
+  }
+
+  return Math.max(progress, 0);
+}
+
+function clampProgressPercent(percent: number, allowCompletion: boolean): number {
+  const upperBound = allowCompletion ? 100 : SCANNING_PROGRESS_CAP;
+  if (!Number.isFinite(percent)) {
+    return 0;
+  }
+  if (percent < 0) {
+    return 0;
+  }
+  if (percent > upperBound) {
+    return upperBound;
+  }
+  return percent;
+}
+
+function postProgress(
+  progressInput: number,
+  metadata: ProgressMetadata | undefined,
+  options: ProgressPostOptions
+) {
+  const ratio = normalizeProgressValue(progressInput);
+  const rawPercent = ratio * 100;
+  const percent = clampProgressPercent(rawPercent, options.forceComplete ?? false);
+
+  const payload: Record<string, unknown> = {
     type: 'scan-progress',
-    progress: 100,
-    isScanning: false
-  });
+    progress: percent,
+    progressRatio: ratio,
+    isScanning: options.isScanning
+  };
+
+  if (metadata?.processedCount !== undefined) {
+    payload.processedCount = metadata.processedCount;
+  }
+
+  if (metadata?.totalCount !== undefined) {
+    payload.totalCount = metadata.totalCount;
+  }
+
+  if (metadata?.phase) {
+    payload.phase = metadata.phase;
+  }
+
+  if (metadata?.label) {
+    payload.label = metadata.label;
+  }
+
+  figma.ui.postMessage(payload);
+}
+
+export function updateProgress(progress: number, metadata?: ProgressMetadata) {
+  postProgress(progress, metadata, { isScanning: true });
+}
+
+export function resetProgress(metadata?: ProgressMetadata) {
+  postProgress(0, metadata, { isScanning: false, forceComplete: true });
+}
+
+export function completeProgress(metadata?: ProgressMetadata) {
+  postProgress(100, metadata, { isScanning: false, forceComplete: true });
 }
 
 // Helper to create a throttled progress updater with adaptive sensitivity
-export function createThrottledProgress(minChangePercent = 0.5) {
+export function createThrottledProgress(minChangePercent = 0.5): ProgressCallback {
   let lastProgress = 0;
   let lastUpdateTime = Date.now();
   
-  return (progress: number) => {
+  return (progress: number, metadata: ProgressMetadata = {}) => {
     const currentTime = Date.now();
     const timeSinceLastUpdate = currentTime - lastUpdateTime;
     
     // Calculate target normalized progress (0-1 range)
-    const normalizedProgress = Math.min(Math.max(0, progress), 1);
+    const normalizedProgress = normalizeProgressValue(progress);
     
     // Determine if we should update based on either:
     // 1. Significant progress change OR
@@ -795,7 +861,7 @@ export function createThrottledProgress(minChangePercent = 0.5) {
     if (significantChange || timeIntervalMet || isProgressMilestone || normalizedProgress >= 0.995) {
       lastProgress = normalizedProgress;
       lastUpdateTime = currentTime;
-      updateProgress(normalizedProgress);
+      updateProgress(normalizedProgress, metadata);
     }
   };
 }

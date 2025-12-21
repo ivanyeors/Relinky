@@ -16,6 +16,7 @@ import {
   isScannableNodeType,
   isNodeFromLibraryInstance,
   prepareLibraryInstanceFiltering,
+  ProgressCallback,
 } from '../common';
 import { isScancelled } from './index';
 
@@ -214,7 +215,7 @@ const getRemoteStyleRefsForNode = (node: SceneNode): Array<{ property: string; s
  * - `groupKey` set to group by token + library
  */
 export async function scanForLinkedLibraryTokens(
-  progressCallback: (progress: number) => void,
+  progressCallback: ProgressCallback,
   selectedFrameIds: string[] = [],
   ignoreHiddenLayers: boolean = false,
   skipInstances: boolean = false
@@ -260,7 +261,12 @@ export async function scanForLinkedLibraryTokens(
   };
 
   const nodes = await getNodesToScan(selectedFrameIds, ignoreHiddenLayers, skipInstances);
-  const total = nodes.length || 1;
+  if (nodes.length === 0) {
+    progressCallback(1, { processedCount: 0, totalCount: 0, phase: 'complete' });
+    return results;
+  }
+
+  const total = nodes.length;
 
   for (let i = 0; i < nodes.length; i++) {
     if (isScancelled()) break;
@@ -372,12 +378,23 @@ export async function scanForLinkedLibraryTokens(
       console.warn(`Error scanning node ${node.name} (${node.id}) for linked library tokens:`, err);
     }
 
-    progressCallback(Math.round(((i + 1) / total) * 100));
+    const processedCount = i + 1;
+    const ratio = processedCount / total;
+    progressCallback(ratio, {
+      processedCount,
+      totalCount: total,
+      phase: 'library-scan'
+    });
     if ((i + 1) % 50 === 0) {
       await new Promise(resolve => setTimeout(resolve, 0));
     }
   }
 
+  progressCallback(1, {
+    processedCount: total,
+    totalCount: total,
+    phase: 'complete'
+  });
   return results;
 }
 
