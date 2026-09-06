@@ -6,8 +6,7 @@
     <title>Relinky - Scan and Relink Components</title>
     <!-- Explicitly deny disallowed features to avoid permission policy warnings in DevTools -->
     <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), clipboard-write=(), display-capture=()">
-    <!-- Vue.js from CDN -->
-    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <!-- Vue is bundled locally by webpack (no third-party CDN scripts are loaded at runtime) -->
     <!-- CSS imports -->
     <!-- The ui.js script will be injected by webpack -->
   </head>

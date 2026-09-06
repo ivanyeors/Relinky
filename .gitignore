@@ -1,1 +1,11 @@
 .DS_Store
+
+# Node
+node_modules/
+dist/
+*.log
+
+# Never commit crash dumps (they contain raw process memory)
+core
+core.*
+*.core
