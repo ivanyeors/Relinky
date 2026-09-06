@@ -18,6 +18,32 @@ let currentWindowSize = {
   height: 600
 };
 
+// Window size bounds (kept in sync with the resize handle limits in ui.js)
+const WINDOW_MIN_WIDTH = 300;
+const WINDOW_MAX_WIDTH = 800;
+const WINDOW_MIN_HEIGHT = 400;
+const WINDOW_MAX_HEIGHT = 900;
+
+/**
+ * Coerce an untrusted dimension (from the UI or clientStorage) into a finite,
+ * clamped number. Non-numeric or non-finite input falls back to `fallback`.
+ */
+function clampWindowDimension(value: unknown, min: number, max: number, fallback: number): number {
+  const num = typeof value === 'number' ? value : Number.NaN;
+  if (!Number.isFinite(num)) return fallback;
+  return Math.min(Math.max(Math.round(num), min), max);
+}
+
+/**
+ * Normalise an untrusted list of node IDs coming from the UI: keep only
+ * non-empty strings and drop duplicates.
+ */
+function sanitizeIdList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const ids = value.filter((id): id is string => typeof id === 'string' && id.length > 0);
+  return Array.from(new Set(ids));
+}
+
 // Cancellation flag for "scan similar component by selection"
 let similarComponentsScanCancelled = false;
 
@@ -140,9 +166,13 @@ async function getSimilarComponentSelectionInfo(): Promise<{
 // Initialize window size from saved preferences
 (async function initializeWindowSize() {
   try {
-    const savedSize = await figma.clientStorage.getAsync('windowSize');
-    if (savedSize) {
-      figma.ui.resize(savedSize.width, savedSize.height);
+    const savedSize: unknown = await figma.clientStorage.getAsync('windowSize');
+    if (savedSize && typeof savedSize === 'object') {
+      const { width, height } = savedSize as { width?: unknown; height?: unknown };
+      const safeWidth = clampWindowDimension(width, WINDOW_MIN_WIDTH, WINDOW_MAX_WIDTH, currentWindowSize.width);
+      const safeHeight = clampWindowDimension(height, WINDOW_MIN_HEIGHT, WINDOW_MAX_HEIGHT, currentWindowSize.height);
+      currentWindowSize = { width: safeWidth, height: safeHeight };
+      figma.ui.resize(safeWidth, safeHeight);
     }
   } catch (err) {
     console.error('Failed to restore window size:', err);
@@ -904,7 +934,13 @@ async function handleScan(params: ScanForTokensMessage): Promise<void> {
 
 // Handle messages from the UI
 figma.ui.onmessage = async (msg: PluginMessage) => {
-  console.log('Plugin received message:', msg);
+  // Reject anything that is not a well-formed message object with a string `type`.
+  if (!msg || typeof msg !== 'object' || typeof (msg as { type?: unknown }).type !== 'string') {
+    console.warn('Ignoring malformed message from UI');
+    return;
+  }
+  // Log only the message type; payloads can contain document content.
+  console.log('Plugin received message:', msg.type);
 
   // Store scan parameters for potential rescan
   if (msg.type === 'scan-for-tokens') {
@@ -913,9 +949,10 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
 
   // Window resize
   if (msg.type === 'resize') {
-    // Validate dimensions
-    const width = Math.min(Math.max(msg.width || 300, 300), 800);
-    const height = Math.min(Math.max(msg.height || 400, 400), 900);
+    // Validate dimensions: must be finite numbers, clamped to the allowed range
+    const width = clampWindowDimension(msg.width, WINDOW_MIN_WIDTH, WINDOW_MAX_WIDTH, currentWindowSize.width);
+    const height = clampWindowDimension(msg.height, WINDOW_MIN_HEIGHT, WINDOW_MAX_HEIGHT, currentWindowSize.height);
+    currentWindowSize = { width, height };
     
     // Use figma.ui.resize
     figma.ui.resize(width, height);
@@ -953,8 +990,8 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
     
     // Extract scan parameters with fallbacks for backward compatibility
     const scanType = msg.scanType || '';
-    const selectedFrameIds = msg.selectedFrameIds || [];
-    const ignoreHiddenLayers = msg.ignoreHiddenLayers || false;
+    const selectedFrameIds = sanitizeIdList(msg.selectedFrameIds);
+    const ignoreHiddenLayers = msg.ignoreHiddenLayers === true;
     const isRescan = msg.isRescan || false;
     const sourceType = msg.sourceType || 'raw-values'; // Default to raw-values
     
@@ -1072,7 +1109,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
   
   // Handle token application
   if (msg.type === 'apply-token' && msg.nodeId && msg.tokenType && msg.tokenValue) {
-    const node = figma.getNodeById(msg.nodeId);
+    const node = await figma.getNodeByIdAsync(msg.nodeId);
     
     if (node) {
       try {
@@ -1124,8 +1161,8 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
 
   // Handle style application
   if (msg.type === 'apply-style' && msg.nodeId && msg.styleType && msg.styleId) {
-    const node = figma.getNodeById(msg.nodeId);
-    const style = figma.getStyleById(msg.styleId);
+    const node = await figma.getNodeByIdAsync(msg.nodeId);
+    const style = await figma.getStyleByIdAsync(msg.styleId);
     
     if (node && style) {
       try {
@@ -1179,7 +1216,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
 
   // Handle component swap
   if (msg.type === 'swap-component' && msg.nodeId) {
-    const node = figma.getNodeById(msg.nodeId);
+    const node = await figma.getNodeByIdAsync(msg.nodeId);
     
     if (node && node.type === 'INSTANCE') {
       try {

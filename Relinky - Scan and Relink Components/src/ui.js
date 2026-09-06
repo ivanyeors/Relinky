@@ -1,6 +1,10 @@
 // Import the CSS file so webpack can process it
 import './styles.css';
 
+// Vue is bundled from node_modules (pinned in package.json) instead of being fetched
+// from a CDN at runtime, so no third-party script can be swapped underneath the plugin.
+import { createApp } from 'vue';
+
 // Import the icons from icons.js
 import { icons } from './icons.js';
 
@@ -18,7 +22,6 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function initializeApp() {
-  const { createApp } = Vue;
   
   // Add the SuccessToast component definition
   const SuccessToast = {
@@ -2261,7 +2264,7 @@ function initializeApp() {
         console.log(`Selected library scan type: ${value}`);
       },
       openFeedbackForm() {
-        window.open('https://t.maze.co/350274999', '_blank');
+        window.open('https://t.maze.co/350274999', '_blank', 'noopener,noreferrer');
       },
       toggleHiddenFilter() {
         this.showHiddenOnly = !this.showHiddenOnly;
@@ -2836,7 +2839,7 @@ function initializeApp() {
       },
 
       openStripePayment() {
-        window.open('https://buy.stripe.com/8wM7wb49NeFD5UYcMM', '_blank');
+        window.open('https://buy.stripe.com/8wM7wb49NeFD5UYcMM', '_blank', 'noopener,noreferrer');
       },
       
       // Add methods to dismiss toast notifications
@@ -2863,10 +2866,14 @@ function initializeApp() {
 
       // Single message handler
       window.onmessage = (event) => {
-        const msg = event.data.pluginMessage;
-        if (msg) {
-          this.handlePluginMessage(msg);
+        // Only accept well-formed plugin messages: an object with a string `type`.
+        // Anything else (foreign postMessage traffic, malformed payloads) is ignored.
+        const data = event && event.data;
+        const msg = data && typeof data === 'object' ? data.pluginMessage : undefined;
+        if (!msg || typeof msg !== 'object' || typeof msg.type !== 'string') {
+          return;
         }
+        this.handlePluginMessage(msg);
       };
 
       // Request initial selection state

@@ -11,6 +11,10 @@
   ],
   "ui": "./dist/ui.html",
   "networkAccess": {
-    "allowedDomains": ["https://unpkg.com"]
+    "allowedDomains": [
+      "https://t.maze.co",
+      "https://buy.stripe.com"
+    ],
+    "reasoning": "The plugin never fetches remote code or data. These domains are only opened in a new browser tab from the feedback and donation buttons."
   }
 }
